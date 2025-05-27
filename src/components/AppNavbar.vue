@@ -56,5 +56,6 @@
   background-color: #19e4ff;
   color: black;
   font-weight: 600;
+  border-radius: 20rem;
 }
 </style>
