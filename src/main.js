@@ -1,6 +1,7 @@
 // Bootstrap
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap' // JS de Bootstrap (para tooltips, modals, etc.)
+import './assets/main.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

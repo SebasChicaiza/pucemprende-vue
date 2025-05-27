@@ -1,15 +1,17 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
-import './assets/main.css'
+import AppNavbar from './components/AppNavbar.vue'
+import AppFooter from './components/AppFooter.vue'
 </script>
 
 <template>
-  <header>
-    <nav>
-      <RouterLink to="/">Home</RouterLink>
-      <RouterLink to="/about">About</RouterLink>
-    </nav>
-  </header>
+  <div class="d-flex flex-column min-vh-100">
+    <AppNavbar />
 
-  <RouterView />
+    <!-- Contenido principal -->
+    <main class="flex-grow-1">
+      <RouterView />
+    </main>
+
+    <AppFooter />
+  </div>
 </template>
