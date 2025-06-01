@@ -22,10 +22,10 @@ onUnmounted(() => {
       <!-- Logo + navegación -->
       <div class="d-none d-lg-flex align-items-center">
         <img
-          src="../assets/universidad_varios/pucemprende-logo-reducido.png"
+          src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
           alt="Logo PUCE"
           class="me-4"
-          style="height: 50px"
+          style="height: 70px"
         />
 
         <!-- Botones de navegación -->
@@ -36,7 +36,7 @@ onUnmounted(() => {
       <!-- Botón hamburguesa (solo móvil) -->
       <img
         v-if="isMobile"
-        src="../assets/universidad_varios/pucemprende-logo-reducido.png"
+        src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
         alt="Logo PUCE "
         style="height: 50px"
       />
@@ -55,19 +55,25 @@ onUnmounted(() => {
       </div>
     </div>
     <!-- Menú responsive solo visible en móvil cuando está abierto -->
-    <div v-if="menuOpen && isMobile" class="d-flex flex-column bg-primary p-3 mt-2 rounded gap-2">
-      <router-link to="/" class="btn" @click="menuOpen = false">Inicio</router-link>
-      <router-link to="/eventos" class="btn" @click="menuOpen = false">Eventos</router-link>
-      <router-link to="/sobreNosotros" class="btn" @click="menuOpen = false"
-        >Sobre Nosotros</router-link
+    <transition name="slide-fade">
+      <div
+        v-if="menuOpen && isMobile"
+        class="d-flex flex-column p-3 mt-2 rounded gap-2 position-absolute"
+        style="top: 100%; right: 0; background-color: #174384; z-index: 1000"
       >
-      <router-link to="/login" class="btn-ini btn" @click="menuOpen = false"
-        >Iniciar Sesión</router-link
-      >
-      <router-link to="/registro" class="btn-reg btn" @click="menuOpen = false"
-        >Registrarse</router-link
-      >
-    </div>
+        <router-link to="/" class="btn" @click="menuOpen = false">Inicio</router-link>
+        <router-link to="/eventos" class="btn" @click="menuOpen = false">Eventos</router-link>
+        <router-link to="/sobreNosotros" class="btn" @click="menuOpen = false"
+          >Sobre Nosotros</router-link
+        >
+        <router-link to="/login" class="btn-ini btn" @click="menuOpen = false"
+          >Iniciar Sesión</router-link
+        >
+        <router-link to="/registro" class="btn-reg btn" @click="menuOpen = false"
+          >Registrarse</router-link
+        >
+      </div>
+    </transition>
   </nav>
 </template>
 
@@ -102,5 +108,27 @@ onUnmounted(() => {
   color: black;
   font-weight: 600;
   border-radius: 20rem;
+}
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+.slide-fade-enter-to {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.slide-fade-leave-from {
+  opacity: 1;
+  transform: translateX(0);
+}
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
 }
 </style>
