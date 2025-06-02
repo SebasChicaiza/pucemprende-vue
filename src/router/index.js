@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import EventosView from '../views/EventosView.vue'
+import LogInView from '@/views/LogInView.vue'
+import SignUpView from '@/views/SignUpView.vue'
 
 
 const router = createRouter({
@@ -16,6 +18,16 @@ const router = createRouter({
       name: 'eventos',
       component: EventosView,
     },
+    {
+      path: '/login',
+      name: 'login',
+      component: LogInView,
+    },
+    {
+      path: '/registro',
+      name: 'registro',
+      component: SignUpView,
+    }
     /* EJEMPLO LAZY LOADING
     {
       path: '/about',

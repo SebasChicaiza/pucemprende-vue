@@ -21,12 +21,15 @@ onUnmounted(() => {
     <div class="d-flex justify-content-between align-items-center w-100">
       <!-- Logo + navegación -->
       <div class="d-none d-lg-flex align-items-center">
-        <img
+        <router-link to="/">
+          <img
           src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
           alt="Logo PUCE"
           class="me-4"
           style="height: 70px"
         />
+        </router-link>
+
 
         <!-- Botones de navegación -->
         <router-link to="/" class="btn">Inicio</router-link>
@@ -34,12 +37,14 @@ onUnmounted(() => {
         <router-link to="/sobre" class="btn">Sobre Nosotros</router-link>
       </div>
       <!-- Botón hamburguesa (solo móvil) -->
-      <img
+      <router-link to="/">
+        <img
         v-if="isMobile"
         src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
         alt="Logo PUCE "
         style="height: 50px"
-      />
+        />
+      </router-link>
       <button
         class="btn d-lg-none text-white"
         @click="menuOpen = !menuOpen"
