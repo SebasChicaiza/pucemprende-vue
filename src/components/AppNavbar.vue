@@ -23,13 +23,12 @@ onUnmounted(() => {
       <div class="d-none d-lg-flex align-items-center">
         <router-link to="/">
           <img
-          src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
-          alt="Logo PUCE"
-          class="me-4"
-          style="height: 70px"
-        />
+            src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
+            alt="Logo PUCE"
+            class="me-4"
+            style="height: 70px"
+          />
         </router-link>
-
 
         <!-- Botones de navegación -->
         <router-link to="/" class="btn">Inicio</router-link>
@@ -39,10 +38,10 @@ onUnmounted(() => {
       <!-- Botón hamburguesa (solo móvil) -->
       <router-link to="/">
         <img
-        v-if="isMobile"
-        src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
-        alt="Logo PUCE "
-        style="height: 50px"
+          v-if="isMobile"
+          src="../assets/universidad_varios/logoBordeadoPUCE-sinmargen.png"
+          alt="Logo PUCE "
+          style="height: 50px"
         />
       </router-link>
       <button
@@ -90,7 +89,7 @@ onUnmounted(() => {
 .btn {
   color: white;
   font-weight: 400;
-  font-size: large;
+  font-size: medium;
 }
 .btn:hover {
   text-decoration: underline;
