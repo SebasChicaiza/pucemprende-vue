@@ -3,6 +3,13 @@ import CarrouselCard from '@/components/CarrouselCard.vue'
 import evento1 from '@/assets/pruebas/evento1danza.jpeg'
 import evento2 from '@/assets/pruebas/bootcamp.jpg'
 import evento3 from '@/assets/pruebas/feriadigital.jpg'
+import { onMounted } from 'vue'
+
+// En HomeView.vue o App.vue por ejemplo
+onMounted(() => {
+  // Precarga "SobreNosotrosView.vue" mientras el usuario navega en Home
+  import(/* webpackPrefetch: true */ '../views/EventosView.vue')
+})
 
 const eventos = [
   {
