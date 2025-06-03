@@ -167,7 +167,7 @@ export default {
       this.success = false
       try {
         const response = await fetch(
-          'https://1f56-2800-bf0-143-1048-34e0-b7dd-5625-70cc.ngrok-free.app/api/register',
+          'https://39db-2800-bf0-143-1048-d908-9e9f-c9a7-bb45.ngrok-free.app/api/register',
           {
             method: 'POST',
             headers: {

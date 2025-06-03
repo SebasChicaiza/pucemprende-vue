@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import EventosView from '../views/EventosView.vue'
 import LogInView from '@/views/LogInView.vue'
 import SignUpView from '@/views/SignUpView.vue'
+import SobreNosotrosView from '@/views/SobreNosotrosView.vue'
 
 
 const router = createRouter({
@@ -27,6 +28,11 @@ const router = createRouter({
       path: '/registro',
       name: 'registro',
       component: SignUpView,
+    },
+    {
+      path: '/sobreNosotros',
+      name: 'sobreNosotros',
+      component: SobreNosotrosView,
     }
     /* EJEMPLO LAZY LOADING
     {

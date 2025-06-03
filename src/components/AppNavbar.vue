@@ -33,7 +33,7 @@ onUnmounted(() => {
         <!-- Botones de navegación -->
         <router-link to="/" class="btn">Inicio</router-link>
         <router-link to="/eventos" class="btn">Eventos</router-link>
-        <router-link to="/sobre" class="btn">Sobre Nosotros</router-link>
+        <router-link to="/sobreNosotros" class="btn">Sobre Nosotros</router-link>
       </div>
       <!-- Botón hamburguesa (solo móvil) -->
       <router-link to="/">
