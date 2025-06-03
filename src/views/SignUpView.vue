@@ -56,6 +56,15 @@
               required
             />
           </div>
+          <div class="col-12 mb-3">
+            <input
+              v-model="form.usuario"
+              type="text"
+              class="form-control bg-light border-0"
+              placeholder="Nombre de usuario"
+              required
+            />
+          </div>
           <div class="col-md-6 mb-3">
             <input
               v-model="form.clave"
@@ -197,7 +206,7 @@ export default {
             email: '',
             clave: '',
             clave_confirmation: '',
-            rol_id: 1,
+            rol_id: 2,
             nombre: '',
             apellido: '',
             telefono: '',
