@@ -175,17 +175,14 @@ export default {
       this.error = ''
       this.success = false
       try {
-        const response = await fetch(
-          'https://39db-2800-bf0-143-1048-d908-9e9f-c9a7-bb45.ngrok-free.app/api/register',
-          {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(this.form),
+        const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/register`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
           },
-        )
+          body: JSON.stringify(this.form),
+        })
 
         const text = await response.text()
         let data
