@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { onMounted } from 'vue'
 import { onUnmounted } from 'vue'
 import EventoCard from '@/components/EventoCard.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
 import evento1 from '@/assets/pruebas/evento1danza.jpeg'
 import evento2 from '@/assets/pruebas/bootcamp.jpg'
@@ -177,6 +179,7 @@ onUnmounted(() => {
 })
 </script>
 <template>
+  <AppNavbar />
   <div class="main-banner">
     <div class="carousel-container">
       <!-- Botón izquierda -->
@@ -230,6 +233,7 @@ onUnmounted(() => {
       </div>
     </div>
   </section>
+  <AppFooter />
 </template>
 <style scoped>
 .carousel-container {

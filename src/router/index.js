@@ -4,6 +4,8 @@ import EventosView from '../views/EventosView.vue'
 import LogInView from '@/views/LogInView.vue'
 import SignUpView from '@/views/SignUpView.vue'
 import SobreNosotrosView from '@/views/SobreNosotrosView.vue'
+import DashboardView from '@/views/Admin/DashboardView.vue'
+import EventsView from '@/views/Admin/EventsView.vue'
 
 
 const router = createRouter({
@@ -33,6 +35,22 @@ const router = createRouter({
       path: '/sobreNosotros',
       name: 'sobreNosotros',
       component: SobreNosotrosView,
+    },
+    {
+      path: '/admin/dashboard',
+      name: 'adminDashboard',
+      component: DashboardView,
+      meta: {
+        title: 'Dashboard',
+      },
+    },
+    {
+      path: '/admin/eventos',
+      name: 'adminEventos',
+      component: EventsView,
+      meta: {
+        title: 'Eventos',
+      },
     }
     /* EJEMPLO LAZY LOADING
     {

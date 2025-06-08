@@ -1,4 +1,84 @@
+<script>
+
+export default {
+  data() {
+    return {
+      form: {
+        usuario: '',
+        email: '',
+        clave: '',
+        clave_confirmation: '',
+        rol_id: 2,
+        nombre: '',
+        apellido: '',
+        telefono: '',
+        identificacion: '',
+        alumni: 0,
+        genero: 'M',
+        estado: 'Activo',
+      },
+      error: '',
+      success: false,
+    }
+  },
+  methods: {
+    async handleRegister() {
+      this.error = ''
+      this.success = false
+      try {
+        const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/register`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(this.form),
+        })
+
+        const text = await response.text()
+        let data
+        try {
+          data = JSON.parse(text)
+        } catch (err) {
+          console.error('Respuesta inesperada:', text + err)
+          this.error = 'Error inesperado del servidor.'
+          return
+        }
+
+        if (!response.ok) {
+          this.error = data.message || 'Error al registrarse'
+        } else {
+          this.success = true
+          this.form = {
+            usuario: '',
+            email: '',
+            clave: '',
+            clave_confirmation: '',
+            rol_id: 2,
+            nombre: '',
+            apellido: '',
+            telefono: '',
+            identificacion: '',
+            alumni: 0,
+            genero: 'M',
+            estado: 'Activo',
+          }
+        }
+      } catch (e) {
+        console.error(e)
+        this.error = 'Fallo en la conexión con el servidor.'
+      }
+    },
+  },
+}
+</script>
+<script setup>
+  import AppNavbar from '@/components/AppNavbar.vue'
+  import AppFooter from '@/components/AppFooter.vue'
+</script>
+
 <template>
+  <AppNavbar />
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
@@ -147,80 +227,9 @@
       </form>
     </div>
   </div>
+  <AppFooter />
 </template>
-<script>
-export default {
-  data() {
-    return {
-      form: {
-        usuario: '',
-        email: '',
-        clave: '',
-        clave_confirmation: '',
-        rol_id: 2,
-        nombre: '',
-        apellido: '',
-        telefono: '',
-        identificacion: '',
-        alumni: 0,
-        genero: 'M',
-        estado: 'Activo',
-      },
-      error: '',
-      success: false,
-    }
-  },
-  methods: {
-    async handleRegister() {
-      this.error = ''
-      this.success = false
-      try {
-        const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/register`, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(this.form),
-        })
 
-        const text = await response.text()
-        let data
-        try {
-          data = JSON.parse(text)
-        } catch (err) {
-          console.error('Respuesta inesperada:', text + err)
-          this.error = 'Error inesperado del servidor.'
-          return
-        }
-
-        if (!response.ok) {
-          this.error = data.message || 'Error al registrarse'
-        } else {
-          this.success = true
-          this.form = {
-            usuario: '',
-            email: '',
-            clave: '',
-            clave_confirmation: '',
-            rol_id: 2,
-            nombre: '',
-            apellido: '',
-            telefono: '',
-            identificacion: '',
-            alumni: 0,
-            genero: 'M',
-            estado: 'Activo',
-          }
-        }
-      } catch (e) {
-        console.error(e)
-        this.error = 'Fallo en la conexión con el servidor.'
-      }
-    },
-  },
-}
-</script>
 
 <style scoped>
 input::placeholder {

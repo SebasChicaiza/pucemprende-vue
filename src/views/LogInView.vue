@@ -1,4 +1,10 @@
+<script setup>
+  import AppNavbar from '@/components/AppNavbar.vue'
+  import AppFooter from '@/components/AppFooter.vue'
+</script>
+
 <template>
+  <AppNavbar />
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
@@ -53,6 +59,7 @@
       <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
     </div>
   </div>
+  <AppFooter />
 </template>
 
 <script>

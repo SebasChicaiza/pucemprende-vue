@@ -1,5 +1,6 @@
 // Bootstrap
 import 'bootstrap/dist/css/bootstrap.min.css'
+import '@fortawesome/fontawesome-free/css/all.min.css' // FontAwesome
 import 'bootstrap' // JS de Bootstrap (para tooltips, modals, etc.)
 import './assets/main.css'
 
