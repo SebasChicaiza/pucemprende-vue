@@ -242,30 +242,19 @@ async function enviarEvento(data) {
             </button>
           </div>
 
-          <div class="dots-container" v-else>
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-          </div>
+          <!-- <div class="button-row">
+            <button type="button" class="btn btn-cancel" @click="$emit('close')">
+              <i class="fas fa-angle-left"></i>Volver
+            </button>
+            <button class="btn btn-primary" @click="testLoading">
+              Siguiente<i class="fas fa-angle-right"></i>
+            </button>
+          </div> -->
 
         </form>
       </div>
 
-      <!-- <div class="button-row">
-        <button class="btn btn-primary" @click="testLoading">
-          Probar Loader <i class="fas fa-spinner"></i>
-        </button>
-      </div>
 
-      <div class="dots-container" v-if="loading">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-      </div> -->
 
 
       <!-- Modal parte 2 -->
@@ -286,6 +275,17 @@ async function enviarEvento(data) {
         <p>Sección para añadir actividades</p>
       </div>
 
+
+      <!-- Loader overlay -->
+      <div v-if="loading" class="loading-overlay">
+        <div class="dots-container">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -618,5 +618,19 @@ async function enviarEvento(data) {
     background-color: #b3d4fc;
     box-shadow: 0 0 0 0 rgba(178, 212, 252, 0.7);
   }
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
 }
 </style>
