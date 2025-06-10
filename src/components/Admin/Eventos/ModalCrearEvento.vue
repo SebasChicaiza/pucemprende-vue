@@ -72,13 +72,12 @@ async function enviarEvento(data) {
 
     let result = {}
     try {
-      // Separar los dos objetos JSON pegados
-      const parts = raw.split(/}(?={)/) // divide entre }{
-      const part1 = JSON.parse(parts[0] + '}')
-      const part2 = JSON.parse('{' + parts[1])
-      result = { usuario: part1, evento: part2 }
+      // Buscar el inicio del segundo JSON (evento)
+      const indexSecondJson = raw.indexOf('}{') + 1
+      const jsonStr = raw.substring(indexSecondJson)
+      result = JSON.parse(jsonStr)
     } catch (e) {
-      console.error('Error al parsear JSON doble:', e)
+      console.error('❌ Error al parsear JSON del evento:', e)
       error.value = 'La respuesta del servidor no es válida.'
       return
     }
