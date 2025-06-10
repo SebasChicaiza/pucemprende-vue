@@ -1,10 +1,12 @@
 <script setup>
 import AppNavbar from '@/components/AppNavbar.vue'
 import AppFooter from '@/components/AppFooter.vue'
+import LoaderComponent from '@/components/LoaderComponent.vue';
 </script>
 
 <template>
   <AppNavbar />
+  <LoaderComponent v-if="loading"/>
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
@@ -65,16 +67,21 @@ import AppFooter from '@/components/AppFooter.vue'
 <script>
 export default {
   name: 'LoginForm',
+  components: {
+    LoaderComponent,
+  },
   data() {
     return {
       email: '',
       password: '',
       error: '',
+      loading: false,
     }
   },
   methods: {
     async handleLogin() {
       this.error = ''
+      this.loading = true
       try {
         const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/login`, {
           method: 'POST',
@@ -116,6 +123,9 @@ export default {
       } catch (err) {
         this.error = 'Correo o contraseña incorrectos.'
         console.error('Login error:', err)
+      }
+      finally {
+        this.loading = false
       }
     },
   },

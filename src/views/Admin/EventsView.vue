@@ -15,7 +15,8 @@ const loading = ref(false)
 
 // Function to fetch events
 async function fetchEvents() {
-  const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58' // Get token from localStorage
+  const token = localStorage.getItem('token')
+
 
   if (!token) {
     error.value = 'Token de autenticación no encontrado.'
