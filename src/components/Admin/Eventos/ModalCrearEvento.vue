@@ -27,28 +27,27 @@ const activeTab = ref('info')
 const tabTitle = computed(() => {
   switch (activeTab.value) {
     case 'info':
-      return 'Información del Evento';
+      return 'Información del Evento'
     case 'imagenes':
-      return 'Imágenes del Evento';
+      return 'Imágenes del Evento'
     case 'cronograma':
-      return 'Añadir Cronogramas';
+      return 'Añadir Cronogramas'
     case 'actividades':
-      return 'Añadir Actividades';
+      return 'Añadir Actividades'
     default:
-      return 'Información del Evento';
+      return 'Información del Evento'
   }
-});
+})
 
 function testLoading() {
-  loading.value = true;
+  loading.value = true
   setTimeout(() => {
-    loading.value = false;
-    console.log('✅ Simulación completada.');
-  }, 10000);
+    loading.value = false
+    console.log('✅ Simulación completada.')
+  }, 10000)
 }
 
-
-const descripcionCount = computed(() => form.descripcion.length);
+const descripcionCount = computed(() => form.descripcion.length)
 const error = ref('')
 const loading = ref(false)
 
@@ -68,17 +67,17 @@ async function handleSubmit() {
     return
   }
 
-  const fechaInicio = new Date(form.fecha_inicio);
-  const fechaFin = new Date(form.fecha_fin);
+  const fechaInicio = new Date(form.fecha_inicio)
+  const fechaFin = new Date(form.fecha_fin)
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas ingresadas no son válidas.';
-    return;
+    error.value = '⚠️ Las fechas ingresadas no son válidas.'
+    return
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.';
-    return;
+    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.'
+    return
   }
 
   const payload = { ...form }
@@ -145,14 +144,30 @@ async function enviarEvento(data) {
       <h2 class="modal-title">Evento</h2>
 
       <div class="modal-tabs">
-        <button :class="['tab', activeTab === 'info' ? 'active' : '']" @click="activeTab = 'info'">Información del Evento</button>
-        <button :class="['tab', activeTab === 'imagenes' ? 'active' : '']" @click="activeTab = 'imagenes'">Imágenes del Evento</button>
-        <button :class="['tab', activeTab === 'cronograma' ? 'active' : '']" @click="activeTab = 'cronograma'">Añadir Cronogramas</button>
-        <button :class="['tab', activeTab === 'actividades' ? 'active' : '']" @click="activeTab = 'actividades'">Añadir Actividades</button>
+        <button :class="['tab', activeTab === 'info' ? 'active' : '']" @click="activeTab = 'info'">
+          Información del Evento
+        </button>
+        <button
+          :class="['tab', activeTab === 'imagenes' ? 'active' : '']"
+          @click="activeTab = 'imagenes'"
+        >
+          Imágenes del Evento
+        </button>
+        <button
+          :class="['tab', activeTab === 'cronograma' ? 'active' : '']"
+          @click="activeTab = 'cronograma'"
+        >
+          Añadir Cronogramas
+        </button>
+        <button
+          :class="['tab', activeTab === 'actividades' ? 'active' : '']"
+          @click="activeTab = 'actividades'"
+        >
+          Añadir Actividades
+        </button>
       </div>
 
       <h3 class="modal-title2">{{ tabTitle }}</h3>
-
 
       <!-- Modal parte 1 -->
 
@@ -165,11 +180,7 @@ async function enviarEvento(data) {
             </div>
 
             <div class="form-group textarea-group span-3">
-              <textarea
-                v-model="form.descripcion"
-                maxlength="225"
-                required
-              ></textarea>
+              <textarea v-model="form.descripcion" maxlength="225" required></textarea>
               <label>Descripción *</label>
               <div class="char-count">{{ descripcionCount }}/225</div>
             </div>
@@ -227,25 +238,36 @@ async function enviarEvento(data) {
             </div>
 
             <div class="form-group span-1">
-              <input v-model.number="form.capacidad" type="number" placeholder="#" min="0" required />
+              <input
+                v-model.number="form.capacidad"
+                type="number"
+                placeholder="#"
+                min="0"
+                required
+              />
               <label>Capacidad *</label>
             </div>
           </div>
 
           <div class="switch-group">
             <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" v-model="form.hayEquipos" :true-value="1" :false-value="0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                v-model="form.hayEquipos"
+                :true-value="1"
+                :false-value="0"
+              />
               <label class="form-check-label">Ingresos de Proyectos</label>
             </div>
 
             <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" v-model="form.hayFormulario">
+              <input class="form-check-input" type="checkbox" v-model="form.hayFormulario" />
               <label class="form-check-label">Se necesita Rubricas</label>
             </div>
           </div>
 
           <p v-if="error" class="error-text">{{ error }}</p>
-
 
           <div class="button-row">
             <button type="button" class="btn btn-cancel" @click="$emit('close')">
@@ -261,12 +283,8 @@ async function enviarEvento(data) {
               Loader button
             </button>
           </div> -->
-
         </form>
       </div>
-
-
-
 
       <!-- Modal parte 2 -->
       <div v-if="activeTab === 'imagenes'">
@@ -286,9 +304,8 @@ async function enviarEvento(data) {
         <p>Sección para añadir actividades</p>
       </div>
 
-
       <!-- Loader  -->
-      <Loader v-if="loading"/>
+      <Loader v-if="loading" />
     </div>
   </div>
 </template>
@@ -350,7 +367,6 @@ async function enviarEvento(data) {
   display: flex;
   justify-content: space-between;
   gap: 0.5em;
-
 }
 
 .tab {
@@ -376,7 +392,6 @@ async function enviarEvento(data) {
   font-weight: bold;
   color: #174384;
 }
-
 
 .custom-form {
   max-width: 900px;
@@ -498,7 +513,9 @@ async function enviarEvento(data) {
 }
 
 .form-check-input {
-  transition: background-color 1s ease, border-color 1s ease;
+  transition:
+    background-color 1s ease,
+    border-color 1s ease;
 }
 
 .error-text {
@@ -506,8 +523,6 @@ async function enviarEvento(data) {
   text-align: center;
   font-weight: bold;
 }
-
-
 
 /* Botones */
 .button-row {
