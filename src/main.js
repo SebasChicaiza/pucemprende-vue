@@ -10,6 +10,13 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 
+// main.js o App.vue (en <script setup>)
+import { defineAsyncComponent } from 'vue'
+
+// Esto precarga la vista como si fuera usada
+defineAsyncComponent(() => import('@/views/Admin/EventsView.vue'))
+
+
 const app = createApp(App)
 
 app.use(createPinia())

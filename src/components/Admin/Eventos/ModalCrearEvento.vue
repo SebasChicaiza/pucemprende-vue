@@ -1,31 +1,89 @@
 <script setup>
 import { ref, reactive } from 'vue'
 
+/*
 const props = defineProps({
   show: Boolean,
 })
+  */
 
 const emit = defineEmits(['close', 'submit'])
 
 const form = reactive({
   nombre: '',
+  categoria_id: null,
   descripcion: '',
-  categoria: '',
-  modalidad: '',
-  fechaInicio: '',
-  fechaFin: '',
-  estado: 'Activo',
+  fecha_inicio: '',
+  fecha_fin: '',
+  capacidad: 0,
+  sede_id: null,
   espacio: '',
-  sede: '',
-  capacidad: '',
-  ingresoProyectos: false,
-  seNecesitaRubricas: false,
+  modalidad: '',
+  hayEquipos: 0,
+  hayFormulario: false,
 })
 
-function handleSubmit() {
-  emit('submit', { ...form })
+const activeTab = ref('info')
+const error = ref('')
+const loading = ref(false)
+
+async function handleSubmit() {
+  error.value = ''
+
+  if (
+    !form.nombre ||
+    !form.descripcion ||
+    !form.fecha_inicio ||
+    !form.fecha_fin ||
+    !form.modalidad ||
+    !form.categoria_id ||
+    !form.sede_id
+  ) {
+    error.value = '⚠️ Por favor, completa todos los campos obligatorios.'
+    return
+  }
+
+  const payload = { ...form }
+  await enviarEvento(payload)
 }
-const activeTab = ref('info') // 'info', 'imagenes', 'cronograma', 'actividades'
+
+async function enviarEvento(data) {
+  const token = localStorage.getItem('token')
+
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.'
+    return
+  }
+
+  loading.value = true
+  try {
+    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token,
+      },
+      body: JSON.stringify(data),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      console.error('Error del servidor:', result)
+      error.value = result.message || 'Error al crear el evento.'
+      return
+    }
+
+    console.log('Evento creado con éxito:', result)
+    activeTab.value = 'imagenes'
+    emit('submit', result) // 🔁 Notificar al padre que el evento fue creado
+  } catch (err) {
+    console.error('Error de red:', err)
+    error.value = 'Fallo en la conexión con el servidor.'
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -106,6 +164,7 @@ const activeTab = ref('info') // 'info', 'imagenes', 'cronograma', 'actividades'
             <button type="button" class="btn btn-cancel" @click="$emit('close')">Volver</button>
             <button type="submit" class="btn btn-primary">Siguiente</button>
           </div>
+          <p v-if="error" class="error-text">{{ error }}</p>
         </form>
       </div>
       <!-- Modal parte 2 -->
