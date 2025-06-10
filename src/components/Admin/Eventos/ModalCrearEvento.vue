@@ -222,6 +222,13 @@ async function enviarEvento(data) {
           </div>
 
           <p v-if="error" class="error-text">{{ error }}</p>
+
+
+          <div class="button-row">
+            <button type="button" class="btn btn-cancel" @click="$emit('close')"><i class="fas fa-angle-left"></i>Volver</button>
+            <button type="submit" class="btn btn-primary">Siguiente<i class="fas fa-angle-right"></i></button>
+          </div>
+
         </form>
       </div>
 
@@ -243,11 +250,6 @@ async function enviarEvento(data) {
         <p>Sección para añadir actividades</p>
       </div>
 
-
-      <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="$emit('close')"><i class="fas fa-angle-left"></i>Volver</button>
-            <button type="submit" class="btn btn-primary">Siguiente<i class="fas fa-angle-right"></i></button>
-      </div>
     </div>
   </div>
 </template>
