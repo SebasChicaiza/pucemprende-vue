@@ -55,6 +55,8 @@ async function enviarEvento(data) {
 
   loading.value = true
   try {
+    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2))
+
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
       method: 'POST',
       headers: {
@@ -63,6 +65,14 @@ async function enviarEvento(data) {
       },
       body: JSON.stringify(data),
     })
+
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const raw = await response.text()
+      console.error('Respuesta inesperada (no es JSON):', raw)
+      error.value = 'El servidor devolvió un formato inesperado.'
+      return
+    }
 
     const result = await response.json()
 
