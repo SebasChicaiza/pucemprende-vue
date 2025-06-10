@@ -1,11 +1,9 @@
 <script setup>
 import { ref, reactive } from 'vue'
 
-/*
 const props = defineProps({
   show: Boolean,
 })
-  */
 
 const emit = defineEmits(['close', 'submit'])
 
