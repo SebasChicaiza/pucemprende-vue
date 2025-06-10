@@ -67,6 +67,19 @@ async function handleSubmit() {
     return
   }
 
+  const fechaInicio = new Date(form.fecha_inicio);
+  const fechaFin = new Date(form.fecha_fin);
+
+  if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+    error.value = '⚠️ Las fechas ingresadas no son válidas.';
+    return;
+  }
+
+  if (fechaInicio >= fechaFin) {
+    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.';
+    return;
+  }
+
   const payload = { ...form }
   await enviarEvento(payload)
 }
@@ -233,7 +246,7 @@ async function enviarEvento(data) {
           <p v-if="error" class="error-text">{{ error }}</p>
 
 
-          <div class="button-row" v-if="!loading">
+          <div class="button-row">
             <button type="button" class="btn btn-cancel" @click="$emit('close')">
               <i class="fas fa-angle-left"></i>Volver
             </button>
