@@ -154,11 +154,6 @@ async function enviarEvento(data) {
             <input v-model="form.fecha_inicio" type="date" required />
             <input v-model="form.fecha_fin" type="date" required />
 
-            <select v-model="form.estado" required>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-            </select>
-
             <input v-model="form.espacio" type="text" placeholder="Lugar del evento" />
 
             <select v-model.number="form.sede_id" required>
