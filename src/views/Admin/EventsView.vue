@@ -15,28 +15,34 @@ const loading = ref(false)
 
 // Function to fetch events
 async function fetchEvents() {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token');
 
 
   if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
-    return
+    error.value = 'Token de autenticación no encontrado.';
+    loading.value = false; // Make sure loading is turned off if no token
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
   try {
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: token,
+        'Authorization': `Bearer ${token}`,
       },
-    })
+    });
+
+    // Log the response status and headers
+    console.log('Response Status:', response.status);
+    console.log('Response Headers:', response.headers);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Error del servidor:', errorText);
       error.value = `Error al cargar los eventos: ${response.statusText} (HTTP ${response.status})`;
+      loading.value = false; // Ensure loading is turned off in case of error
       return;
     }
 
@@ -45,20 +51,21 @@ async function fetchEvents() {
       const data = await response.json();
       console.log('Datos de eventos:', data);
       events.value = data;
-    } if (response.status === 401) {
-      error.value = 'No autorizado. El token es inválido o ha expirado.';
     } else {
-      const errorText = await response.text(); // Mostrar el cuerpo del error (HTML)
-      console.error('Error inesperado:', errorText);
+      const errorText = await response.text();
+      console.error('Error inesperado: contenido no JSON', errorText);
       error.value = 'Error al cargar los eventos. Verifique el servidor.';
     }
+
   } catch (err) {
     console.error('Error al hacer la solicitud:', err);
     error.value = `Fallo en la conexión con el servidor: ${err.message}`;
   } finally {
-    loading.value = false;
+    console.log('Loader is turning off');
+    loading.value = false; // Ensure loader is turned off
   }
 }
+
 
 onMounted(fetchEvents)
 
@@ -69,7 +76,7 @@ function guardarEvento(data) {
 </script>
 
 <template>
-  <LoaderComponent/>
+  <LoaderComponent v-if="loading"/>
   <div class="d-flex">
     <Sidebar />
 
