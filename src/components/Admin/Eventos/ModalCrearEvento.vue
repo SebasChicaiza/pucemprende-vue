@@ -66,21 +66,25 @@ async function enviarEvento(data) {
       body: JSON.stringify(data),
     })
 
-    let result = {}
+    const raw = await response.text()
+    console.log('⚠️ Respuesta cruda del servidor:', raw)
 
-    // Intentar parsear JSON solo si la respuesta tiene cuerpo y es tipo JSON
-    const contentType = response.headers.get('content-type')
-    if (contentType && contentType.includes('application/json')) {
-      try {
-        result = await response.json()
-      } catch (jsonErr) {
-        console.warn('Respuesta sin cuerpo JSON. Continuando.', jsonErr)
-      }
+    let result = {}
+    try {
+      // Separar los dos objetos JSON pegados
+      const parts = raw.split(/}(?={)/) // divide entre }{
+      const part1 = JSON.parse(parts[0] + '}')
+      const part2 = JSON.parse('{' + parts[1])
+      result = { usuario: part1, evento: part2 }
+    } catch (e) {
+      console.error('Error al parsear JSON doble:', e)
+      error.value = 'La respuesta del servidor no es válida.'
+      return
     }
 
     if (!response.ok) {
       console.error('Error del servidor:', result)
-      error.value = result.message || 'Error al crear el evento.'
+      error.value = result?.mensaje || 'Error al crear el evento.'
       return
     }
 
@@ -88,7 +92,7 @@ async function enviarEvento(data) {
     activeTab.value = 'imagenes'
     emit('submit', result)
   } catch (err) {
-    console.error('Error de red:', err)
+    console.error('Error de red:', err.name, err.message)
     error.value = 'Fallo en la conexión con el servidor.'
   } finally {
     loading.value = false
