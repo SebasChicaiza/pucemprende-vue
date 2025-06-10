@@ -1,6 +1,6 @@
 <script setup>
-  import AppNavbar from '@/components/AppNavbar.vue'
-  import AppFooter from '@/components/AppFooter.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 </script>
 
 <template>
@@ -106,10 +106,10 @@ export default {
         localStorage.setItem('token', `Bearer ${data.access_token}`)
         localStorage.setItem('user', JSON.stringify(data.user))
 
-        if (data.user.rol_id === 5) {
-          this.$router.push('/admin')
-        } else if (data.user.rol_id === 10) {
-          this.$router.push('/usuario')
+        if (data.user.rol_id === 1) {
+          this.$router.push('/admin/eventos')
+        } else if (data.user.rol_id === 2) {
+          this.$router.push('/eventos')
         } else {
           this.$router.push('/')
         }
