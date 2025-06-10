@@ -66,15 +66,17 @@ async function enviarEvento(data) {
       body: JSON.stringify(data),
     })
 
-    const contentType = response.headers.get('content-type')
-    if (!contentType || !contentType.includes('application/json')) {
-      const raw = await response.text()
-      console.error('Respuesta inesperada (no es JSON):', raw)
-      error.value = 'El servidor devolvió un formato inesperado.'
-      return
-    }
+    let result = {}
 
-    const result = await response.json()
+    // Intentar parsear JSON solo si la respuesta tiene cuerpo y es tipo JSON
+    const contentType = response.headers.get('content-type')
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        result = await response.json()
+      } catch (jsonErr) {
+        console.warn('Respuesta sin cuerpo JSON. Continuando.', jsonErr)
+      }
+    }
 
     if (!response.ok) {
       console.error('Error del servidor:', result)
@@ -84,7 +86,7 @@ async function enviarEvento(data) {
 
     console.log('Evento creado con éxito:', result)
     activeTab.value = 'imagenes'
-    emit('submit', result) // 🔁 Notificar al padre que el evento fue creado
+    emit('submit', result)
   } catch (err) {
     console.error('Error de red:', err)
     error.value = 'Fallo en la conexión con el servidor.'
