@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue'
+import { ref, reactive } from 'vue'
 
 const props = defineProps({
   show: Boolean,
@@ -25,6 +25,7 @@ const form = reactive({
 function handleSubmit() {
   emit('submit', { ...form })
 }
+const activeTab = ref('info') // 'info', 'imagenes', 'cronograma', 'actividades'
 </script>
 
 <template>
@@ -33,58 +34,97 @@ function handleSubmit() {
       <h2 class="modal-title">Evento</h2>
 
       <div class="modal-tabs">
-        <span class="tab active">Información del Evento</span>
-        <span class="tab">Imágenes del Evento</span>
-        <span class="tab">Añadir Cronogramas</span>
-        <span class="tab">Añadir Actividades</span>
+        <button :class="['tab', activeTab === 'info' ? 'active' : '']" @click="activeTab = 'info'">
+          Información del Evento
+        </button>
+        <button
+          :class="['tab', activeTab === 'imagenes' ? 'active' : '']"
+          @click="activeTab = 'imagenes'"
+        >
+          Imágenes del Evento
+        </button>
+        <button
+          :class="['tab', activeTab === 'cronograma' ? 'active' : '']"
+          @click="activeTab = 'cronograma'"
+        >
+          Añadir Cronogramas
+        </button>
+        <button
+          :class="['tab', activeTab === 'actividades' ? 'active' : '']"
+          @click="activeTab = 'actividades'"
+        >
+          Añadir Actividades
+        </button>
       </div>
 
-      <form @submit.prevent="handleSubmit">
-        <div class="form-grid">
-          <input v-model="form.nombre" type="text" placeholder="Nombre del evento*" required />
-          <input
-            v-model="form.descripcion"
-            type="text"
-            placeholder="Descripción*"
-            maxlength="225"
-            required
-          />
-          <select v-model="form.categoria" required>
-            <option disabled value="">Seleccione una Categoría</option>
-            <option>Emprendimiento</option>
-            <option>Tecnología</option>
-          </select>
-          <select v-model="form.modalidad" required>
-            <option disabled value="">Seleccione una Modalidad</option>
-            <option>Presencial</option>
-            <option>Virtual</option>
-            <option>Híbrida</option>
-          </select>
-          <input v-model="form.fechaInicio" type="date" required />
-          <input v-model="form.fechaFin" type="date" required />
-          <select v-model="form.estado" required>
-            <option value="Activo">Activo</option>
-            <option value="Inactivo">Inactivo</option>
-          </select>
-          <input v-model="form.espacio" type="text" placeholder="Lugar del evento" />
-          <input v-model="form.sede" type="text" placeholder="Sede PUCE" />
-          <input v-model="form.capacidad" type="number" placeholder="Capacidad" />
-        </div>
+      <!-- Modal parte 1 -->
 
-        <div class="checkbox-group">
-          <label
-            ><input type="checkbox" v-model="form.ingresoProyectos" /> Ingreso de Proyectos</label
-          >
-          <label
-            ><input type="checkbox" v-model="form.seNecesitaRubricas" /> Se necesita Rúbricas</label
-          >
-        </div>
+      <div v-if="activeTab === 'info'">
+        <form @submit.prevent="handleSubmit">
+          <div class="form-grid">
+            <input v-model="form.nombre" type="text" placeholder="Nombre del evento*" required />
+            <input
+              v-model="form.descripcion"
+              type="text"
+              placeholder="Descripción*"
+              maxlength="225"
+              required
+            />
+            <select v-model="form.categoria" required>
+              <option disabled value="">Seleccione una Categoría</option>
+              <option>Emprendimiento</option>
+              <option>Tecnología</option>
+            </select>
+            <select v-model="form.modalidad" required>
+              <option disabled value="">Seleccione una Modalidad</option>
+              <option>Presencial</option>
+              <option>Virtual</option>
+              <option>Híbrida</option>
+            </select>
+            <input v-model="form.fechaInicio" type="date" required />
+            <input v-model="form.fechaFin" type="date" required />
+            <select v-model="form.estado" required>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+            <input v-model="form.espacio" type="text" placeholder="Lugar del evento" />
+            <input v-model="form.sede" type="text" placeholder="Sede PUCE" />
+            <input v-model="form.capacidad" type="number" placeholder="Capacidad" />
+          </div>
 
-        <div class="button-row">
-          <button type="button" class="btn btn-cancel" @click="$emit('close')">Volver</button>
-          <button type="submit" class="btn btn-primary">Siguiente</button>
-        </div>
-      </form>
+          <div class="checkbox-group">
+            <label
+              ><input type="checkbox" v-model="form.ingresoProyectos" /> Ingreso de Proyectos</label
+            >
+            <label
+              ><input type="checkbox" v-model="form.seNecesitaRubricas" /> Se necesita
+              Rúbricas</label
+            >
+          </div>
+
+          <div class="button-row">
+            <button type="button" class="btn btn-cancel" @click="$emit('close')">Volver</button>
+            <button type="submit" class="btn btn-primary">Siguiente</button>
+          </div>
+        </form>
+      </div>
+      <!-- Modal parte 2 -->
+      <div v-if="activeTab === 'imagenes'">
+        <p>Aquí puedes subir imágenes del evento</p>
+        <!-- Ejemplo de input -->
+        <input type="file" multiple />
+      </div>
+
+      <!-- Modal parte 3 -->
+      <div v-if="activeTab === 'cronograma'">
+        <p>Formulario para añadir cronogramas</p>
+        <!-- Puedes poner una tabla o inputs según el diseño -->
+      </div>
+
+      <!-- Modal parte 4 -->
+      <div v-if="activeTab === 'actividades'">
+        <p>Sección para añadir actividades</p>
+      </div>
     </div>
   </div>
 </template>
