@@ -167,7 +167,7 @@ async function enviarEvento(data) {
 
           <div class="checkbox-group">
             <label>
-              <input type="checkbox" v-model="form.hayEquipos" true-value="1" false-value="0" />
+              <input type="checkbox" v-model="form.hayEquipos" :true-value="1" :false-value="0" />
               Ingreso de Proyectos
             </label>
 
