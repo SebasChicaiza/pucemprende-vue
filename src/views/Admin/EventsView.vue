@@ -28,7 +28,7 @@ async function fetchEvents() {
       method: 'GET', // Use GET to fetch data
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: token,
       },
     })
 
