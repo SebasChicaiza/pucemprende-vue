@@ -26,7 +26,7 @@ onUnmounted(() => {
 
 function logout() {
   localStorage.removeItem('user')
-  localStorage.removeIte('token')
+  localStorage.removeItem('token')
   router.push('/login') // o usar router.push('/login') si prefieres redireccionar
 }
 function cerrarSesion() {
