@@ -22,6 +22,7 @@ const form = reactive({
 })
 
 const activeTab = ref('info')
+
 const error = ref('')
 const loading = ref(false)
 
@@ -90,7 +91,7 @@ async function enviarEvento(data) {
 
     console.log('Evento creado con éxito:', result)
     activeTab.value = 'imagenes'
-    emit('submit', result)
+    // emit('submit', result)
   } catch (err) {
     console.error('Error de red:', err.name, err.message)
     error.value = 'Fallo en la conexión con el servidor.'
