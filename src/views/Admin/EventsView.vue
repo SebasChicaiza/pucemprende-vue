@@ -25,25 +25,34 @@ async function fetchEvents() {
   loading.value = true
   try {
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
-      method: 'GET', // Use GET to fetch data
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         Authorization: token,
       },
     })
 
-    const data = await response.json()
-    console.log('Datos de eventos:', data)
-    if (response.ok) {
-      events.value = data
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error del servidor:', errorText);
+      error.value = `Error al cargar los eventos: ${response.statusText} (HTTP ${response.status})`;
+      return;
+    }
+
+    const contentType = response.headers.get('Content-Type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      console.log('Datos de eventos:', data);
+      events.value = data;
     } else {
-      error.value = 'Error al cargar los eventos'
+      error.value = 'El servidor no devolvió datos en formato JSON.';
+      console.error('Unexpected response type:', contentType);
     }
   } catch (err) {
-    console.error('Error al hacer la solicitud:', err)
-    error.value = 'Fallo en la conexión con el servidor.'
+    console.error('Error al hacer la solicitud:', err);
+    error.value = `Fallo en la conexión con el servidor: ${err.message}`;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
