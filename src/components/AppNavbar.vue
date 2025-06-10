@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 const menuOpen = ref(false)
 const isMobile = ref(window.innerWidth < 992)
-const user = ref(null)
+import { user } from '@/stores/user'
 const router = useRouter()
 
 const checkMobile = () => {
@@ -13,11 +13,11 @@ const checkMobile = () => {
 
 onMounted(() => {
   window.addEventListener('resize', checkMobile)
+
   const storedUser = localStorage.getItem('user')
-  if (storedUser) {
-    user.value = JSON.parse(storedUser)
-  }
-  console.log(user)
+  user.value = storedUser ? JSON.parse(storedUser) : null
+
+  console.log(user.value)
 })
 
 onUnmounted(() => {
@@ -27,6 +27,7 @@ onUnmounted(() => {
 function logout() {
   localStorage.removeItem('user')
   localStorage.removeItem('token')
+  user.value = null
   router.push('/login') // o usar router.push('/login') si prefieres redireccionar
 }
 function cerrarSesion() {
