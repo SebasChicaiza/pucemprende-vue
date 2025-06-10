@@ -15,7 +15,7 @@ const loading = ref(false)
 
 // Function to fetch events
 async function fetchEvents() {
-  const token = localStorage.getItem('token') // Get token from localStorage
+  const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58' // Get token from localStorage
 
   if (!token) {
     error.value = 'Token de autenticación no encontrado.'
@@ -44,9 +44,12 @@ async function fetchEvents() {
       const data = await response.json();
       console.log('Datos de eventos:', data);
       events.value = data;
+    } if (response.status === 401) {
+      error.value = 'No autorizado. El token es inválido o ha expirado.';
     } else {
-      error.value = 'El servidor no devolvió datos en formato JSON.';
-      console.error('Unexpected response type:', contentType);
+      const errorText = await response.text(); // Mostrar el cuerpo del error (HTML)
+      console.error('Error inesperado:', errorText);
+      error.value = 'Error al cargar los eventos. Verifique el servidor.';
     }
   } catch (err) {
     console.error('Error al hacer la solicitud:', err);
