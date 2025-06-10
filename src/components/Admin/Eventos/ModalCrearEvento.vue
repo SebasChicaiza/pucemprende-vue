@@ -38,6 +38,15 @@ const tabTitle = computed(() => {
   }
 });
 
+function testLoading() {
+  loading.value = true;
+  setTimeout(() => {
+    loading.value = false;
+    console.log('✅ Simulación completada.');
+  }, 10000); // simula 3 segundos de espera
+}
+
+
 const descripcionCount = computed(() => form.descripcion.length);
 const error = ref('')
 const loading = ref(false)
@@ -243,6 +252,21 @@ async function enviarEvento(data) {
 
         </form>
       </div>
+
+      <!-- <div class="button-row">
+        <button class="btn btn-primary" @click="testLoading">
+          Probar Loader <i class="fas fa-spinner"></i>
+        </button>
+      </div>
+
+      <div class="dots-container" v-if="loading">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div> -->
+
 
       <!-- Modal parte 2 -->
       <div v-if="activeTab === 'imagenes'">
