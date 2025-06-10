@@ -1,8 +1,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 
 const menuOpen = ref(false)
 const isMobile = ref(window.innerWidth < 992)
+const user = ref(null)
+const router = useRouter()
 
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 992
@@ -10,11 +13,25 @@ const checkMobile = () => {
 
 onMounted(() => {
   window.addEventListener('resize', checkMobile)
+  const storedUser = localStorage.getItem('user')
+  if (storedUser) {
+    user.value = JSON.parse(storedUser)
+  }
+  console.log(user)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
 })
+
+function logout() {
+  localStorage.removeItem('user')
+  router.push('/login') // o usar router.push('/login') si prefieres redireccionar
+}
+function cerrarSesion() {
+  logout()
+  menuOpen.value = false
+}
 </script>
 <template>
   <nav class="navbar px-4 py-2">
@@ -53,15 +70,19 @@ onUnmounted(() => {
       </button>
 
       <!-- Botones de sesión -->
-      <div v-if="!isMobile" class="d-lg-flex">
+      <div v-if="!isMobile && !user" class="d-lg-flex">
         <router-link to="/login" class="btn-ini btn me-3">Iniciar Sesión</router-link>
         <router-link to="/registro" class="btn-reg btn">Registrarse</router-link>
+      </div>
+      <div v-else-if="!isMobile && user" class="d-lg-flex">
+        <router-link to="/cuenta" class="btn-ini btn me-3">Mi Cuenta</router-link>
+        <button @click="logout" class="btn-reg btn">Cerrar Sesión</button>
       </div>
     </div>
     <!-- Menú responsive solo visible en móvil cuando está abierto -->
     <transition name="slide-fade">
       <div
-        v-if="menuOpen && isMobile"
+        v-if="menuOpen && isMobile && !user"
         class="d-flex flex-column p-3 mt-2 rounded gap-2 position-absolute"
         style="top: 100%; right: 0; background-color: #174384; z-index: 1000"
       >
@@ -76,6 +97,22 @@ onUnmounted(() => {
         <router-link to="/registro" class="btn-reg btn" @click="menuOpen = false"
           >Registrarse</router-link
         >
+      </div>
+      <!-- Menú para usuario autenticado -->
+      <div
+        v-else-if="menuOpen && isMobile && user"
+        class="d-flex flex-column p-3 mt-2 rounded gap-2 position-absolute"
+        style="top: 100%; right: 0; background-color: #174384; z-index: 1000"
+      >
+        <router-link to="/" class="btn" @click="menuOpen = false">Inicio</router-link>
+        <router-link to="/eventos" class="btn" @click="menuOpen = false">Eventos</router-link>
+        <router-link to="/sobreNosotros" class="btn" @click="menuOpen = false"
+          >Sobre Nosotros</router-link
+        >
+        <router-link to="/cuenta" class="btn-ini btn" @click="menuOpen = false"
+          >Mi Cuenta</router-link
+        >
+        <button class="btn-reg btn" @click="cerrarSesion">Cerrar Sesión</button>
       </div>
     </transition>
   </nav>

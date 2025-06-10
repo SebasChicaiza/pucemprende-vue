@@ -6,6 +6,7 @@ import SignUpView from '@/views/SignUpView.vue'
 import SobreNosotrosView from '@/views/SobreNosotrosView.vue'
 import DashboardView from '@/views/Admin/DashboardView.vue'
 import EventsView from '@/views/Admin/EventsView.vue'
+import CuentaView from '@/views/CuentaView.vue'
 
 
 const router = createRouter({
@@ -50,6 +51,14 @@ const router = createRouter({
       component: EventsView,
       meta: {
         title: 'Eventos',
+      },
+    },
+    {
+      path: '/cuenta',
+      name: 'MiCuenta',
+      component: CuentaView,
+      meta: {
+        title: 'Cuenta',
       },
     }
     /* EJEMPLO LAZY LOADING
