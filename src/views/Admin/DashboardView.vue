@@ -1,16 +1,18 @@
 <script setup>
 import Sidebar from '@/components/Admin/AdminSidebar.vue';
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue';
+import LoaderComponent from '@/components/LoaderComponent.vue';
 </script>
 
 <template>
-  <div class="d-flex">
+  <LoaderComponent v-if="loading"/>
+  <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
 
-    <div class="flex-grow-1" style="min-height: 100vh;">
+    <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
       <PageHeaderRoute />
 
-      <div class="p-4">
+      <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <p>Este es el dashboard de admin</p>
       </div>
     </div>

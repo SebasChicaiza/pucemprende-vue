@@ -12,8 +12,12 @@ defineProps({
         <i class="fas fa-pen edit-icon"></i>
       </div>
 
-      <h5 class="card-title mt-2">{{ event.nombre }}</h5>
-      <p class="card-text mb-3">{{ event.descripcion }}</p>
+      <h5 class="card-title mt-2 fixed-title">
+        {{ event.nombre.length > 30 ? event.nombre.slice(0, 30) + '...' : event.nombre }}
+      </h5>
+      <p class="card-text mb-3 fixed-description">
+        {{ event.descripcion.length > 120 ? event.descripcion.slice(0, 120) + '...' : event.descripcion }}
+      </p>
 
       <p class="mb-1">
         <strong>Inicia:</strong> {{ new Date(event.fecha_inicio).toLocaleDateString() }}<br />
@@ -23,10 +27,11 @@ defineProps({
       <p class="mb-2"><strong>Categoría:</strong> {{ event.categoria_id === 1 ? 'Emprendimientos' : 'Tecnología' }}</p>
 
       <div class="d-flex align-items-center mb-3">
-        <i class="fas fa-check-circle text-success me-1"></i>
-        <span class="text-success fw-semibold">Estado: </span>
-        <span class="ms-1 text-muted">{{ event.estado_borrado ? 'Inactivo' : 'Activo' }}</span>
+        <i :class="event.estado_borrado ? 'fas fa-times-circle text-danger me-1' : 'fas fa-check-circle text-success me-1'"></i>
+        <span :class="event.estado_borrado ? 'text-danger fw-semibold' : 'text-success fw-semibold'">Estado:</span>
+        <span :class="event.estado_borrado ? 'text-danger ms-1' : 'text-muted ms-1'">{{ event.estado_borrado ? 'Inactivo' : 'Activo' }}</span>
       </div>
+
 
       <div class="d-flex gap-2">
         <button class="btn btn-outline-primary btn-sm">Ver evento</button>
@@ -39,9 +44,15 @@ defineProps({
 <style scoped>
 .event-card {
   max-width: 300px;
+  height: 375px;
   border-radius: 12px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
   border: none;
+}
+.event-card .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .event-card .edit-icon {
@@ -61,6 +72,7 @@ defineProps({
 .event-card .card-text {
   font-size: 0.9rem;
   color: #555;
+  text-align: justify;
 }
 
 .event-card .btn {
@@ -86,5 +98,18 @@ defineProps({
   background-color: #ffffff;
   border-color: #174384;
   color: #174384;
+}
+
+.fixed-title {
+  height: 1.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fixed-description {
+  height: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
