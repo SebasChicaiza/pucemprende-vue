@@ -119,6 +119,7 @@ async function enviarEvento(data) {
         <form @submit.prevent="handleSubmit">
           <div class="form-grid">
             <input v-model="form.nombre" type="text" placeholder="Nombre del evento*" required />
+
             <input
               v-model="form.descripcion"
               type="text"
@@ -126,42 +127,56 @@ async function enviarEvento(data) {
               maxlength="225"
               required
             />
-            <select v-model="form.categoria" required>
+
+            <select v-model.number="form.categoria_id" required>
               <option disabled value="">Seleccione una Categoría</option>
-              <option>Emprendimiento</option>
-              <option>Tecnología</option>
+              <option :value="1">Emprendimiento</option>
+              <option :value="2">Tecnología</option>
             </select>
+
             <select v-model="form.modalidad" required>
               <option disabled value="">Seleccione una Modalidad</option>
               <option>Presencial</option>
               <option>Virtual</option>
               <option>Híbrida</option>
             </select>
-            <input v-model="form.fechaInicio" type="date" required />
-            <input v-model="form.fechaFin" type="date" required />
+
+            <input v-model="form.fecha_inicio" type="date" required />
+            <input v-model="form.fecha_fin" type="date" required />
+
             <select v-model="form.estado" required>
               <option value="Activo">Activo</option>
               <option value="Inactivo">Inactivo</option>
             </select>
+
             <input v-model="form.espacio" type="text" placeholder="Lugar del evento" />
-            <input v-model="form.sede" type="text" placeholder="Sede PUCE" />
-            <input v-model="form.capacidad" type="number" placeholder="Capacidad" />
+
+            <select v-model.number="form.sede_id" required>
+              <option disabled value="">Seleccione una sede</option>
+              <option :value="1">Sede Quito</option>
+              <option :value="2">Sede Ambato</option>
+            </select>
+
+            <input v-model.number="form.capacidad" type="number" placeholder="Capacidad" min="0" />
           </div>
 
           <div class="checkbox-group">
-            <label
-              ><input type="checkbox" v-model="form.ingresoProyectos" /> Ingreso de Proyectos</label
-            >
-            <label
-              ><input type="checkbox" v-model="form.seNecesitaRubricas" /> Se necesita
-              Rúbricas</label
-            >
+            <label>
+              <input type="checkbox" v-model="form.hayEquipos" true-value="1" false-value="0" />
+              Ingreso de Proyectos
+            </label>
+
+            <label>
+              <input type="checkbox" v-model="form.hayFormulario" />
+              Se necesita Rúbricas
+            </label>
           </div>
 
           <div class="button-row">
             <button type="button" class="btn btn-cancel" @click="$emit('close')">Volver</button>
             <button type="submit" class="btn btn-primary">Siguiente</button>
           </div>
+
           <p v-if="error" class="error-text">{{ error }}</p>
         </form>
       </div>
