@@ -8,6 +8,7 @@ import AppFooter from '@/components/AppFooter.vue'
   <AppNavbar />
   <div>
     <h2>Sobre Nosotros</h2>
+
   </div>
   <AppFooter />
 </template>
