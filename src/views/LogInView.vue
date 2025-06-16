@@ -83,16 +83,23 @@ export default {
       this.error = ''
       this.loading = true
       try {
+
+        await fetch(`${import.meta.env.VITE_URL_BACKEND}/sanctum/csrf-cookie`, {
+  credentials: 'include'
+});
+
         const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/login`, {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+
           },
           body: JSON.stringify({
             email: this.email,
             password: this.password,
           }),
+          credentials: 'include'
         })
 
         const text = await response.text()
@@ -121,7 +128,7 @@ export default {
           this.$router.push('/')
         }
       } catch (err) {
-        this.error = 'Correo o contraseña incorrectos.'
+        this.error = 'Correo o contraseña incorrectos. aaaaaaaa'
         console.error('Login error:', err)
       }
       finally {
