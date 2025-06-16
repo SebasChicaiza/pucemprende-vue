@@ -94,7 +94,11 @@ function guardarEvento(data) {
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
           <div class="row" v-if="!loading">
-            <div class="col-md-3 mb-3" v-for="event in filteredEvents" :key="event.id">
+            <div
+              class="col-12 col-sm-12 col-md-6 col-lg-3 mb-3"
+              v-for="event in filteredEvents"
+              :key="event.id"
+            >
               <AdminEventCard :event="event" />
             </div>
           </div>
