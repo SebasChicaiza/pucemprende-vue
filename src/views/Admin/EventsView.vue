@@ -2,9 +2,11 @@
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import { ref, onMounted, computed } from 'vue'
+import axios from 'axios';
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
 import AdminEventCard from '@/components/Admin/Eventos/AdminEventCard.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
+
 
 const abrir = ref(false)
 
@@ -23,8 +25,8 @@ const filteredEvents = computed(() =>
 
 // Function to fetch events
 async function fetchEvents() {
-  //const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58'; //To test the API call, you can use a hardcoded token like this
   const token = localStorage.getItem('token');
+  //const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58'; // To test the API call, you can use a hardcoded token like this
 
   if (!token) {
     error.value = 'Token de autenticación no encontrado.';
@@ -34,43 +36,39 @@ async function fetchEvents() {
 
   loading.value = true;
   try {
-    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
-      method: 'GET',
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
     });
-
-    // Log the response status and headers
     console.log('Response Status:', response.status);
-    console.log('Response Headers:', response.headers);
+    console.log('Response Data:', response.data);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error del servidor:', errorText);
-      error.value = `Error al cargar los eventos: ${response.statusText} (HTTP ${response.status})`;
-      loading.value = false; // Ensure loading is turned off in case of error
-      return;
-    }
-
-    const contentType = response.headers.get('Content-Type');
-    if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      console.log('Datos de eventos:', data);
-      events.value = data;
-    } else {
-      const errorText = await response.text();
-      console.error('Error inesperado: contenido no JSON', errorText);
-      error.value = 'Error al cargar los eventos. Verifique el servidor.';
-    }
+    events.value = response.data;
+    error.value = null;
 
   } catch (err) {
-    console.error('Error al hacer la solicitud:', err);
-    error.value = `Fallo en la conexión con el servidor: ${err.message}`;
+    if (err.response) {
+
+      console.error('Error del servidor (Axios):', err.response.data);
+      console.error('Response Status (Axios):', err.response.status);
+      console.error('Response Headers (Axios):', err.response.headers);
+
+      const errorMessage = err.response.data?.message || err.response.statusText || `HTTP Error ${err.response.status}`;
+      error.value = `Error al cargar los eventos: ${errorMessage}`;
+    } else if (err.request) {
+      // The request was made but no response was received
+      console.error('No se recibió respuesta del servidor (Axios):', err.request);
+      error.value = 'No se pudo conectar con el servidor. Verifique su conexión de red.';
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('Error al configurar la solicitud (Axios):', err.message);
+      error.value = `Fallo en la solicitud: ${err.message}`;
+    }
   } finally {
     console.log('Loader is turning off');
-    loading.value = false; // Ensure loader is turned off
+    loading.value = false;
   }
 }
 
