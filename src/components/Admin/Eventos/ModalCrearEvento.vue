@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
 import ScrollBar from '@/components/ScrollBar.vue'
+import axios from 'axios';
 
 const props = defineProps({
   show: Boolean,
@@ -54,6 +55,26 @@ const error = ref('')
 const loading = ref(false)
 const categorias = ref([])
 
+
+const fetchCategorias = async () => {
+  const token = localStorage.getItem('token');
+  // const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58';
+
+  if (!token) {
+    console.error("Token de autenticación no encontrado.");
+  }
+
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/categoria`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    categorias.value = response.data;
+  } catch (error) {
+    console.error("Error al obtener las categorías:", error);
+  }
+};
 
 async function handleSubmit() {
   error.value = ''
@@ -245,21 +266,7 @@ function moverAbajo(idx) {
 }
 
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  // const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58';
-  try {
-    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/categoria`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token,
-      },
-    })
-    if (!response.ok) throw new Error('Network response was not ok')
-    categorias.value = await response.json() // expects [{ id, nombre }, ...]
-  } catch (error) {
-    console.error('Error fetching categories:', error)
-  }
+  fetchCategorias()
 })
 
 </script>
