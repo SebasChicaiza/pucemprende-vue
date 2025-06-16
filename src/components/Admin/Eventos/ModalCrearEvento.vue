@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
+import ScrollBar from '@/components/ScrollBar.vue'
 
 const props = defineProps({
   show: Boolean,
@@ -51,6 +52,8 @@ function testLoading() {
 const descripcionCount = computed(() => form.descripcion.length)
 const error = ref('')
 const loading = ref(false)
+const categorias = ref([])
+
 
 async function handleSubmit() {
   error.value = ''
@@ -151,12 +154,12 @@ function handleCoverChange(event) {
     return
   }
 
-  if (file.size <= 1024 * 1024) {
+  if (file.size <= 10240 * 10240) {
     coverPreview.value = URL.createObjectURL(file)
   } else {
     event.target.value = ''
     coverPreview.value = '/assets/iconos/imageHolder.png'
-    alert('La imagen debe pesar menos de 1 MB.')
+    alert('La imagen debe pesar menos de 10 MB.')
   }
 }
 
@@ -240,12 +243,33 @@ function moverAbajo(idx) {
   actividades.value[idx + 1] = actividades.value[idx]
   actividades.value[idx] = temp
 }
+
+onMounted(async () => {
+  const token = localStorage.getItem('token')
+  // const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58';
+  try {
+    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/categoria`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token,
+      },
+    })
+    if (!response.ok) throw new Error('Network response was not ok')
+    categorias.value = await response.json() // expects [{ id, nombre }, ...]
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+  }
+})
+
 </script>
 
 <template>
   <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content fade-in">
-      <h2 class="modal-title">Evento</h2>
+      <h2 class="modal-title">Evento
+        <i class="fa-solid fa-xmark close-modal-button" @click="$emit('close')"></i>
+      </h2>
 
       <div class="modal-tabs">
         <button :class="['tab', activeTab === 'info' ? 'active' : '']" @click="activeTab = 'info'">
@@ -273,9 +297,9 @@ function moverAbajo(idx) {
 
       <h3 class="modal-title2">{{ tabTitle }}</h3>
 
-      <!-- Modal parte 1 -->
-
-      <div v-if="activeTab === 'info'">
+      <!-- Modal Información del Evento -->
+      <ScrollBar>
+        <div v-if="activeTab === 'info'">
         <form @submit.prevent="handleSubmit" class="custom-form">
           <div class="form-grid">
             <div class="form-group span-3">
@@ -292,10 +316,11 @@ function moverAbajo(idx) {
             <div class="form-group-row span-3">
               <div class="form-group half">
                 <select v-model.number="form.categoria_id" required>
-                  <option :value="1">Emprendimiento</option>
-                  <option :value="2">Tecnología</option>
+                  <option disabled value="">Seleccione una categoría</option>
+                  <option v-for="cat in categorias" :key="cat.id" :value="cat.id">
+                    {{ cat.nombre }}
+                  </option>
                 </select>
-
                 <label>Categoría *</label>
               </div>
 
@@ -390,8 +415,7 @@ function moverAbajo(idx) {
         </form>
       </div>
 
-      <!-- Modal parte 2 -->
-      <!-- Modal parte 2 -->
+      <!-- Modal Imágenes del Evento -->
       <div v-if="activeTab === 'imagenes'">
         <div class="imagenes-section">
           <!-- Cover del Evento -->
@@ -418,9 +442,9 @@ function moverAbajo(idx) {
                   ref="coverInput"
                 />
                 <button type="button" @click="coverInput.click()" class="imagenes-btn">
-                  Elegir archivo
+                  Elegir archivo...
                 </button>
-                <p class="imagenes-help-text">Suba una imagen que no pese más de 1 mb</p>
+                <p class="imagenes-help-text">Suba una imagen que no pese más de 10 mb</p>
               </div>
             </div>
           </div>
@@ -438,14 +462,7 @@ function moverAbajo(idx) {
                 ref="additionalInput"
               />
               <div class="imagenes-dropzone-content">
-                <svg class="imagenes-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M4 12l1.41 1.41M20 12l-1.41 1.41M12 4v12"
-                  />
-                </svg>
+                <i class="fa-solid fa-folder imagenes-svg"></i>
                 <p>Puedes arrastrar y soltar archivos aquí para añadirlos</p>
                 <span class="imagenes-or">OR</span>
                 <button type="button" @click="additionalInput.click()" class="imagenes-btn">
@@ -463,56 +480,39 @@ function moverAbajo(idx) {
                 />
               </div>
             </div>
+            <div class="button-row">
+            <button type="button" class="btn btn-cancel" @click="$emit('close')">
+              <i class="fas fa-angle-left"></i>Volver
+            </button>
+            <button type="submit" class="btn btn-primary">
+              Siguiente<i class="fas fa-angle-right"></i>
+            </button>
+          </div>
           </div>
         </div>
       </div>
 
-      <!-- Modal parte 3 -->
+      <!-- Modal Añadir Cronogramas -->
       <div v-if="activeTab === 'cronograma'">
         <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
-          <div class="form-group">
-            <input
-              id="cronograma-titulo"
-              v-model="cronogramaForm.titulo"
-              type="text"
-              placeholder=""
-              required
-            />
-            <label for="cronograma-titulo">Título*</label>
+          <div class="form-group span-3">
+            <input id="cronograma-titulo" v-model="cronogramaForm.titulo" type="text" required />
+            <label for="cronograma-titulo">Nombre del evento*</label>
           </div>
-          <div class="form-group">
-            <textarea
-              id="cronograma-desc"
-              v-model="cronogramaForm.descripcion"
-              placeholder=" "
-              required
-            ></textarea>
+
+          <div class="form-group textarea-group span-3">
+            <textarea id="cronograma-desc" v-model="cronogramaForm.descripcion" maxlength="225" required></textarea>
             <label for="cronograma-desc">Descripción *</label>
+            <div class="char-count">{{ descripcionCount }}/225</div>
           </div>
           <div class="cronograma-row">
             <div class="form-group">
-              <label for="cronograma-inicio">Fecha de Inicio *</label>
-              <div class="input-icon">
-                <input
-                  id="cronograma-inicio"
-                  v-model="cronogramaForm.fecha_inicio"
-                  type="date"
-                  required
-                />
-                <span class="icon-calendar"></span>
-              </div>
+              <input v-model="cronogramaForm.fecha_inicio" type="date" placeholder=" " required />
+              <label>Fecha de Inicio *</label>
             </div>
             <div class="form-group">
-              <label for="cronograma-fin">Fecha de Fin *</label>
-              <div class="input-icon">
-                <input
-                  id="cronograma-fin"
-                  v-model="cronogramaForm.fecha_fin"
-                  type="date"
-                  required
-                />
-                <span class="icon-calendar"></span>
-              </div>
+              <input v-model="cronogramaForm.fecha_fin" type="date" placeholder=" " required />
+              <label>Fecha de Fin *</label>
             </div>
           </div>
           <div class="button-row">
@@ -525,22 +525,21 @@ function moverAbajo(idx) {
           </div>
         </form>
       </div>
-      <!-- Modal parte 4 -->
+
+      <!-- Modal Añadir Actividades -->
       <div v-if="activeTab === 'actividades'">
-        <h3 class="modal-title2">Añadir Actividades</h3>
         <form class="actividad-form" @submit.prevent="handleActividadAdd">
-          <div class="form-row">
-            <div class="form-group">
-              <input v-model="actividadForm.titulo" type="text" placeholder=" " required />
-              <label>Título*</label>
-            </div>
+          <div class="form-group span-3">
+            <input v-model="actividadForm.titulo" type="text" required />
+            <label for="cronograma-titulo">Título*</label>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <textarea v-model="actividadForm.descripcion" placeholder=" " required></textarea>
-              <label>Descripción *</label>
-            </div>
+
+          <div class="form-group textarea-group span-3">
+            <textarea id="cronograma-desc" v-model="actividadForm.descripcion" maxlength="225" required></textarea>
+            <label for="cronograma-desc">Descripción *</label>
+            <div class="char-count">{{ descripcionCount }}/225</div>
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <select v-model="actividadForm.cronograma" required>
@@ -558,7 +557,7 @@ function moverAbajo(idx) {
               <label>Fecha de Fin *</label>
             </div>
           </div>
-          <div class="button-row" style="justify-content: center">
+          <div class="button-row" style="justify-content: center; margin-top: 0rem;">
             <button type="submit" class="btn btn-primary">Añadir Actividad</button>
           </div>
         </form>
@@ -604,10 +603,12 @@ function moverAbajo(idx) {
           </button>
         </div>
       </div>
+      </ScrollBar>
 
+    </div>
       <!-- Loader  -->
       <Loader v-if="loading" />
-    </div>
+
   </div>
 </template>
 
@@ -628,15 +629,31 @@ function moverAbajo(idx) {
   width: 95vw;
   margin: 0 auto;
 }
-/* Modal centrado */
+
 .modal-content {
   background: white;
   border-radius: 16px;
+  max-height: 95vh;
   padding: 2rem;
   max-width: 600px;
   width: 95%;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   animation: fadeSlideIn 0.4s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+
+.button-row {
+  padding-top: 1rem;
+  background: white;
+  z-index: 10;
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  margin-top: 1rem;
+  gap: 1rem;
+  justify-content: flex-start;
 }
 
 /* Animación */
@@ -657,9 +674,25 @@ function moverAbajo(idx) {
 
 /* Título */
 .modal-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 1.7rem;
   font-weight: bold;
   margin-bottom: 1rem;
+}
+
+.close-modal-button {
+  background: none;
+  border: none;
+  font-size: 0.8em;
+  cursor: pointer;
+  color: #333;
+  padding: 0;
+}
+
+.close-modal-button:hover {
+  color: #174384;
 }
 
 .modal-title2 {
@@ -704,6 +737,7 @@ function moverAbajo(idx) {
 }
 
 .form-grid {
+  padding-top: 0.3em;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   column-gap: 1em;
@@ -830,12 +864,6 @@ function moverAbajo(idx) {
 }
 
 /* Botones */
-.button-row {
-  display: flex;
-  margin-top: 2rem;
-  gap: 1rem;
-  justify-content: flex-start;
-}
 
 .btn {
   padding: 0.6rem 1.5rem;
@@ -889,13 +917,13 @@ function moverAbajo(idx) {
 .imagenes-section {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1rem;
 }
 
 .imagenes-label {
   display: block;
   font-weight: 500;
-  font-size: 1rem;
+  font-size: 0.8rem;
   color: #333;
   margin-bottom: 0.5rem;
 }
@@ -907,8 +935,8 @@ function moverAbajo(idx) {
 }
 
 .cover-preview-box {
-  width: 72px;
-  height: 72px;
+  width: 250px; /* 125px * 2 */
+  height: 144px; /* 72px * 2 */
   background: #f3f3f3;
   display: flex;
   align-items: center;
@@ -919,8 +947,8 @@ function moverAbajo(idx) {
 }
 
 .cover-preview-img {
-  width: 48px;
-  height: 48px;
+  width: 250px; /* 125px * 2 */
+  height: 144px; /* 72px * 2 */
   object-fit: contain;
   display: block;
 }
@@ -946,7 +974,7 @@ function moverAbajo(idx) {
   border-radius: 6px;
   border: none;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   margin-bottom: 0.2rem;
   transition: background 0.2s;
 }
@@ -956,7 +984,7 @@ function moverAbajo(idx) {
 }
 
 .imagenes-help-text {
-  font-size: 0.85rem;
+  font-size: 0.65rem;
   color: #888;
   margin-top: 0.3rem;
 }
@@ -964,7 +992,7 @@ function moverAbajo(idx) {
 .imagenes-dropzone {
   border: 2px dashed #4c81cf;
   border-radius: 10px;
-  padding: 2rem 1rem;
+  padding: 1rem 1rem;
   text-align: center;
   cursor: pointer;
   background: #f8fafc;
@@ -976,6 +1004,7 @@ function moverAbajo(idx) {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
+  justify-items: center;
 }
 
 .imagenes-svg {
@@ -1018,6 +1047,7 @@ function moverAbajo(idx) {
   }
 }
 .cronograma-form {
+  padding-top: 0.3em;
   max-width: 700px;
   margin: 0 auto;
   display: flex;
@@ -1057,22 +1087,6 @@ function moverAbajo(idx) {
   position: relative;
 }
 
-.input-icon input[type='date'] {
-  padding-right: 2.2rem;
-}
-
-.icon-calendar {
-  position: absolute;
-  right: 0.8rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  background: url('data:image/svg+xml;utf8,<svg fill="none" stroke="gray" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="18" rx="2" stroke="gray"/><path d="M16 2v4M8 2v4M3 10h18" stroke="gray"/></svg>')
-    no-repeat center center;
-  pointer-events: none;
-}
-
 @media (max-width: 600px) {
   .cronograma-row {
     flex-direction: column;
@@ -1080,6 +1094,7 @@ function moverAbajo(idx) {
   }
 }
 .actividad-form {
+  padding-top: 0.3em;
   max-width: 900px;
   margin: 0 auto 2rem auto;
   display: flex;

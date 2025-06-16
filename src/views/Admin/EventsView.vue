@@ -23,7 +23,7 @@ const filteredEvents = computed(() =>
 
 // Function to fetch events
 async function fetchEvents() {
-  // const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58'; To test the API call, you can use a hardcoded token like this
+  //const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58'; //To test the API call, you can use a hardcoded token like this
   const token = localStorage.getItem('token');
 
   if (!token) {
