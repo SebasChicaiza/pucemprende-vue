@@ -6,6 +6,16 @@ const collapsed = ref(false)
 function toggleSidebar() {
   collapsed.value = !collapsed.value
 }
+
+const userJsonString = localStorage.getItem('user');
+let usernow = null;
+if (userJsonString) {
+  try {
+    usernow = JSON.parse(userJsonString);
+  } catch (e) {
+    console.error("Error parsing user data from localStorage:", e);
+  }
+}
 </script>
 
 
@@ -60,8 +70,8 @@ function toggleSidebar() {
               :class="['transition-all sidebar-text', collapsed ? 'collapsed-text' : 'expanded-text']"
               style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
             >
-              <strong>Juan José</strong><br />
-              <span class="sidebar-email">jjnc2004@gmail.com</span>
+              <strong>{{ usernow.usuario }}</strong><br />
+              <span class="sidebar-email">{{ usernow.email }}</span>
             </div>
 
             <div v-if="collapsed" class="sidebar-tooltip">Usuario</div>

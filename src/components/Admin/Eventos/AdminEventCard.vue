@@ -1,7 +1,42 @@
 <script setup>
-defineProps({
-  event: Object,
-})
+import { ref, onMounted} from 'vue';
+import axios from 'axios';
+import { defineProps } from 'vue';
+const props = defineProps({
+  event: {
+    type: Object,
+    required: true,
+  },
+});
+const categoryName = ref('Cargando...');
+
+
+async function getCategoryNameById(categoryId) {
+  const token = localStorage.getItem('token');
+  if (!categoryId) {
+    categoryName.value = 'N/A';
+    return;
+  }
+  if (!token) {
+    console.error('Token de autenticación no encontrado.');
+    categoryName.value = 'N/A';
+    return;
+  }
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/categoria/${categoryId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    categoryName.value = response.data.nombre;
+  } catch (error) {
+    console.error(`Error fetching category for ID ${categoryId}:`, error);
+    categoryName.value = 'Error al cargar categoría';
+  }
+}
+onMounted(() => {
+  getCategoryNameById(props.event.categoria_id);
+});
 </script>
 
 <template>
@@ -24,7 +59,11 @@ defineProps({
         <strong>Finaliza:</strong> {{ new Date(event.fecha_fin).toLocaleDateString() }}
       </p>
 
-      <p class="card-text mb-2"><strong>Categoría:</strong> {{ event.categoria_id === 1 ? 'Emprendimientos' : 'Tecnología' }}</p>
+      <p class="card-text mb-2"><strong>Categoría: </strong>
+      <span v-if="categoryName === 'Cargando...'">
+          <i class="fas fa-spinner fa-spin"></i> </span>
+      <span v-else>{{ categoryName }}</span>
+      </p>
 
       <div class="card-text d-flex align-items-center mb-3">
         <i :class="event.estado_borrado ? 'fas fa-times-circle text-danger me-1' : 'fas fa-check-circle text-success me-1'"></i>

@@ -90,7 +90,12 @@ function guardarEvento(data) {
       <PageHeaderRoute />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <input v-model="searchQuery" type="text" placeholder="Buscar por nombre" class="form-control mb-3"/>
+        <div class="d-flex align-items-center mb-3 gap-2">
+          <input v-model="searchQuery" type="text" placeholder="Buscar por nombre" class="form-control"/>
+          <button class="btn btn-default" @click="abrir = true">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
           <div class="row" v-if="!loading">
@@ -99,15 +104,26 @@ function guardarEvento(data) {
               v-for="event in filteredEvents"
               :key="event.id"
             >
-              <AdminEventCard :event="event" />
+              <AdminEventCard :event="event"/>
             </div>
           </div>
         </div>
-        <button @click="abrir = true" class="bg-blue-600 text-white px-4 py-2 rounded-md">
-          Crear Evento
-        </button>
         <ModalCrearEvento :show="abrir" @close="abrir = false" @submit="guardarEvento" />
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+
+.btn-default {
+  background-color: #174384;
+  border-color: #174384;
+  color: #fff;
+}
+.btn-default:hover {
+  background-color: #ffffff;
+  border-color: #174384;
+  color: #174384;
+}
+</style>

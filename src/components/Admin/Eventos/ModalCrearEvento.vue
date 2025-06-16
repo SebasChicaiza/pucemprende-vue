@@ -27,6 +27,14 @@ const form = reactive({
 
 const activeTab = ref('info')
 
+const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
+
+const isTabCompleted = (tabName) => {
+  const activeIndex = tabOrder.indexOf(activeTab.value);
+  const tabIndex = tabOrder.indexOf(tabName);
+  return tabIndex < activeIndex;
+};
+
 const tabTitle = computed(() => {
   switch (activeTab.value) {
     case 'info':
@@ -54,6 +62,16 @@ const descripcionCount = computed(() => form.descripcion.length)
 const error = ref('')
 const loading = ref(false)
 const categorias = ref([])
+const sede = ref([])
+const eventIdStore = ref(null);
+
+
+
+
+
+
+
+// Aqui se maneja la carga de categorías y sedes y crear eventos
 
 
 const fetchCategorias = async () => {
@@ -76,6 +94,27 @@ const fetchCategorias = async () => {
   }
 };
 
+const fetchSede = async () => {
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    console.error("Token de autenticación no encontrado.");
+    return;
+  }
+
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/sede`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    sede.value = response.data;
+  } catch (error) {
+    console.error("Error al obtener las sedes:", error);
+  }
+};
+
+//submit eventos
 async function handleSubmit() {
   error.value = ''
 
@@ -119,54 +158,58 @@ async function enviarEvento(data) {
 
   loading.value = true
   try {
-    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2))
+    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2));
 
-    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token,
-      },
-      body: JSON.stringify(data),
-    })
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token,
+        },
+      }
+    );
 
-    const raw = await response.text()
-    console.log('⚠️ Respuesta cruda del servidor:', raw)
+    const result = response.data;
+    console.log('Evento creado con éxito:', result);
 
-    let result = {}
-    try {
-      // Buscar el inicio del segundo JSON (evento)
-      const indexSecondJson = raw.indexOf('}{') + 1
-      const jsonStr = raw.substring(indexSecondJson)
-      result = JSON.parse(jsonStr)
-    } catch (e) {
-      console.error('❌ Error al parsear JSON del evento:', e)
-      error.value = 'La respuesta del servidor no es válida.'
-      return
-    }
+    eventIdStore.value = result.id;
+    console.log('Stored event ID globally:', eventIdStore.value);
 
-    if (!response.ok) {
-      console.error('Error del servidor:', result)
-      error.value = result?.mensaje || 'Error al crear el evento.'
-      return
-    }
-
-    console.log('Evento creado con éxito:', result)
-    activeTab.value = 'imagenes'
-    // emit('submit', result)
+    activeTab.value = 'imagenes';
   } catch (err) {
-    console.error('Error de red:', err.name, err.message)
-    error.value = 'Fallo en la conexión con el servidor.'
+    if (err.response) {
+      console.error('Error del servidor:', err.response.data);
+      error.value = err.response.data?.mensaje || 'Error al crear el evento.';
+    } else if (err.request) {
+      // The request was made but no response was received
+      console.error('Error de red: No se recibió respuesta del servidor.');
+      error.value = 'Fallo en la conexión con el servidor.';
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('Error al configurar la solicitud:', err.message);
+      error.value = 'Error interno al procesar la solicitud.';
+    }
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
+
+
+
+
+
+
+
+
+// Aqui se maneja la carga de imágenes del segundo modal
 
 const coverInput = ref(null)
 const additionalInput = ref(null)
 
 const coverPreview = ref(imageHolder)
 const additionalPreviews = ref([])
+
 
 function handleCoverChange(event) {
   const file = event.target.files[0]
@@ -194,14 +237,28 @@ function handleDrop(event) {
   additionalPreviews.value = files.map((file) => URL.createObjectURL(file))
 }
 
+
+
+
+
+
+
+
+
+// Aqui se maneja la carga de cronogramas y actividades del tercer y cuarto modal
+
+const cronogramaIdStore = ref(null);
+
 const cronogramaForm = reactive({
+  evento_id: '',
   titulo: '',
   descripcion: '',
   fecha_inicio: '',
   fecha_fin: '',
 })
 
-function handleCronogramaSubmit() {
+//submit cronograma
+async function handleCronogramaSubmit() {
   // Aquí puedes validar y guardar el cronograma, luego pasar a la siguiente pestaña
   // Por ejemplo:
   if (
@@ -209,12 +266,80 @@ function handleCronogramaSubmit() {
     !cronogramaForm.descripcion ||
     !cronogramaForm.fecha_inicio ||
     !cronogramaForm.fecha_fin
-  ) {
-    alert('Por favor, completa todos los campos del cronograma.')
+  ){
+    error.value = '⚠️ Por favor, completa todos los campos obligatorios.'
     return
   }
-  activeTab.value = 'actividades'
+
+  const fechaInicio = new Date(cronogramaForm.fecha_inicio)
+  const fechaFin = new Date(cronogramaForm.fecha_fin)
+
+  if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+    error.value = '⚠️ Las fechas ingresadas no son válidas.'
+    return
+  }
+
+  if (fechaInicio >= fechaFin) {
+    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.'
+    return
+  }
+
+  const payload = {
+    ...cronogramaForm,
+    evento_id: eventIdStore.value // Assign the current eventIdStore.value here
+  };
+  await enviarCronogramas(payload)
 }
+
+
+async function enviarCronogramas(data) {
+  const token = localStorage.getItem('token')
+  console.log('Id del evento:', eventIdStore.value);
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.'
+    return
+  }
+
+  loading.value = true
+  try {
+    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2));
+
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token,
+        },
+      }
+    );
+
+    const result = response.data;
+    console.log('Cronograma creado con éxito:', result);
+
+    cronogramaIdStore.value = result.id;
+    console.log('Stored cronograma ID globally:', cronogramaIdStore.value);
+
+    activeTab.value = 'actividades';
+  } catch (err) {
+    if (err.response) {
+      console.error('Error del servidor:', err.response.data);
+      error.value = err.response.data?.mensaje || 'Error al crear el cronograma.';
+    } else if (err.request) {
+      // The request was made but no response was received
+      console.error('Error de red: No se recibió respuesta del servidor.');
+      error.value = 'Fallo en la conexión con el servidor.';
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('Error al configurar la solicitud:', err.message);
+      error.value = 'Error interno al procesar la solicitud.';
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+
 const actividadForm = reactive({
   titulo: '',
   descripcion: '',
@@ -267,6 +392,7 @@ function moverAbajo(idx) {
 
 onMounted(async () => {
   fetchCategorias()
+  fetchSede()
 })
 
 </script>
@@ -279,23 +405,42 @@ onMounted(async () => {
       </h2>
 
       <div class="modal-tabs">
-        <button :class="['tab', activeTab === 'info' ? 'active' : '']" @click="activeTab = 'info'">
+        <button
+          :class="[
+            'tab',
+            activeTab === 'info' ? 'active' : '',
+            isTabCompleted('info') ? 'completed' : ''
+          ]"
+          @click="activeTab = 'info'"
+        >
           Información del Evento
         </button>
         <button
-          :class="['tab', activeTab === 'imagenes' ? 'active' : '']"
+          :class="[
+            'tab',
+            activeTab === 'imagenes' ? 'active' : '',
+            isTabCompleted('imagenes') ? 'completed' : ''
+          ]"
           @click="activeTab = 'imagenes'"
         >
           Imágenes del Evento
         </button>
         <button
-          :class="['tab', activeTab === 'cronograma' ? 'active' : '']"
+          :class="[
+            'tab',
+            activeTab === 'cronograma' ? 'active' : '',
+            isTabCompleted('cronograma') ? 'completed' : ''
+          ]"
           @click="activeTab = 'cronograma'"
         >
           Añadir Cronogramas
         </button>
         <button
-          :class="['tab', activeTab === 'actividades' ? 'active' : '']"
+          :class="[
+            'tab',
+            activeTab === 'actividades' ? 'active' : '',
+            isTabCompleted('actividades') ? 'completed' : ''
+          ]"
           @click="activeTab = 'actividades'"
         >
           Añadir Actividades
@@ -306,7 +451,7 @@ onMounted(async () => {
 
       <!-- Modal Información del Evento -->
       <ScrollBar>
-        <div v-if="activeTab === 'info'">
+      <div v-if="activeTab === 'info'">
         <form @submit.prevent="handleSubmit" class="custom-form">
           <div class="form-grid">
             <div class="form-group span-3">
@@ -333,6 +478,7 @@ onMounted(async () => {
 
               <div class="form-group half">
                 <select v-model="form.modalidad" required>
+                  <option disabled>Seleccione una modalidad</option>
                   <option>Presencial</option>
                   <option>Virtual</option>
                   <option>Híbrida</option>
@@ -340,23 +486,16 @@ onMounted(async () => {
                 <label>Modalidad *</label>
               </div>
             </div>
-
-            <div class="form-group span-1">
+            <div class="form-group-row span-3">
+              <div class="form-group half">
               <input v-model="form.fecha_inicio" type="date" required />
               <label>Fecha de Inicio *</label>
             </div>
 
-            <div class="form-group span-1">
+            <div class="form-group half">
               <input v-model="form.fecha_fin" type="date" required />
               <label>Fecha de Fin *</label>
             </div>
-
-            <div class="form-group span-1">
-              <select v-model="form.estado">
-                <option>Activo</option>
-                <option>Inactivo</option>
-              </select>
-              <label>Estado *</label>
             </div>
 
             <div class="form-group span-1">
@@ -366,9 +505,10 @@ onMounted(async () => {
 
             <div class="form-group span-1">
               <select v-model.number="form.sede_id" required>
-                <option disabled value="">Sedes PUCE</option>
-                <option :value="1">Sede Quito</option>
-                <option :value="2">Sede Ambato</option>
+                <option disabled value="">Seleccione una sede</option>
+                <option v-for="sede in sede" :key="sede.id" :value="sede.id">
+                  {{ sede.nombre }}
+                </option>
               </select>
               <label>Sede *</label>
             </div>
@@ -406,7 +546,7 @@ onMounted(async () => {
           <p v-if="error" class="error-text">{{ error }}</p>
 
           <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="$emit('close')">
+            <button type="button" class="btn btn-cancel" disabled>
               <i class="fas fa-angle-left"></i>Volver
             </button>
             <button type="submit" class="btn btn-primary">
@@ -504,7 +644,7 @@ onMounted(async () => {
         <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
           <div class="form-group span-3">
             <input id="cronograma-titulo" v-model="cronogramaForm.titulo" type="text" required />
-            <label for="cronograma-titulo">Nombre del evento*</label>
+            <label for="cronograma-titulo">Titulo del cronograma*</label>
           </div>
 
           <div class="form-group textarea-group span-3">
@@ -738,9 +878,16 @@ onMounted(async () => {
   color: #174384;
 }
 
+.tab.completed {
+  border-bottom: 4px solid #174384;
+  border-radius: 10px 10px 0 0;
+  font-weight: bold;
+  color: #174384;
+}
+
 .custom-form {
   max-width: 900px;
-  margin: auto;
+  margin: 2px;
 }
 
 .form-grid {
