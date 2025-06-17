@@ -297,8 +297,8 @@ async function handleCronogramaSubmit() {
 
   const payload = {
     ...cronogramaForm,
-    evento_id: eventIdStore.value
-    // evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
+    //evento_id: eventIdStore.value
+    evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
   };
   await enviarCronogramas(payload)
 }
@@ -378,14 +378,15 @@ function handleConfirmationCancel() {
 
 const cronogramasOptions = ref([]);
 
+
 const actividadForm = reactive({
-  cronograma: '',
+  cronograma_id: '',
   titulo: '',
   descripcion: '',
   fecha_inicio: '',
   fecha_fin: '',
-  dependeDe: '',
-})
+  dependencia_id: null,
+});
 
 // Function to fetch details for each cronograma ID
 async function fetchCronogramasDetails() {
@@ -425,41 +426,205 @@ watch(
   { deep: true } // Watch for changes inside the array
 );
 
+
+
 const actividades = ref([])
 
-function handleActividadAdd() {
+const addingActividad = ref(false);
+const reorderingActividades = ref(false);
+const actividadError = ref(null);
+
+async function handleActividadAdd() {
+  actividadError.value = null; // Clear previous errors
+  addingActividad.value = true;
+  console.log('Actividad Form Data before validation:', JSON.parse(JSON.stringify(actividadForm)));
+
+  // Basic client-side validation
   if (
     !actividadForm.titulo ||
     !actividadForm.descripcion ||
-    !actividadForm.cronograma ||
+    !actividadForm.cronograma_id || // Use cronograma_id here
     !actividadForm.fecha_inicio ||
     !actividadForm.fecha_fin
   ) {
-    alert('Por favor, completa todos los campos de la actividad.')
-    return
+    actividadError.value = 'Por favor, completa todos los campos obligatorios de la actividad.';
+    addingActividad.value = false;
+    return;
   }
-  actividades.value.push({ ...actividadForm })
-  actividadForm.titulo = ''
-  actividadForm.descripcion = ''
-  actividadForm.cronograma = ''
-  actividadForm.fecha_inicio = ''
-  actividadForm.fecha_fin = ''
-  actividadForm.dependeDe = ''
+
+  // Determine the 'orden' for the new activity
+  // If there are existing activities, the new one's order is the last activity's order + 1
+  // If no existing activities, it's 1
+  const newOrder = actividades.value.length > 0 ? Math.max(...actividades.value.map(a => a.orden)) + 1 : 1;
+
+  const payload = {
+    cronograma_id: actividadForm.cronograma_id,
+    titulo: actividadForm.titulo,
+    descripcion: actividadForm.descripcion,
+    fecha_inicio: actividadForm.fecha_inicio + 'T00:00:00.000000Z',
+    fecha_fin: actividadForm.fecha_fin + 'T00:00:00.000000Z',
+    orden: newOrder,
+    dependencia_id: actividadForm.dependencia_id || null, // Ensure null if empty
+  };
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+    addingActividad.value = false;
+    return;
+  }
+
+  try {
+    loading.value = true; // Show loading state
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Add the newly created activity (including its ID and potentially updated 'orden' from backend)
+    // to the local 'actividades' array.
+    actividades.value.push(response.data); // Assuming backend returns the full created object
+
+    // Reset the form
+    actividadForm.titulo = '';
+    actividadForm.descripcion = '';
+    // Keep cronograma_id selected for next activity (optional)
+    actividadForm.fecha_inicio = '';
+    actividadForm.fecha_fin = '';
+    actividadForm.dependencia_id = null; // Reset dependency
+
+    console.log('Actividad añadida:', response.data);
+    successMessage.value = `La actividad "<strong>${response.data.titulo}</strong>" ha sido creada con éxito.`;
+    showSuccessModal.value = true;
+
+  } catch (error) {
+    console.error('Error al añadir actividad:', error);
+    actividadError.value = error.response?.data?.message || 'Fallo al añadir la actividad.';
+  } finally {
+    addingActividad.value = false;
+    loading.value = false;
+  }
 }
 
-function moverArriba(idx) {
-  if (idx === 0) return
-  const temp = actividades.value[idx - 1]
-  actividades.value[idx - 1] = actividades.value[idx]
-  actividades.value[idx] = temp
+// --- Reordering Activities (Mover Arriba/Abajo) ---
+// This function will reorder locally and then send the updated order for ALL activities
+// in the current 'actividades' array to the backend.
+async function updateActivityOrderOnBackend() {
+  reorderingActividades.value = true;
+  actividadError.value = null; // Clear previous errors
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+    reorderingActividades.value = false;
+    return;
+  }
+
+  // Prepare the data for the backend: an array of all activities with their current order
+  const orderUpdatePayload = actividades.value.map((act, index) => ({
+    id: act.id, // Assuming 'id' is available from backend response
+    orden: index + 1, // New order based on current array index
+    // Include other fields if your PUT endpoint expects the full object,
+    // otherwise, just id and orden are usually sufficient for reordering.
+    cronograma_id: act.cronograma_id, // Important for context
+    titulo: act.titulo,
+    descripcion: act.descripcion,
+    fecha_inicio: act.fecha_inicio,
+    fecha_fin: act.fecha_fin,
+    dependencia_id: act.dependencia_id || null,
+  }));
+
+  try {
+    // Assuming your endpoint is /api/actividades-cronograma and it accepts an array
+    // for a batch update of order.
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, orderUpdatePayload, {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('Orden de actividades actualizada en el backend:', response.data);
+    // Optionally, re-fetch activities from backend to ensure local state matches remote state
+    // This is good practice for highly critical order, but might be overkill for simple cases
+    // if backend confirms the update.
+    // await fetchActividadesForCronograma(actividadForm.cronograma_id);
+  } catch (error) {
+    console.error('Error al actualizar el orden de las actividades:', error);
+    actividadError.value = error.response?.data?.message || 'Fallo al guardar el nuevo orden de las actividades.';
+    // Optionally, revert local changes if backend update fails
+    // A more robust solution would store the previous state and revert.
+    alert('Fallo al actualizar el orden. Por favor, intente de nuevo.');
+  } finally {
+    reorderingActividades.value = false;
+  }
 }
 
-function moverAbajo(idx) {
-  if (idx === actividades.value.length - 1) return
-  const temp = actividades.value[idx + 1]
-  actividades.value[idx + 1] = actividades.value[idx]
-  actividades.value[idx] = temp
+// Helper function to swap two items in the local activities array
+function swapActivities(idx1, idx2) {
+  const temp = actividades.value[idx1];
+  actividades.value[idx1] = actividades.value[idx2];
+  actividades.value[idx2] = temp;
+
+  // After local swap, update the 'orden' property for all activities
+  // to reflect their new position based on array index + 1
+  actividades.value.forEach((act, index) => {
+    act.orden = index + 1;
+  });
 }
+
+async function moverArriba(idx) {
+  if (idx === 0) return;
+  swapActivities(idx, idx - 1);
+  await updateActivityOrderOnBackend(); // Send the updated order to the backend
+}
+
+async function moverAbajo(idx) {
+  if (idx === actividades.value.length - 1) return;
+  swapActivities(idx, idx + 1);
+  await updateActivityOrderOnBackend(); // Send the updated order to the backend
+}
+
+// --- Optional: Fetch existing activities for a selected cronograma ---
+// This would be useful if you load the component and want to display existing activities
+// for the initially selected cronograma or when the selected cronograma changes.
+// You'll need to create a new backend API endpoint for this, e.g., GET /api/cronogramas/{cronograma_id}/actividades
+
+watch(
+  () => actividadForm.cronograma_id,
+  async (newCronogramaId) => {
+    if (newCronogramaId) {
+      console.log(`Selected cronograma changed to ${newCronogramaId}. Fetching existing activities.`);
+      await fetchActividadesForCronograma(newCronogramaId);
+    } else {
+      actividades.value = []; // Clear activities if no cronograma is selected
+    }
+  },
+  { immediate: true } // Run on initial load if cronograma_id is already set
+);
+
+async function fetchActividadesForCronograma(cronogramaId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    actividadError.value = 'Token de autenticación no encontrado.';
+    return;
+  }
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaId}/actividades`, {
+      headers: { Authorization: token },
+    });
+    // Assuming response.data is an array of activities with id and orden
+    // Sort them by 'orden' to ensure correct display
+    actividades.value = response.data.sort((a, b) => a.orden - b.orden);
+    console.log('Existing activities loaded:', actividades.value);
+  } catch (error) {
+    console.error(`Error al cargar actividades para cronograma ${cronogramaId}:`, error);
+    actividadError.value = error.response?.data?.message || 'Fallo al cargar actividades existentes.';
+  }
+}
+
 
 onMounted(async () => {
   fetchCategorias()
@@ -770,7 +935,7 @@ onMounted(async () => {
 
           <div class="form-row">
             <div class="form-group">
-              <select v-model="actividadForm.cronograma" required>
+              <select v-model="actividadForm.cronograma_id" required>
                 <option disabled value="">Cronograma *</option>
                 <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">{{ c.titulo }}</option>
               </select>
@@ -786,11 +951,18 @@ onMounted(async () => {
             </div>
           </div>
           <div class="button-row" style="justify-content: center; margin-top: 0rem;">
-            <button type="submit" class="btn btn-primary">Añadir Actividad</button>
+            <button type="submit" class="btn btn-primary" :disabled="addingActividad">
+              {{ addingActividad ? 'Añadiendo...' : 'Añadir Actividad' }}
+            </button>
           </div>
+
         </form>
+        <div v-if="actividadError" class="alert alert-danger mt-3">{{ actividadError }}</div>
 
         <div class="tabla-actividades">
+          <div v-if="reorderingActividades" class="overlay-loader">
+            <div class="spinner"></div> Actualizando orden...
+          </div>
           <table>
             <thead>
               <tr>
@@ -803,19 +975,16 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(act, idx) in actividades" :key="idx">
+              <tr v-for="(act, idx) in actividades" :key="act.id || idx">
                 <td>
-                  <button @click="moverArriba(idx)" :disabled="idx === 0">▲</button>
-                  {{ idx + 1 }}
-                  <button @click="moverAbajo(idx)" :disabled="idx === actividades.length - 1">
+                  <button @click="moverArriba(idx)" :disabled="idx === 0 || reorderingActividades">▲</button>
+                  {{ act.orden }} <button @click="moverAbajo(idx)" :disabled="idx === actividades.length - 1 || reorderingActividades">
                     ▼
                   </button>
                 </td>
                 <td>{{ act.titulo }}</td>
                 <td>{{ act.descripcion }}</td>
-                <td>{{ act.fecha_inicio }}</td>
-                <td>{{ act.fecha_fin }}</td>
-                <td>{{ act.dependeDe || '------' }}</td>
+                <td>{{ act.fecha_inicio.split('T')[0] }}</td> <td>{{ act.fecha_fin.split('T')[0] }}</td> <td>{{ act.dependencia_id || '------' }}</td>
               </tr>
             </tbody>
           </table>
@@ -854,11 +1023,61 @@ onMounted(async () => {
     :show="showSuccessModal"
     :message="successMessage"
     @close="handleModalClose"
-    :duration="4000"
+    :duration="2500"
   />
 </template>
 
 <style scoped>
+/* Add styles for your loader overlay */
+.overlay-loader {
+  position: absolute; /* or relative to its parent container */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10; /* Ensure it's above the table */
+  border-radius: 8px; /* Match your table/card styling */
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Ensure your table container has position: relative if overlay-loader is absolute */
+.tabla-actividades {
+    position: relative; /* Essential for overlay-loader's absolute positioning */
+    /* ... rest of your table styles */
+}
+
+/* Add any other specific styles for buttons, alerts, etc., if not already present */
+.alert {
+  padding: 10px 15px;
+  border-radius: 5px;
+  margin-top: 15px;
+  font-size: 0.85em;
+}
+
+.alert-danger {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
 /* Overlay del fondo */
 .modal-overlay {
   position: fixed;
@@ -1374,7 +1593,7 @@ onMounted(async () => {
 .tabla-actividades table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.95rem;
+  font-size: 0.70rem;
   background: #fff;
 }
 
