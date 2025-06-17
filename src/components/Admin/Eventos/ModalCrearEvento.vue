@@ -72,7 +72,7 @@ const categorias = ref([])
 const sede = ref([])
 const eventIdStore = ref(null);
 const showConfirmationModal = ref(false);
-
+const ConfModalMessage = ref('');
 
 
 
@@ -333,6 +333,8 @@ async function enviarCronogramas(data) {
 
     successMessage.value = `El cronograma "<strong>${data.titulo}</strong>" ha sido creado con éxito.`;
     showSuccessModal.value = true;
+    ConfModalMessage.value = `¿Estás seguro de que deseas continuar a añadir actividades? Una vez que pases a la siguiente sección,
+    **no podrás volver a crear cronogramas** para este evento. Sin embargo, podrás editar los cronogramas existentes más tarde.`
 
   } catch (err) {
     if (err.response) {
@@ -357,8 +359,16 @@ function confirmProceedToActivities() {
 }
 
 function handleConfirmationConfirm() {
-  showConfirmationModal.value = false;
-  activeTab.value = 'actividades';
+  showConfirmationModal.value = false; // Always close the modal
+
+  if (activeTab.value === 'cronograma') {
+    activeTab.value = 'actividades';
+    console.log('Switched to Activities tab after confirmation.');
+  } else if (activeTab.value === 'actividades') {
+
+    console.log('Activities saved successfully!');
+    // saveAllActivitiesToBackend();
+  }
 }
 
 function handleConfirmationCancel() {
@@ -452,9 +462,6 @@ async function handleActividadAdd() {
     return;
   }
 
-  // Determine the 'orden' for the new activity
-  // If there are existing activities, the new one's order is the last activity's order + 1
-  // If no existing activities, it's 1
   const newOrder = actividades.value.length > 0 ? Math.max(...actividades.value.map(a => a.orden)) + 1 : 1;
 
   const payload = {
@@ -464,7 +471,7 @@ async function handleActividadAdd() {
     fecha_inicio: actividadForm.fecha_inicio + 'T00:00:00.000000Z',
     fecha_fin: actividadForm.fecha_fin + 'T00:00:00.000000Z',
     orden: newOrder,
-    dependencia_id: actividadForm.dependencia_id || null, // Ensure null if empty
+    dependencia_id: actividadForm.dependencia_id || null,
   };
 
   const token = localStorage.getItem('token');
@@ -475,7 +482,7 @@ async function handleActividadAdd() {
   }
 
   try {
-    loading.value = true; // Show loading state
+    loading.value = true;
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
       headers: {
         Authorization: token,
@@ -483,17 +490,16 @@ async function handleActividadAdd() {
       },
     });
 
-    // Add the newly created activity (including its ID and potentially updated 'orden' from backend)
-    // to the local 'actividades' array.
-    actividades.value.push(response.data); // Assuming backend returns the full created object
 
-    // Reset the form
+    actividades.value.push(response.data);
+
+
     actividadForm.titulo = '';
     actividadForm.descripcion = '';
-    // Keep cronograma_id selected for next activity (optional)
+
     actividadForm.fecha_inicio = '';
     actividadForm.fecha_fin = '';
-    actividadForm.dependencia_id = null; // Reset dependency
+    actividadForm.dependencia_id = null;
 
     console.log('Actividad añadida:', response.data);
     successMessage.value = `La actividad "<strong>${response.data.titulo}</strong>" ha sido creada con éxito.`;
@@ -508,7 +514,6 @@ async function handleActividadAdd() {
   }
 }
 
-// Function to send a PUT request for a single activity's order
 async function updateSingleActivityOrder(activity) {
   actividadError.value = null;
 
@@ -530,7 +535,6 @@ async function updateSingleActivityOrder(activity) {
   };
 
   try {
-    // ⭐ Corrected endpoint: /api/actividades-cronograma/{id} ⭐
     const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activity.id}`, payload, {
       headers: {
         Authorization: token,
@@ -538,7 +542,7 @@ async function updateSingleActivityOrder(activity) {
       },
     });
     console.log(`Actividad ID ${activity.id} orden actualizada:`, response.data);
-    return true; // Indicate success
+    return true;
   } catch (error) {
     console.error(`Error al actualizar el orden de la actividad ID ${activity.id}:`, error);
     actividadError.value = error.response?.data?.message || `Fallo al actualizar la actividad ID ${activity.id}.`;
@@ -546,15 +550,11 @@ async function updateSingleActivityOrder(activity) {
   }
 }
 
-
-// Helper function to swap two items in the local activities array
 function swapActivities(idx1, idx2) {
   const temp = actividades.value[idx1];
   actividades.value[idx1] = actividades.value[idx2];
   actividades.value[idx2] = temp;
 
-  // After local swap, update the 'orden' property for all activities
-  // to reflect their new position based on array index + 1
   actividades.value.forEach((act, index) => {
     act.orden = index + 1;
   });
@@ -568,22 +568,19 @@ async function moverArriba(idx) {
 
   const prevIdx = idx - 1;
 
-  // Store original activities before swapping for potential revert
   const originalActivities = JSON.parse(JSON.stringify(actividades.value));
 
-  // Perform local swap
   swapActivities(idx, prevIdx);
 
-  // Identify the two activities that were just swapped (now at prevIdx and idx)
   const activityToUpdate1 = actividades.value[prevIdx];
   const activityToUpdate2 = actividades.value[idx];
 
-  // Send individual PUT requests for each affected activity
+
   const success1 = await updateSingleActivityOrder(activityToUpdate1);
   const success2 = await updateSingleActivityOrder(activityToUpdate2);
 
   if (!success1 || !success2) {
-    // If either update failed, revert local changes
+
     actividades.value = originalActivities;
     alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
   }
@@ -599,28 +596,49 @@ async function moverAbajo(idx) {
 
   const nextIdx = idx + 1;
 
-  // Store original activities before swapping for potential revert
+
   const originalActivities = JSON.parse(JSON.stringify(actividades.value));
 
-  // Perform local swap
+
   swapActivities(idx, nextIdx);
 
-  // Identify the two activities that were just swapped (now at idx and nextIdx)
+
   const activityToUpdate1 = actividades.value[idx];
   const activityToUpdate2 = actividades.value[nextIdx];
 
-  // Send individual PUT requests for each affected activity
+
   const success1 = await updateSingleActivityOrder(activityToUpdate1);
   const success2 = await updateSingleActivityOrder(activityToUpdate2);
 
   if (!success1 || !success2) {
-    // If either update failed, revert local changes
     actividades.value = originalActivities;
     alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
   }
 
   reorderingActividades.value = false;
 }
+
+function getDependenciaDisplayText(act, idx) {
+  if (act.dependencia_id) {
+    const dependentActivity = actividades.value.find(a => a.id === act.dependencia_id);
+    return dependentActivity ? dependentActivity.titulo : `ID ${act.dependencia_id} (No encontrado)`;
+  } else {
+    if (idx === 0) {
+      return '------';
+    } else {
+      if (actividades.value[idx - 1]) {
+        return actividades.value[idx - 1].titulo;
+      }
+      return 'N/A';
+    }
+  }
+}
+
+function handleSaveButtonClick() {
+  ConfModalMessage.value = '¿Deseas guardar la configuración actual de todas las actividades asociadas a tus cronogramas? Esta acción consolidará los cambios.';
+  showConfirmationModal.value = true;
+}
+
 
 watch(
   () => actividadForm.cronograma_id,
@@ -629,10 +647,10 @@ watch(
       console.log(`Selected cronograma changed to ${newCronogramaId}. Fetching existing activities.`);
       await fetchActividadesForCronograma(newCronogramaId);
     } else {
-      actividades.value = []; // Clear activities if no cronograma is selected
+      actividades.value = [];
     }
   },
-  { immediate: true } // Run on initial load if cronograma_id is already set
+  { immediate: true }
 );
 
 async function fetchActividadesForCronograma(cronogramaId) {
@@ -645,8 +663,6 @@ async function fetchActividadesForCronograma(cronogramaId) {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaId}/actividades`, {
       headers: { Authorization: token },
     });
-    // Assuming response.data is an array of activities with id and orden
-    // Sort them by 'orden' to ensure correct display
     actividades.value = response.data.sort((a, b) => a.orden - b.orden);
     console.log('Existing activities loaded:', actividades.value);
   } catch (error) {
@@ -1016,7 +1032,7 @@ onMounted(async () => {
                 <td>{{ act.descripcion }}</td>
                 <td>{{ act.fecha_inicio.split('T')[0] }}</td>
                 <td>{{ act.fecha_fin.split('T')[0] }}</td>
-                <td>{{ act.dependencia_id || '------' }}</td>
+                <td>{{ getDependenciaDisplayText(act, idx) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1026,7 +1042,7 @@ onMounted(async () => {
           <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" disabled>
             <i class="fas fa-angle-left"></i> Volver
           </button>
-          <button type="button" class="btn btn-primary">
+          <button type="button" class="btn btn-primary" @click="handleSaveButtonClick">
             Guardar <i class="fas fa-angle-right"></i>
           </button>
         </div>
@@ -1042,8 +1058,7 @@ onMounted(async () => {
   <ConfirmationModal
     :show="showConfirmationModal"
     title="Confirmar Continuación"
-    message="¿Estás seguro de que deseas continuar a añadir actividades? Una vez que pases a la siguiente sección,
-    **no podrás volver a crear cronogramas** para este evento. Sin embargo, podrás editar los cronogramas existentes más tarde."
+    :message="ConfModalMessage"
     confirm-text="Sí, continuar"
     cancel-text="No, quedarme"
     @confirm="handleConfirmationConfirm"
@@ -1059,9 +1074,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* Add styles for your loader overlay */
+
 .overlay-loader {
-  position: absolute; /* or relative to its parent container */
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -1071,8 +1086,8 @@ onMounted(async () => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  z-index: 10; /* Ensure it's above the table */
-  border-radius: 8px; /* Match your table/card styling */
+  z-index: 10;
+  border-radius: 8px;
 }
 
 .spinner {
@@ -1090,13 +1105,12 @@ onMounted(async () => {
   100% { transform: rotate(360deg); }
 }
 
-/* Ensure your table container has position: relative if overlay-loader is absolute */
+
 .tabla-actividades {
-    position: relative; /* Essential for overlay-loader's absolute positioning */
-    /* ... rest of your table styles */
+    position: relative;
+
 }
 
-/* Add any other specific styles for buttons, alerts, etc., if not already present */
 .alert {
   padding: 10px 15px;
   border-radius: 5px;
