@@ -1,8 +1,10 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
 import ScrollBar from '@/components/ScrollBar.vue'
+import OkModal from '@/components/OkModal.vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import axios from 'axios';
 
 const props = defineProps({
@@ -28,6 +30,11 @@ const form = reactive({
 const activeTab = ref('info')
 
 const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
+
+const handleModalClose = () => {
+  showSuccessModal.value = false;
+};
+
 
 const isTabCompleted = (tabName) => {
   const activeIndex = tabOrder.indexOf(activeTab.value);
@@ -64,6 +71,7 @@ const loading = ref(false)
 const categorias = ref([])
 const sede = ref([])
 const eventIdStore = ref(null);
+const showConfirmationModal = ref(false);
 
 
 
@@ -206,9 +214,9 @@ async function enviarEvento(data) {
 
 const coverInput = ref(null)
 const additionalInput = ref(null)
-
 const coverPreview = ref(imageHolder)
 const additionalPreviews = ref([])
+
 
 
 function handleCoverChange(event) {
@@ -245,9 +253,13 @@ function handleDrop(event) {
 
 
 
-// Aqui se maneja la carga de cronogramas y actividades del tercer y cuarto modal
+// Aqui se maneja la carga de cronogramas del tercer modal
 
-const cronogramaIdStore = ref(null);
+const cronogramaIdStore = ref([]);
+const showSuccessModal = ref(false);
+const successMessage = ref(''); // This will hold the dynamic message for the modal
+
+
 
 const cronogramaForm = reactive({
   evento_id: '',
@@ -259,8 +271,7 @@ const cronogramaForm = reactive({
 
 //submit cronograma
 async function handleCronogramaSubmit() {
-  // Aquí puedes validar y guardar el cronograma, luego pasar a la siguiente pestaña
-  // Por ejemplo:
+
   if (
     !cronogramaForm.titulo ||
     !cronogramaForm.descripcion ||
@@ -286,11 +297,11 @@ async function handleCronogramaSubmit() {
 
   const payload = {
     ...cronogramaForm,
-    evento_id: eventIdStore.value // Assign the current eventIdStore.value here
+    evento_id: eventIdStore.value
+    // evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
   };
   await enviarCronogramas(payload)
 }
-
 
 async function enviarCronogramas(data) {
   const token = localStorage.getItem('token')
@@ -317,10 +328,12 @@ async function enviarCronogramas(data) {
     const result = response.data;
     console.log('Cronograma creado con éxito:', result);
 
-    cronogramaIdStore.value = result.id;
+    cronogramaIdStore.value.push(result.id);
     console.log('Stored cronograma ID globally:', cronogramaIdStore.value);
 
-    activeTab.value = 'actividades';
+    successMessage.value = `El cronograma "<strong>${data.titulo}</strong>" ha sido creado con éxito.`;
+    showSuccessModal.value = true;
+
   } catch (err) {
     if (err.response) {
       console.error('Error del servidor:', err.response.data);
@@ -339,20 +352,78 @@ async function enviarCronogramas(data) {
   }
 }
 
+function confirmProceedToActivities() {
+  showConfirmationModal.value = true;
+}
+
+function handleConfirmationConfirm() {
+  showConfirmationModal.value = false;
+  activeTab.value = 'actividades';
+}
+
+function handleConfirmationCancel() {
+  showConfirmationModal.value = false;
+}
+
+
+
+
+
+
+
+
+
+// Aqui se maneja la carga de actividades del cuarto modal
+
+
+const cronogramasOptions = ref([]);
 
 const actividadForm = reactive({
+  cronograma: '',
   titulo: '',
   descripcion: '',
-  cronograma: '',
   fecha_inicio: '',
   fecha_fin: '',
   dependeDe: '',
 })
 
-const cronogramas = ref([
-  { id: 1, nombre: 'Cronograma 1' },
-  { id: 2, nombre: 'Cronograma 2' },
-])
+// Function to fetch details for each cronograma ID
+async function fetchCronogramasDetails() {
+  cronogramasOptions.value = [];
+  const token = localStorage.getItem('token');
+
+  if (cronogramaIdStore.value.length === 0) {
+    console.log('No cronograma IDs to fetch yet.');
+    return;
+  }
+  const fetchPromises = cronogramaIdStore.value.map(async (id) => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${id}`, {
+        headers: {
+          Authorization: token,
+        },
+      });
+      return { id: response.data.id, titulo: response.data.titulo };
+    } catch (error) {
+      console.error(`Error al obtener detalles del cronograma con ID ${id}:`, error);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(fetchPromises);
+
+  cronogramasOptions.value = results.filter(item => item !== null);
+  console.log('Opciones de cronogramas cargadas:', cronogramasOptions.value);
+}
+
+watch(
+  () => cronogramaIdStore.value,
+  (newIds) => {
+    console.log('cronogramaIdStore updated. Re-fetching cronograma details.');
+    fetchCronogramasDetails();
+  },
+  { deep: true } // Watch for changes inside the array
+);
 
 const actividades = ref([])
 
@@ -393,6 +464,7 @@ function moverAbajo(idx) {
 onMounted(async () => {
   fetchCategorias()
   fetchSede()
+  fetchCronogramasDetails()
 })
 
 </script>
@@ -662,13 +734,22 @@ onMounted(async () => {
               <label>Fecha de Fin *</label>
             </div>
           </div>
+          <div class="form-group span-3">
+            <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 200px;">
+              Crear cronograma <i class="fas fa-plus"></i>
+            </button>
+          </div>
+
+
           <div class="button-row">
             <button type="button" class="btn btn-cancel" @click="activeTab = 'imagenes'">
               <i class="fas fa-angle-left"></i> Volver
             </button>
-            <button type="submit" class="btn btn-primary">
+            <button type="button" class="btn btn-primary" @click="confirmProceedToActivities">
               Siguiente <i class="fas fa-angle-right"></i>
             </button>
+
+
           </div>
         </form>
       </div>
@@ -691,7 +772,7 @@ onMounted(async () => {
             <div class="form-group">
               <select v-model="actividadForm.cronograma" required>
                 <option disabled value="">Cronograma *</option>
-                <option v-for="c in cronogramas" :key="c.id" :value="c.id">{{ c.nombre }}</option>
+                <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">{{ c.titulo }}</option>
               </select>
               <label>Cronograma *</label>
             </div>
@@ -742,7 +823,7 @@ onMounted(async () => {
         </div>
 
         <div class="button-row">
-          <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'">
+          <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" disabled>
             <i class="fas fa-angle-left"></i> Volver
           </button>
           <button type="button" class="btn btn-primary">
@@ -757,6 +838,24 @@ onMounted(async () => {
       <Loader v-if="loading" />
 
   </div>
+
+  <ConfirmationModal
+    :show="showConfirmationModal"
+    title="Confirmar Continuación"
+    message="¿Estás seguro de que deseas continuar a añadir actividades? Una vez que pases a la siguiente sección,
+    **no podrás volver a crear cronogramas** para este evento. Sin embargo, podrás editar los cronogramas existentes más tarde."
+    confirm-text="Sí, continuar"
+    cancel-text="No, quedarme"
+    @confirm="handleConfirmationConfirm"
+    @cancel="handleConfirmationCancel"
+  />
+
+  <OkModal
+    :show="showSuccessModal"
+    :message="successMessage"
+    @close="handleModalClose"
+    :duration="4000"
+  />
 </template>
 
 <style scoped>
@@ -769,7 +868,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 100;
 }
 .modal-imagenes {
   max-width: 900px;
@@ -1249,6 +1348,7 @@ onMounted(async () => {
 }
 .actividad-form {
   padding-top: 0.3em;
+  padding-left: 0.1em;
   max-width: 900px;
   margin: 0 auto 2rem auto;
   display: flex;
