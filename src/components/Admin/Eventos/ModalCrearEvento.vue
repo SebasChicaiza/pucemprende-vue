@@ -297,8 +297,8 @@ async function handleCronogramaSubmit() {
 
   const payload = {
     ...cronogramaForm,
-    //evento_id: eventIdStore.value
-    evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
+    evento_id: eventIdStore.value
+    // evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
   };
   await enviarCronogramas(payload)
 }
@@ -358,7 +358,7 @@ function confirmProceedToActivities() {
   showConfirmationModal.value = true;
 }
 
-function handleConfirmationConfirm() {
+async function handleConfirmationConfirm() {
   showConfirmationModal.value = false; // Always close the modal
 
   if (activeTab.value === 'cronograma') {
@@ -366,8 +366,11 @@ function handleConfirmationConfirm() {
     console.log('Switched to Activities tab after confirmation.');
   } else if (activeTab.value === 'actividades') {
 
-    console.log('Activities saved successfully!');
-    // saveAllActivitiesToBackend();
+    console.log('Activities save confirmed. Updating dependencies...');
+    await updateActivitiesDependencies();
+    successMessage.value = 'Se a creado el evento con exito';
+    showSuccessModal.value = true;
+    emit('close');
   }
 }
 
@@ -672,6 +675,86 @@ async function fetchActividadesForCronograma(cronogramaId) {
 }
 
 
+// Final Update for the dependencies to confirm all the event
+async function updateActivitiesDependencies() {
+  loading.value = true;
+  actividadError.value = null;
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+    loading.value = false;
+    return;
+  }
+
+  // Group activities by cronograma_id to process them logically
+  const activitiesByCronograma = actividades.value.reduce((acc, activity) => {
+    if (!acc[activity.cronograma_id]) {
+      acc[activity.cronograma_id] = [];
+    }
+    acc[activity.cronograma_id].push(activity);
+    return acc;
+  }, {});
+
+  const updatePromises = [];
+
+  for (const cronogramaId in activitiesByCronograma) {
+    // Sort activities for each cronograma by their current 'orden'
+    const sortedActivities = activitiesByCronograma[cronogramaId].sort((a, b) => a.orden - b.orden);
+
+    let previousActivityId = null;
+
+    for (let i = 0; i < sortedActivities.length; i++) {
+      const currentActivity = sortedActivities[i];
+      let dependenciaId = null;
+
+      if (i === 0) {
+        // The first activity in the sorted list depends on itself
+        dependenciaId = currentActivity.id;
+      } else {
+        // Subsequent activities depend on the previous one's ID
+        dependenciaId = previousActivityId;
+      }
+
+      // Check if the dependency_id actually needs an update
+      if (currentActivity.dependencia_id !== dependenciaId) {
+        const payload = {
+          cronograma_id: currentActivity.cronograma_id, // Ensure cronograma_id is included as per your PUT requirement
+          orden: currentActivity.orden, // Include order if the API expects it even if not changing
+          dependencia_id: dependenciaId,
+        };
+
+        updatePromises.push(
+          axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${currentActivity.id}`, payload, {
+            headers: {
+              Authorization: token,
+              'Content-Type': 'application/json',
+            },
+          }).then(response => {
+            // Update the local state to reflect the change
+            currentActivity.dependencia_id = dependenciaId;
+            console.log(`Updated dependency for Activity ID ${currentActivity.id}:`, response.data);
+            return response.data;
+          })
+        );
+      }
+      previousActivityId = currentActivity.id; // Set for the next iteration
+    }
+  }
+
+  try {
+    await Promise.all(updatePromises);
+    console.log('All activity dependencies updated successfully!');
+    successMessage.value = '¡Todas las dependencias de actividades se han actualizado con éxito!';
+    showSuccessModal.value = true;
+  } catch (error) {
+    console.error('Error during mass activity dependency update:', error);
+    actividadError.value = error.response?.data?.message || 'Fallo al actualizar las dependencias de las actividades.';
+  } finally {
+    loading.value = false;
+  }
+}
+
 onMounted(async () => {
   fetchCategorias()
   fetchSede()
@@ -911,11 +994,14 @@ onMounted(async () => {
               </div>
             </div>
             <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="$emit('close')">
+            <button type="button" class="btn btn-cancel" @click="activeTab = 'info'">
               <i class="fas fa-angle-left"></i>Volver
             </button>
             <button type="submit" class="btn btn-primary">
               Siguiente<i class="fas fa-angle-right"></i>
+            </button>
+            <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'">
+              Omitir <i class="fas fa-forward"></i>
             </button>
           </div>
           </div>
@@ -1069,7 +1155,7 @@ onMounted(async () => {
     :show="showSuccessModal"
     :message="successMessage"
     @close="handleModalClose"
-    :duration="2500"
+    :duration="2000"
   />
 </template>
 
