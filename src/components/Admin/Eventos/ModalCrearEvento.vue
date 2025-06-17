@@ -508,59 +508,44 @@ async function handleActividadAdd() {
   }
 }
 
-// --- Reordering Activities (Mover Arriba/Abajo) ---
-// This function will reorder locally and then send the updated order for ALL activities
-// in the current 'actividades' array to the backend.
-async function updateActivityOrderOnBackend() {
-  reorderingActividades.value = true;
-  actividadError.value = null; // Clear previous errors
+// Function to send a PUT request for a single activity's order
+async function updateSingleActivityOrder(activity) {
+  actividadError.value = null;
 
   const token = localStorage.getItem('token');
   if (!token) {
     actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
-    reorderingActividades.value = false;
-    return;
+    return false;
   }
 
-  // Prepare the data for the backend: an array of all activities with their current order
-  const orderUpdatePayload = actividades.value.map((act, index) => ({
-    id: act.id, // Assuming 'id' is available from backend response
-    orden: index + 1, // New order based on current array index
-    // Include other fields if your PUT endpoint expects the full object,
-    // otherwise, just id and orden are usually sufficient for reordering.
-    cronograma_id: act.cronograma_id, // Important for context
-    titulo: act.titulo,
-    descripcion: act.descripcion,
-    fecha_inicio: act.fecha_inicio,
-    fecha_fin: act.fecha_fin,
-    dependencia_id: act.dependencia_id || null,
-  }));
+  if (!activity.id) {
+    console.error('Attempted to update an activity without an ID:', activity);
+    actividadError.value = 'Error: No se pudo actualizar la actividad sin un ID.';
+    return false;
+  }
+
+  const payload = {
+    cronograma_id: activity.cronograma_id,
+    orden: activity.orden,
+  };
 
   try {
-    // Assuming your endpoint is /api/actividades-cronograma and it accepts an array
-    // for a batch update of order.
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, orderUpdatePayload, {
+    // ⭐ Corrected endpoint: /api/actividades-cronograma/{id} ⭐
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activity.id}`, payload, {
       headers: {
         Authorization: token,
         'Content-Type': 'application/json',
       },
     });
-
-    console.log('Orden de actividades actualizada en el backend:', response.data);
-    // Optionally, re-fetch activities from backend to ensure local state matches remote state
-    // This is good practice for highly critical order, but might be overkill for simple cases
-    // if backend confirms the update.
-    // await fetchActividadesForCronograma(actividadForm.cronograma_id);
+    console.log(`Actividad ID ${activity.id} orden actualizada:`, response.data);
+    return true; // Indicate success
   } catch (error) {
-    console.error('Error al actualizar el orden de las actividades:', error);
-    actividadError.value = error.response?.data?.message || 'Fallo al guardar el nuevo orden de las actividades.';
-    // Optionally, revert local changes if backend update fails
-    // A more robust solution would store the previous state and revert.
-    alert('Fallo al actualizar el orden. Por favor, intente de nuevo.');
-  } finally {
-    reorderingActividades.value = false;
+    console.error(`Error al actualizar el orden de la actividad ID ${activity.id}:`, error);
+    actividadError.value = error.response?.data?.message || `Fallo al actualizar la actividad ID ${activity.id}.`;
+    return false;
   }
 }
+
 
 // Helper function to swap two items in the local activities array
 function swapActivities(idx1, idx2) {
@@ -577,20 +562,65 @@ function swapActivities(idx1, idx2) {
 
 async function moverArriba(idx) {
   if (idx === 0) return;
-  swapActivities(idx, idx - 1);
-  await updateActivityOrderOnBackend(); // Send the updated order to the backend
+
+  reorderingActividades.value = true;
+  actividadError.value = null;
+
+  const prevIdx = idx - 1;
+
+  // Store original activities before swapping for potential revert
+  const originalActivities = JSON.parse(JSON.stringify(actividades.value));
+
+  // Perform local swap
+  swapActivities(idx, prevIdx);
+
+  // Identify the two activities that were just swapped (now at prevIdx and idx)
+  const activityToUpdate1 = actividades.value[prevIdx];
+  const activityToUpdate2 = actividades.value[idx];
+
+  // Send individual PUT requests for each affected activity
+  const success1 = await updateSingleActivityOrder(activityToUpdate1);
+  const success2 = await updateSingleActivityOrder(activityToUpdate2);
+
+  if (!success1 || !success2) {
+    // If either update failed, revert local changes
+    actividades.value = originalActivities;
+    alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
+  }
+
+  reorderingActividades.value = false;
 }
 
 async function moverAbajo(idx) {
   if (idx === actividades.value.length - 1) return;
-  swapActivities(idx, idx + 1);
-  await updateActivityOrderOnBackend(); // Send the updated order to the backend
-}
 
-// --- Optional: Fetch existing activities for a selected cronograma ---
-// This would be useful if you load the component and want to display existing activities
-// for the initially selected cronograma or when the selected cronograma changes.
-// You'll need to create a new backend API endpoint for this, e.g., GET /api/cronogramas/{cronograma_id}/actividades
+  reorderingActividades.value = true;
+  actividadError.value = null;
+
+  const nextIdx = idx + 1;
+
+  // Store original activities before swapping for potential revert
+  const originalActivities = JSON.parse(JSON.stringify(actividades.value));
+
+  // Perform local swap
+  swapActivities(idx, nextIdx);
+
+  // Identify the two activities that were just swapped (now at idx and nextIdx)
+  const activityToUpdate1 = actividades.value[idx];
+  const activityToUpdate2 = actividades.value[nextIdx];
+
+  // Send individual PUT requests for each affected activity
+  const success1 = await updateSingleActivityOrder(activityToUpdate1);
+  const success2 = await updateSingleActivityOrder(activityToUpdate2);
+
+  if (!success1 || !success2) {
+    // If either update failed, revert local changes
+    actividades.value = originalActivities;
+    alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
+  }
+
+  reorderingActividades.value = false;
+}
 
 watch(
   () => actividadForm.cronograma_id,
@@ -984,11 +1014,12 @@ onMounted(async () => {
                 </td>
                 <td>{{ act.titulo }}</td>
                 <td>{{ act.descripcion }}</td>
-                <td>{{ act.fecha_inicio.split('T')[0] }}</td> <td>{{ act.fecha_fin.split('T')[0] }}</td> <td>{{ act.dependencia_id || '------' }}</td>
+                <td>{{ act.fecha_inicio.split('T')[0] }}</td>
+                <td>{{ act.fecha_fin.split('T')[0] }}</td>
+                <td>{{ act.dependencia_id || '------' }}</td>
               </tr>
             </tbody>
           </table>
-          <div class="tabla-paginacion">Página 1 de 1</div>
         </div>
 
         <div class="button-row">
