@@ -1,12 +1,9 @@
 <script setup>
-import AppNavbar from '@/components/AppNavbar.vue'
-import AppFooter from '@/components/AppFooter.vue'
-import LoaderComponent from '@/components/LoaderComponent.vue';
+import LoaderComponent from '@/components/LoaderComponent.vue'
 </script>
 
 <template>
-  <AppNavbar />
-  <LoaderComponent v-if="loading"/>
+  <LoaderComponent v-if="loading" />
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
@@ -61,7 +58,6 @@ import LoaderComponent from '@/components/LoaderComponent.vue';
       <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
     </div>
   </div>
-  <AppFooter />
 </template>
 
 <script>
@@ -83,23 +79,21 @@ export default {
       this.error = ''
       this.loading = true
       try {
-
         await fetch(`${import.meta.env.VITE_URL_BACKEND}/sanctum/csrf-cookie`, {
-  credentials: 'include'
-});
+          credentials: 'include',
+        })
 
         const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/login`, {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-
           },
           body: JSON.stringify({
             email: this.email,
             password: this.password,
           }),
-          credentials: 'include'
+          credentials: 'include',
         })
 
         const text = await response.text()
@@ -128,10 +122,9 @@ export default {
           this.$router.push('/')
         }
       } catch (err) {
-        this.error = 'Correo o contraseña incorrectos. aaaaaaaa'
+        this.error = 'Correo o contraseña incorrectos.'
         console.error('Login error:', err)
-      }
-      finally {
+      } finally {
         this.loading = false
       }
     },
