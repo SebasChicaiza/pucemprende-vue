@@ -257,6 +257,7 @@ async function enviarActividad(activityData, cronogramaBackendId) {
   if (!token) {
     throw new Error('Token de autenticación no encontrado.');
   }
+  loading.value = true;
   try {
     const payload = {
       ...activityData,
@@ -276,6 +277,8 @@ async function enviarActividad(activityData, cronogramaBackendId) {
   } catch (error) {
     console.error('Error al enviar actividad:', error);
     throw new Error(error.response?.data?.message || 'Fallo al añadir la actividad.');
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -284,6 +287,7 @@ async function updateActivityOrderAndDependency(activityId, cronogramaBackendId,
   if (!token) {
     throw new Error('Token de autenticación no encontrado.');
   }
+  loading.value = true;
   const payload = {
     cronograma_id: cronogramaBackendId,
     orden: orden,
@@ -301,6 +305,8 @@ async function updateActivityOrderAndDependency(activityId, cronogramaBackendId,
   } catch (error) {
     console.error(`Error al actualizar el orden/dependencia de la actividad ID ${activityId}:`, error);
     throw new Error(error.response?.data?.message || `Fallo al actualizar la actividad ID ${activityId}.`);
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -487,7 +493,7 @@ async function handleActividadAdd() {
   actividadForm.fecha_fin = '';
   actividadForm.dependencia_id = null;
 
-  successMessage.value = `La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida localmente.`;
+  successMessage.value = `La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`;
   showSuccessModal.value = true;
   addingActividad.value = false;
   saveToLocalStorage();
@@ -596,6 +602,8 @@ async function processFinalSave() {
 
     for (const cronograma of cronogramas.value) {
       const createdCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
+      successMessage.value = 'Cronogramas creados con éxito.';
+      showSuccessModal.value = true;
       cronogramaIdMap.set(cronograma.tempId, createdCronograma.id);
 
       if (cronograma.actividades && cronograma.actividades.length > 0) {
@@ -607,6 +615,8 @@ async function processFinalSave() {
           const activity = sortedActivities[i];
 
           const createdActivity = await enviarActividad(JSON.parse(JSON.stringify(activity)), createdCronograma.id);
+          successMessage.value = 'Actividades creados con éxito.';
+          showSuccessModal.value = true;
           const activityBackendId = createdActivity.id;
 
           let dependencyId = null;
