@@ -57,7 +57,7 @@ const activeTab = ref('info');
 const descripcionCount = computed(() => form.descripcion.length);
 const error = ref('');
 const loading = ref(false);
-const categorias = ref([]);
+const categorias = ref([]); // This holds the fetched categories with IDs
 const sede = ref([]);
 const eventIdStore = ref(null);
 const cronogramaIdStore = ref([]);
@@ -77,7 +77,6 @@ const isClosingModal = ref(false);
 
 const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
 
-// --- MODAL AND LOADER HANDLERS ---
 const handleModalClose = () => {
   showSuccessModal.value = false;
   successMessage.value = '';
@@ -160,7 +159,6 @@ const clearLocalStorage = () => {
   localStorage.removeItem('eventDraft');
 };
 
-// --- Define resetForm before the watcher that uses it ---
 const resetForm = () => {
   Object.assign(form, {
     id: null,
@@ -207,15 +205,30 @@ watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore
 }, { deep: true });
 
 watch(() => props.show, (newVal) => {
-  if (!newVal) { // When modal is hidden
-    resetForm(); // Reset form state
-    clearLocalStorage(); // Clear any draft
+  if (!newVal) {
+    resetForm();
+    clearLocalStorage();
+  } else {
+    loadFromLocalStorage();
   }
 });
 
-
 watch(() => props.eventData, (newEventData) => {
   if (newEventData) {
+    console.log('newEventData received in ModalCrearEvento:', newEventData);
+
+    const foundCategory = categorias.value.find(
+      (cat) => cat.nombre === newEventData.categoria
+    );
+
+    let categoryIdToAssign = null;
+    if (foundCategory) {
+      categoryIdToAssign = foundCategory.id;
+      console.log('Found category ID:', categoryIdToAssign, 'for name:', newEventData.categoria);
+    } else {
+      console.warn(`Category name "${newEventData.categoria}" not found in fetched categories. Setting categoria_id to null.`);
+    }
+
     Object.assign(form, {
       id: newEventData.id,
       nombre: newEventData.nombre,
@@ -226,7 +239,7 @@ watch(() => props.eventData, (newEventData) => {
       espacio: newEventData.espacio,
       modalidad: newEventData.modalidad,
       sede_id: newEventData.sede_id,
-      categoria_id: newEventData.categoria_id,
+      categoria_id: categoryIdToAssign,
       hayEquipos: newEventData.hayEquipos,
       hayFormulario: newEventData.hayFormulario,
       estado: newEventData.estado,
@@ -235,13 +248,11 @@ watch(() => props.eventData, (newEventData) => {
     activeTab.value = 'info';
     cronogramas.value = [];
     eventIdStore.value = newEventData.id;
-    clearLocalStorage();
   } else {
+    console.log('newEventData is null, resetting form for new event creation.');
     resetForm();
-    clearLocalStorage();
   }
 }, { immediate: true });
-
 
 const fetchCategorias = async () => {
   const token = localStorage.getItem('token');
@@ -655,7 +666,6 @@ async function handleConfirmationConfirm() {
     activeTab.value = 'actividades';
   } else if (activeTab.value === 'actividades') {
     await processFinalSave();
-    emit('close');
   }
   isClosingModal.value = false;
 }
@@ -679,13 +689,15 @@ async function processFinalSave() {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   };
 
+  // Ensure category_id is always a number before sending
   const eventPayload = {
     ...JSON.parse(JSON.stringify(form)),
     fecha_inicio: formatDateTime(form.fecha_inicio),
     fecha_fin: formatDateTime(form.fecha_fin),
     hayEquipos: Number(form.hayEquipos),
     hayFormulario: Boolean(form.hayFormulario),
-    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
+    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
+    categoria_id: Number(form.categoria_id)
   };
 
   try {
@@ -735,9 +747,19 @@ async function processFinalSave() {
         }
       }
     }
+
+    // --- IMPORTANT: Prepare the event data for the parent component ---
+    const updatedEventForParent = { ...createdOrUpdatedEvent };
+    const foundCategory = categorias.value.find(cat => cat.id === form.categoria_id);
+    if (foundCategory) {
+      updatedEventForParent.categoria = foundCategory.nombre;
+    } else {
+      updatedEventForParent.categoria = 'Categoría Desconocida'; // Fallback
+    }
+
     await showTimedSuccessMessage(isEditing ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
     clearLocalStorage();
-    emit('submit', createdOrUpdatedEvent);
+    emit('submit', updatedEventForParent); // Emit the modified event data
     emit('close');
   } catch (err) {
     console.error('Error during final save process:', err);
@@ -750,6 +772,16 @@ async function processFinalSave() {
 onMounted(async () => {
   await fetchCategorias();
   await fetchSede();
+
+  if (props.eventData && categorias.value.length > 0 && form.categoria_id === null) {
+    const foundCategory = categorias.value.find(
+      (cat) => cat.nombre === props.eventData.categoria
+    );
+    if (foundCategory) {
+      form.categoria_id = foundCategory.id;
+      console.log('Category ID set post-fetch in onMounted for existing event:', form.categoria_id);
+    }
+  }
 
   if (cronogramas.value.length > 0 && !actividadForm.cronograma_id) {
     actividadForm.cronograma_id = cronogramas.value[0].tempId;

@@ -40,7 +40,7 @@ if (userJsonString) {
           { icon: 'fa-regular fa-file', text: 'Formularios', route: '/admin/formularios' },
           { icon: 'fa-solid fa-users', text: 'Equipos', route: '/admin/equipos' },
           { icon: 'fa-regular fa-user', text: 'Usuarios', route: '/admin/usuarios' },
-          { icon: 'fa-regular fa-building', text: 'Organizaciones', route: '/admin/organizaciones' }
+          { icon: 'fa-regular fa-building', text: 'Organizaciones', route: '/admin/organizadores' }
         ]" :key="index" class="sidebar-item">
 
           <router-link :to="item.route" class="d-flex align-items-center py-2 px-3 rounded text-decoration-none sidebar-link">
