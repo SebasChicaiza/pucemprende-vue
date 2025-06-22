@@ -1159,10 +1159,17 @@ onMounted(async () => {
             <tbody>
               <tr v-for="(act, idx) in activitiesForSelectedCronograma" :key="act.tempId">
                 <td>
-                  <button @click="moverArriba(actividadForm.cronograma_id, idx)" :disabled="idx === 0 || reorderingActividades">▲</button>
-                  {{ act.orden }} <button @click="moverAbajo(actividadForm.cronograma_id, idx)" :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades">
-                    ▼
-                  </button>
+                  <div class="order-controls-horizontal">
+                    <button @click="moverArriba(actividadForm.cronograma_id, idx)"
+                      :disabled="idx === 0 || reorderingActividades" class="order-btn">
+                      <i class="fas fa-caret-up"></i>
+                    </button>
+                    <span class="order-number">{{ act.orden }}</span>
+                    <button @click="moverAbajo(actividadForm.cronograma_id, idx)"
+                      :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades" class="order-btn">
+                      <i class="fas fa-caret-down"></i>
+                    </button>
+                  </div>
                 </td>
                 <td>{{ act.titulo }}</td>
                 <td>{{ act.descripcion }}</td>
@@ -1306,10 +1313,7 @@ onMounted(async () => {
 }
 
 
-.tabla-actividades {
-    position: relative;
 
-}
 
 .alert {
   padding: 10px 15px;
@@ -1836,41 +1840,110 @@ onMounted(async () => {
 }
 
 .tabla-actividades {
-  margin: 2rem 0 1rem 0;
-  overflow-x: auto;
+  position: relative;
+  margin-top: 2rem; /* As per your request */
+  margin-bottom: 1rem; /* As per your request */
+  overflow-x: auto; /* Ensures table is scrollable on small screens */
+  border: 1px solid #dee2e6; /* Consistent with cronogramas for overall table border */
+  border-radius: 8px; /* Match other rounded elements */
+}
+
+.tabla-actividades h5 { /* Changed from h4 as per template structure */
+  font-size: 0.9rem;
+  color: #333;
+  margin-top: 0.7rem;
+  margin-bottom: 0.7rem;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  background-color: #f0f0f0; /* Light background for consistency */
+  border-bottom: 1px solid #dee2e6;
+  border-radius: 8px 8px 0 0;
 }
 
 .tabla-actividades table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.70rem;
+  font-size: 0.70rem; /* As per your request, keeps it small */
   background: #fff;
 }
 
-.tabla-actividades th,
-.tabla-actividades td {
-  border: 1px solid #ddd;
-  padding: 0.5rem 0.7rem;
-  text-align: left;
+.tabla-actividades thead {
+  background-color: #174384; /* Deep blue, consistent with cronogramas */
+  color: white;
 }
 
 .tabla-actividades th {
-  background: #f5f5f5;
+  padding: 0.6rem 0.8rem; /* Slightly reduced padding for compactness */
+  text-align: left;
   font-weight: 600;
+  font-size: 0.7rem; /* Keeping header font small */
+  white-space: nowrap; /* Prevent text wrapping in headers */
+  border: none; /* Remove individual cell borders in thead, border is on tbody td */
 }
 
-.tabla-actividades button {
+.tabla-actividades tbody tr:nth-child(even) {
+  background-color: #f8f9fa; /* Consistent alternating row background */
+}
+
+.tabla-actividades tbody tr:hover {
+  background-color: #e5eef8; /* Consistent hover effect */
+}
+
+.tabla-actividades td {
+  border: 1px solid #ddd; /* As per your request for cell borders */
+  padding: 0.5rem 0.7rem; /* As per your request, compact padding */
+  text-align: left;
+  font-size: 0.75rem; /* Slightly larger than table font, but still small for readability */
+  color: #495057;
+  vertical-align: middle; /* Aligns content, especially buttons, nicely */
+}
+
+.tabla-actividades tbody tr:last-child td {
+  border-bottom: 1px solid #ddd; /* Keep bottom border for all rows as per your border-1px-solid-#ddd request */
+}
+
+.order-controls-horizontal {
+  display: flex; /* Arrange children in a row */
+  align-items: center; /* Vertically center items in the row */
+  justify-content: center; /* Horizontally center the group within the cell */
+  gap: 1px; /* Space between buttons and the number */
+  min-width: 60px; /* Ensure enough space for the horizontal layout */
+}
+
+.order-btn {
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 1rem; /* Adjust icon size */
   cursor: pointer;
   color: #174384;
-  padding: 0 0.2rem;
+  padding: 0;
+  line-height: 1;
+  height: 20px;
+  width: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
 }
 
-.tabla-actividades button:disabled {
+.order-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.order-btn:disabled {
   color: #bbb;
   cursor: not-allowed;
+  background-color: transparent;
+}
+
+.order-number {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #333;
+  margin: 0;
+  text-align: center;
+  min-width: 15px; /* Give the number a small fixed width to prevent jumpiness */
 }
 
 .tabla-paginacion {
