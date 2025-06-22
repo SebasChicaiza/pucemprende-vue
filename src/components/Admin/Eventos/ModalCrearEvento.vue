@@ -15,17 +15,19 @@ const emit = defineEmits(['close', 'submit'])
 
 const form = reactive({
   nombre: '',
-  categoria_id: null,
   descripcion: '',
   fecha_inicio: '',
   fecha_fin: '',
-  capacidad: 0,
-  sede_id: null,
+  capacidad: null,
   espacio: '',
   modalidad: '',
+  sede_id: null,
+  categoria_id: null,
   hayEquipos: 0,
   hayFormulario: false,
-})
+  estado: 'activo', // Default value for new field
+  inscripcionesAbiertas: true // Default value for new field
+});
 
 const activeTab = ref('info')
 
@@ -124,7 +126,7 @@ const fetchSede = async () => {
 
 //submit eventos
 async function handleSubmit() {
-  error.value = ''
+  error.value = '';
 
   if (
     !form.nombre ||
@@ -133,27 +135,50 @@ async function handleSubmit() {
     !form.fecha_fin ||
     !form.modalidad ||
     !form.categoria_id ||
-    !form.sede_id
+    !form.sede_id ||
+    !form.espacio ||
+    form.capacidad === null ||
+    form.capacidad === '' ||
+    !form.estado ||
+    form.inscripcionesAbiertas === null
   ) {
-    error.value = '⚠️ Por favor, completa todos los campos obligatorios.'
-    return
+    error.value = '⚠️ Por favor, completa todos los campos obligatorios.';
+    return;
   }
 
   const fechaInicio = new Date(form.fecha_inicio)
   const fechaFin = new Date(form.fecha_fin)
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas ingresadas no son válidas.'
-    return
+    error.value = '⚠️ Las fechas y horas ingresadas no son válidas.';
+    return;
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.'
-    return
+    error.value = '⚠️ La fecha y hora de inicio debe ser anterior a la fecha y hora de fin.';
+    return;
   }
 
-  const payload = { ...form }
-  await enviarEvento(payload)
+  const formatDateTime = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
+  const payload = {
+    ...form,
+    fecha_inicio: formatDateTime(fechaInicio),
+    fecha_fin: formatDateTime(fechaFin),
+    hayEquipos: Number(form.hayEquipos),
+    hayFormulario: Boolean(form.hayFormulario),
+    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
+  };
+
+  await enviarEvento(payload);
 }
 
 async function enviarEvento(data) {
@@ -844,24 +869,33 @@ onMounted(async () => {
 
               <div class="form-group half">
                 <select v-model="form.modalidad" required>
-                  <option disabled>Seleccione una modalidad</option>
+                  <option disabled value="">Seleccione una modalidad</option>
                   <option>Presencial</option>
                   <option>Virtual</option>
                   <option>Híbrida</option>
                 </select>
                 <label>Modalidad *</label>
               </div>
-            </div>
-            <div class="form-group-row span-3">
               <div class="form-group half">
-              <input v-model="form.fecha_inicio" type="date" required />
-              <label>Fecha de Inicio *</label>
+                <select v-model="form.estado" required>
+                  <option disabled value="">Seleccione un estado</option>
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                </select>
+                <label>Estado del Evento *</label>
+              </div>
             </div>
 
-            <div class="form-group half">
-              <input v-model="form.fecha_fin" type="date" required />
-              <label>Fecha de Fin *</label>
-            </div>
+            <div class="form-group-row span-3">
+              <div class="form-group half">
+                <input v-model="form.fecha_inicio" type="datetime-local" required />
+                <label>Fecha y Hora de Inicio *</label>
+              </div>
+
+              <div class="form-group half">
+                <input v-model="form.fecha_fin" type="datetime-local" required />
+                <label>Fecha y Hora de Fin *</label>
+              </div>
             </div>
 
             <div class="form-group span-1">
@@ -872,8 +906,8 @@ onMounted(async () => {
             <div class="form-group span-1">
               <select v-model.number="form.sede_id" required>
                 <option disabled value="">Seleccione una sede</option>
-                <option v-for="sede in sede" :key="sede.id" :value="sede.id">
-                  {{ sede.nombre }}
+                <option v-for="s in sede" :key="s.id" :value="s.id">
+                  {{ s.nombre }}
                 </option>
               </select>
               <label>Sede *</label>
@@ -889,6 +923,7 @@ onMounted(async () => {
               />
               <label>Capacidad *</label>
             </div>
+
           </div>
 
           <div class="switch-group">
@@ -907,6 +942,12 @@ onMounted(async () => {
               <input class="form-check-input" type="checkbox" v-model="form.hayFormulario" />
               <label class="form-check-label">Se necesita Rubricas</label>
             </div>
+
+
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" v-model="form.inscripcionesAbiertas" />
+              <label class="form-check-label">Inscripciones Abiertas</label>
+            </div>
           </div>
 
           <p v-if="error" class="error-text">{{ error }}</p>
@@ -919,12 +960,6 @@ onMounted(async () => {
               Siguiente<i class="fas fa-angle-right"></i>
             </button>
           </div>
-
-          <!-- <div class="button-row">
-            <button class="btn btn-primary" @click="testLoading">
-              Loader button
-            </button>
-          </div> -->
         </form>
       </div>
 
@@ -1458,6 +1493,10 @@ onMounted(async () => {
   transition:
     background-color 1s ease,
     border-color 1s ease;
+}
+
+.form-check-label {
+  font-size: 0.7rem;
 }
 
 .error-text {
