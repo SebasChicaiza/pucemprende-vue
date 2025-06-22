@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue' // ref para variables reactivas
 import heroLogo from '@/assets/fotosOficinas/PUCE-Emprende incubadora.jpeg' // Importa la imagen directamente
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
 // Datos para las historias de éxito
 const successStories = ref([
@@ -45,6 +47,7 @@ const successStories = ref([
 </script>
 
 <template>
+  <AppNavbar/>
   <div class="sobre-nosotros-view">
     <section
       class="hero-section position-relative d-flex align-items-center justify-content-center text-center"
@@ -178,6 +181,7 @@ const successStories = ref([
       </div>
     </section>
   </div>
+  <AppFooter/>
 </template>
 
 <style scoped>

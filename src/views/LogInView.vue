@@ -1,8 +1,11 @@
 <script setup>
 import LoaderComponent from '@/components/LoaderComponent.vue'
+import AppNavbar from '@/components/AppNavbar.vue';
+import AppFooter from '@/components/AppFooter.vue';
 </script>
 
 <template>
+  <AppNavbar/>
   <LoaderComponent v-if="loading" />
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
@@ -58,6 +61,7 @@ import LoaderComponent from '@/components/LoaderComponent.vue'
       <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
     </div>
   </div>
+  <AppFooter/>
 </template>
 
 <script>

@@ -7,6 +7,8 @@ import EventoCard from '@/components/EventoCard.vue'
 import evento1 from '@/assets/pruebas/evento1danza.jpeg'
 import evento2 from '@/assets/pruebas/bootcamp.jpg'
 import evento3 from '@/assets/pruebas/feriadigital.jpg'
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
 // Array de imágenes de banners
 const banners = [
@@ -177,6 +179,7 @@ onUnmounted(() => {
 })
 </script>
 <template>
+  <AppNavbar/>
   <div class="main-banner">
     <div class="carousel-container">
       <!-- Botón izquierda -->
@@ -230,6 +233,7 @@ onUnmounted(() => {
       </div>
     </div>
   </section>
+  <AppFooter/>
 </template>
 <style scoped>
 .carousel-container {

@@ -4,6 +4,8 @@ import evento1 from '@/assets/pruebas/evento1danza.jpeg'
 import evento2 from '@/assets/pruebas/bootcamp.jpg'
 import evento3 from '@/assets/pruebas/feriadigital.jpg'
 import { onMounted } from 'vue'
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
 // En HomeView.vue o App.vue por ejemplo
 onMounted(() => {
@@ -70,6 +72,7 @@ const eventos = [
 </script>
 
 <template>
+  <AppNavbar/>
   <main>
     <div class="banner-home d-flex align-items-center justify-content-start">
       <!-- Imagen -->
@@ -115,6 +118,7 @@ const eventos = [
       </div>
     </section>
   </main>
+  <AppFooter/>
 </template>
 
 <style scoped>

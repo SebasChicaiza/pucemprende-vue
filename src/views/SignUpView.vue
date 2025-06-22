@@ -1,3 +1,8 @@
+<script setup>
+import AppNavbar from '@/components/AppNavbar.vue';
+import AppFooter from '@/components/AppFooter.vue';
+</script>
+
 <script>
 export default {
   data() {
@@ -73,6 +78,7 @@ export default {
 </script>
 
 <template>
+  <AppNavbar/>
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
@@ -221,6 +227,7 @@ export default {
       </form>
     </div>
   </div>
+  <AppFooter />
 </template>
 
 <style scoped>
