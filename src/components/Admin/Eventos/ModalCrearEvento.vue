@@ -9,11 +9,16 @@ import axios from 'axios';
 
 const props = defineProps({
   show: Boolean,
-})
+  eventData: {
+    type: Object,
+    default: null,
+  },
+});
 
 const emit = defineEmits(['close', 'submit'])
 
 const form = reactive({
+  id: null,
   nombre: '',
   descripcion: '',
   fecha_inicio: '',
@@ -72,9 +77,17 @@ const isClosingModal = ref(false);
 
 const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
 
+// --- MODAL AND LOADER HANDLERS ---
 const handleModalClose = () => {
   showSuccessModal.value = false;
+  successMessage.value = '';
 };
+
+async function showTimedSuccessMessage(message, duration = 1000) {
+  successMessage.value = message;
+  showSuccessModal.value = true;
+  await new Promise(resolve => setTimeout(resolve, duration + 100));
+}
 
 const promptCloseConfirmation = () => {
   isClosingModal.value = true;
@@ -124,7 +137,6 @@ const saveToLocalStorage = () => {
     additionalPreviews: additionalPreviews.value,
   };
   localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
-  console.log('Draft saved to local storage.');
 };
 
 const loadFromLocalStorage = () => {
@@ -141,19 +153,95 @@ const loadFromLocalStorage = () => {
     cronogramaIdStore.value = parsedData.cronogramaIdStore || [];
     coverPreview.value = parsedData.coverPreview || imageHolder;
     additionalPreviews.value = parsedData.additionalPreviews || [];
-
-    console.log('Draft loaded from local storage.');
   }
 };
 
 const clearLocalStorage = () => {
   localStorage.removeItem('eventDraft');
-  console.log('Draft cleared from local storage.');
+};
+
+// --- Define resetForm before the watcher that uses it ---
+const resetForm = () => {
+  Object.assign(form, {
+    id: null,
+    nombre: '',
+    descripcion: '',
+    fecha_inicio: '',
+    fecha_fin: '',
+    capacidad: null,
+    espacio: '',
+    modalidad: '',
+    sede_id: null,
+    categoria_id: null,
+    hayEquipos: 0,
+    hayFormulario: false,
+    estado: 'activo',
+    inscripcionesAbiertas: true
+  });
+  Object.assign(cronogramaForm, {
+    evento_id: '',
+    titulo: '',
+    descripcion: '',
+    fecha_inicio: '',
+    fecha_fin: '',
+  });
+  Object.assign(actividadForm, {
+    cronograma_id: '',
+    titulo: '',
+    descripcion: '',
+    fecha_inicio: '',
+    fecha_fin: '',
+    dependencia_id: null,
+  });
+  cronogramas.value = [];
+  activeTab.value = 'info';
+  eventIdStore.value = null;
+  cronogramaIdStore.value = [];
+  coverPreview.value = imageHolder;
+  additionalPreviews.value = [];
+  error.value = '';
 };
 
 watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverPreview, additionalPreviews], () => {
   saveToLocalStorage();
 }, { deep: true });
+
+watch(() => props.show, (newVal) => {
+  if (!newVal) { // When modal is hidden
+    resetForm(); // Reset form state
+    clearLocalStorage(); // Clear any draft
+  }
+});
+
+
+watch(() => props.eventData, (newEventData) => {
+  if (newEventData) {
+    Object.assign(form, {
+      id: newEventData.id,
+      nombre: newEventData.nombre,
+      descripcion: newEventData.descripcion,
+      fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
+      fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
+      capacidad: newEventData.capacidad,
+      espacio: newEventData.espacio,
+      modalidad: newEventData.modalidad,
+      sede_id: newEventData.sede_id,
+      categoria_id: newEventData.categoria_id,
+      hayEquipos: newEventData.hayEquipos,
+      hayFormulario: newEventData.hayFormulario,
+      estado: newEventData.estado,
+      inscripcionesAbiertas: newEventData.inscripcionesAbiertas,
+    });
+    activeTab.value = 'info';
+    cronogramas.value = [];
+    eventIdStore.value = newEventData.id;
+    clearLocalStorage();
+  } else {
+    resetForm();
+    clearLocalStorage();
+  }
+}, { immediate: true });
+
 
 const fetchCategorias = async () => {
   const token = localStorage.getItem('token');
@@ -187,31 +275,43 @@ const fetchSede = async () => {
   }
 };
 
-async function enviarEvento(data) {
+async function sendEventData(data, eventId = null) {
   const token = localStorage.getItem('token');
   if (!token) {
     throw new Error('Token de autenticación no encontrado.');
   }
   loading.value = true;
   try {
-    console.log('JSON enviado al backend (Evento):', JSON.stringify(data, null, 2));
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token,
-      },
-    });
-    console.log('Evento creado con éxito:', response.data);
+    let response;
+    if (eventId) {
+      console.log('JSON enviado al backend (Actualizar Evento):', JSON.stringify(data, null, 2));
+      response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId}`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log('Evento actualizado con éxito:', response.data);
+    } else {
+      console.log('JSON enviado al backend (Crear Evento):', JSON.stringify(data, null, 2));
+      response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log('Evento creado con éxito:', response.data);
+    }
     return response.data;
   } catch (err) {
     if (err.response) {
-      console.error('Error del servidor al crear evento:', err.response.data);
-      throw new Error(err.response.data?.mensaje || 'Error al crear el evento.');
+      console.error('Error del servidor (Axios):', err.response.data);
+      throw new Error(err.response.data?.message || 'Error al procesar el evento.');
     } else if (err.request) {
-      console.error('Error de red: No se recibió respuesta del servidor al crear evento.');
+      console.error('No se recibió respuesta del servidor (Axios):', err.request);
       throw new Error('Fallo en la conexión con el servidor.');
     } else {
-      console.error('Error al configurar la solicitud para crear evento:', err.message);
+      console.error('Error al configurar la solicitud (Axios):', err.message);
       throw new Error('Error interno al procesar la solicitud de evento.');
     }
   } finally {
@@ -231,7 +331,7 @@ async function enviarCronogramas(cronogramaData, eventId) {
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`, payload, {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: token,
+        Authorization: `Bearer ${token}`,
       },
     });
     console.log('Cronograma creado con éxito:', response.data);
@@ -268,7 +368,7 @@ async function enviarActividad(activityData, cronogramaBackendId) {
     console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2));
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
       headers: {
-        Authorization: token,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -296,7 +396,7 @@ async function updateActivityOrderAndDependency(activityId, cronogramaBackendId,
   try {
     const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityId}`, payload, {
       headers: {
-        Authorization: token,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -351,7 +451,7 @@ function handleSubmit() {
 function handleCoverChange(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size <= 10240 * 10240) {
+  if (file.size <= 10 * 1024 * 1024) {
     coverPreview.value = URL.createObjectURL(file);
   } else {
     event.target.value = '';
@@ -416,7 +516,6 @@ function handleCronogramaSubmit() {
 
   successMessage.value = `El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`;
   showSuccessModal.value = true;
-
   saveToLocalStorage();
 }
 
@@ -554,9 +653,7 @@ async function handleConfirmationConfirm() {
     emit('close');
   } else if (activeTab.value === 'cronograma') {
     activeTab.value = 'actividades';
-    console.log('Switched to Activities tab after confirmation.');
   } else if (activeTab.value === 'actividades') {
-    console.log('Final save initiated. Sending all data to backend...');
     await processFinalSave();
     emit('close');
   }
@@ -569,73 +666,79 @@ function handleConfirmationCancel() {
 }
 
 async function processFinalSave() {
-  loading.value = true;
   error.value = null;
 
+  const formatDateTime = (dateString) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
+  const eventPayload = {
+    ...JSON.parse(JSON.stringify(form)),
+    fecha_inicio: formatDateTime(form.fecha_inicio),
+    fecha_fin: formatDateTime(form.fecha_fin),
+    hayEquipos: Number(form.hayEquipos),
+    hayFormulario: Boolean(form.hayFormulario),
+    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
+  };
+
   try {
-    const formatDateTime = (dateString) => {
-      const date = new Date(dateString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    };
+    loading.value = true;
+    const isEditing = form.id !== null;
+    const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id);
+    eventIdStore.value = createdOrUpdatedEvent.id;
+    loading.value = false;
+    await showTimedSuccessMessage(isEditing ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
-    const eventPayload = {
-      ...JSON.parse(JSON.stringify(form)),
-      fecha_inicio: formatDateTime(form.fecha_inicio),
-      fecha_fin: formatDateTime(form.fecha_fin),
-      hayEquipos: Number(form.hayEquipos),
-      hayFormulario: Boolean(form.hayFormulario),
-      inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
-    };
+    if (!isEditing && cronogramas.value.length > 0) {
+      const cronogramaIdMap = new Map();
 
-    const createdEvent = await enviarEvento(eventPayload);
-    eventIdStore.value = createdEvent.id;
-    successMessage.value = 'Evento creado con éxito.';
-    showSuccessModal.value = true;
+      for (const cronograma of cronogramas.value) {
+        loading.value = true;
+        const createdCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
+        cronogramaIdMap.set(cronograma.tempId, createdCronograma.id);
+        loading.value = false;
+        await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" creado con éxito.`);
 
-    const cronogramaIdMap = new Map();
+        if (cronograma.actividades && cronograma.actividades.length > 0) {
+          let previousActivityBackendId = null;
+          const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
 
-    for (const cronograma of cronogramas.value) {
-      const createdCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
-      successMessage.value = 'Cronogramas creados con éxito.';
-      showSuccessModal.value = true;
-      cronogramaIdMap.set(cronograma.tempId, createdCronograma.id);
+          for (let i = 0; i < sortedActivities.length; i++) {
+            const activity = sortedActivities[i];
 
-      if (cronograma.actividades && cronograma.actividades.length > 0) {
-        let previousActivityBackendId = null;
+            loading.value = true;
+            const createdActivity = await enviarActividad(JSON.parse(JSON.stringify(activity)), createdCronograma.id);
+            const activityBackendId = createdActivity.id;
+            loading.value = false;
+            await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" creada con éxito.`);
 
-        const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
+            let dependencyId = null;
+            if (i === 0) {
+              dependencyId = null;
+            } else {
+              dependencyId = previousActivityBackendId;
+            }
 
-        for (let i = 0; i < sortedActivities.length; i++) {
-          const activity = sortedActivities[i];
+            loading.value = true;
+            await updateActivityOrderAndDependency(activityBackendId, createdCronograma.id, activity.orden, dependencyId);
+            loading.value = false;
 
-          const createdActivity = await enviarActividad(JSON.parse(JSON.stringify(activity)), createdCronograma.id);
-          successMessage.value = 'Actividades creados con éxito.';
-          showSuccessModal.value = true;
-          const activityBackendId = createdActivity.id;
-
-          let dependencyId = null;
-          if (i === 0) {
-            dependencyId = activityBackendId;
-          } else {
-            dependencyId = previousActivityBackendId;
+            previousActivityBackendId = activityBackendId;
           }
-
-          await updateActivityOrderAndDependency(activityBackendId, createdCronograma.id, activity.orden, dependencyId);
-
-          previousActivityBackendId = activityBackendId;
         }
       }
     }
-
-    successMessage.value = '¡Evento, cronogramas y actividades creados y configurados con éxito!';
-    showSuccessModal.value = true;
+    await showTimedSuccessMessage(isEditing ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
     clearLocalStorage();
+    emit('submit', createdOrUpdatedEvent);
+    emit('close');
   } catch (err) {
     console.error('Error during final save process:', err);
     error.value = err.message || 'Error desconocido durante el proceso de guardado final.';
@@ -647,7 +750,6 @@ async function processFinalSave() {
 onMounted(async () => {
   await fetchCategorias();
   await fetchSede();
-  loadFromLocalStorage();
 
   if (cronogramas.value.length > 0 && !actividadForm.cronograma_id) {
     actividadForm.cronograma_id = cronogramas.value[0].tempId;
@@ -1058,7 +1160,7 @@ onMounted(async () => {
 
   <ConfirmationModal
     :show="showConfirmationModal"
-    title="Confirmar Continuación"
+    title="Confirmar"
     :message="ConfModalMessage"
     confirm-text="Sí, continuar"
     cancel-text="No, quedarme"
@@ -1068,9 +1170,10 @@ onMounted(async () => {
 
   <OkModal
     :show="showSuccessModal"
+    title="Información"
     :message="successMessage"
     @close="handleModalClose"
-    :duration="2000"
+    :duration="1000"
   />
 </template>
 <style scoped>

@@ -1,42 +1,18 @@
 <script setup>
-import { ref, onMounted} from 'vue';
-import axios from 'axios';
-import { defineProps } from 'vue';
+import { defineProps, defineEmits } from 'vue';
+
 const props = defineProps({
   event: {
     type: Object,
     required: true,
   },
 });
-const categoryName = ref('Cargando...');
 
+const emit = defineEmits(['edit-event']);
 
-async function getCategoryNameById(categoryId) {
-  const token = localStorage.getItem('token');
-  if (!categoryId) {
-    categoryName.value = 'N/A';
-    return;
-  }
-  if (!token) {
-    console.error('Token de autenticación no encontrado.');
-    categoryName.value = 'N/A';
-    return;
-  }
-  try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/categoria/${categoryId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    categoryName.value = response.data.nombre;
-  } catch (error) {
-    console.error(`Error fetching category for ID ${categoryId}:`, error);
-    categoryName.value = 'Error al cargar categoría';
-  }
-}
-onMounted(() => {
-  getCategoryNameById(props.event.categoria_id);
-});
+const emitEditEvent = () => {
+  emit('edit-event', props.event);
+};
 </script>
 
 <template>
@@ -44,7 +20,7 @@ onMounted(() => {
     <div class="card-body">
       <div class="d-flex justify-content-between">
         <small class="text-muted fw-bold">Evento</small>
-        <i class="fas fa-pen edit-icon"></i>
+        <i class="fas fa-pen edit-icon" @click="emitEditEvent"></i>
       </div>
 
       <h5 class="card-title mt-2 fixed-title">
@@ -60,9 +36,7 @@ onMounted(() => {
       </p>
 
       <p class="card-text mb-2"><strong>Categoría: </strong>
-      <span v-if="categoryName === 'Cargando...'">
-          <i class="fas fa-spinner fa-spin"></i> </span>
-      <span v-else>{{ categoryName }}</span>
+        <span>{{ event.categoria }}</span>
       </p>
 
       <div class="card-text d-flex align-items-center mb-3">
@@ -74,7 +48,10 @@ onMounted(() => {
 
       <div class="d-flex gap-2 ">
         <button class="btn btn-outline-primary btn-sm">Ver evento</button>
-        <button class="btn btn-primary btn-sm">Inscribirse</button>
+        <button v-if="event.inscripcionesAbiertas" class="btn btn-primary btn-sm">Inscribirse</button>
+        <p v-else class="text-muted mb-0 d-flex align-items-center justify-content-center" style="font-size: 0.85rem;">
+          Inscripciones aún no abiertas
+        </p>
       </div>
     </div>
   </div>
