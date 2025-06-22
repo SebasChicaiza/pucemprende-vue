@@ -25,11 +25,50 @@ const form = reactive({
   categoria_id: null,
   hayEquipos: 0,
   hayFormulario: false,
-  estado: 'activo', // Default value for new field
-  inscripcionesAbiertas: true // Default value for new field
+  estado: 'activo',
+  inscripcionesAbiertas: true
 });
 
-const activeTab = ref('info')
+const cronogramaForm = reactive({
+  evento_id: '',
+  titulo: '',
+  descripcion: '',
+  fecha_inicio: '',
+  fecha_fin: '',
+});
+
+const actividadForm = reactive({
+  cronograma_id: '',
+  titulo: '',
+  descripcion: '',
+  fecha_inicio: '',
+  fecha_fin: '',
+  dependencia_id: null,
+});
+
+const cronogramas = ref([]);
+
+const activeTab = ref('info');
+const descripcionCount = computed(() => form.descripcion.length);
+const error = ref('');
+const loading = ref(false);
+const categorias = ref([]);
+const sede = ref([]);
+const eventIdStore = ref(null);
+const cronogramaIdStore = ref([]);
+const showConfirmationModal = ref(false);
+const ConfModalMessage = ref('');
+const showSuccessModal = ref(false);
+const successMessage = ref('');
+const coverInput = ref(null);
+const additionalInput = ref(null);
+const coverPreview = ref(imageHolder);
+const additionalPreviews = ref([]);
+const addingActividad = ref(false);
+const reorderingActividades = ref(false);
+const actividadError = ref(null);
+
+const isClosingModal = ref(false);
 
 const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
 
@@ -37,6 +76,11 @@ const handleModalClose = () => {
   showSuccessModal.value = false;
 };
 
+const promptCloseConfirmation = () => {
+  isClosingModal.value = true;
+  ConfModalMessage.value = "Al cerrar el modal se borrará toda la información del evento que ingresaste. ¿Estás seguro de que quieres continuar?";
+  showConfirmationModal.value = true;
+};
 
 const isTabCompleted = (tabName) => {
   const activeIndex = tabOrder.indexOf(activeTab.value);
@@ -57,7 +101,7 @@ const tabTitle = computed(() => {
     default:
       return 'Información del Evento'
   }
-})
+});
 
 function testLoading() {
   loading.value = true
@@ -67,36 +111,59 @@ function testLoading() {
   }, 10000)
 }
 
-const descripcionCount = computed(() => form.descripcion.length)
-const error = ref('')
-const loading = ref(false)
-const categorias = ref([])
-const sede = ref([])
-const eventIdStore = ref(null);
-const showConfirmationModal = ref(false);
-const ConfModalMessage = ref('');
+const saveToLocalStorage = () => {
+  const dataToStore = {
+    form: form,
+    cronogramaForm: cronogramaForm,
+    actividadForm: actividadForm,
+    cronogramas: cronogramas.value,
+    activeTab: activeTab.value,
+    eventIdStore: eventIdStore.value,
+    cronogramaIdStore: cronogramaIdStore.value,
+    coverPreview: coverPreview.value,
+    additionalPreviews: additionalPreviews.value,
+  };
+  localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
+  console.log('Draft saved to local storage.');
+};
 
+const loadFromLocalStorage = () => {
+  const savedData = localStorage.getItem('eventDraft');
+  if (savedData) {
+    const parsedData = JSON.parse(savedData);
+    Object.assign(form, parsedData.form);
+    Object.assign(cronogramaForm, parsedData.cronogramaForm);
+    Object.assign(actividadForm, parsedData.actividadForm);
 
+    cronogramas.value = parsedData.cronogramas || [];
+    activeTab.value = parsedData.activeTab || 'info';
+    eventIdStore.value = parsedData.eventIdStore || null;
+    cronogramaIdStore.value = parsedData.cronogramaIdStore || [];
+    coverPreview.value = parsedData.coverPreview || imageHolder;
+    additionalPreviews.value = parsedData.additionalPreviews || [];
 
+    console.log('Draft loaded from local storage.');
+  }
+};
 
+const clearLocalStorage = () => {
+  localStorage.removeItem('eventDraft');
+  console.log('Draft cleared from local storage.');
+};
 
-
-// Aqui se maneja la carga de categorías y sedes y crear eventos
-
+watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverPreview, additionalPreviews], () => {
+  saveToLocalStorage();
+}, { deep: true });
 
 const fetchCategorias = async () => {
   const token = localStorage.getItem('token');
-  // const token = '75|gKZX3yOMWD1qjgg54tZTRJYHcZbxYfEaliXyBFIC18f79e58';
-
   if (!token) {
     console.error("Token de autenticación no encontrado.");
+    return;
   }
-
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/categoria`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     });
     categorias.value = response.data;
   } catch (error) {
@@ -106,17 +173,13 @@ const fetchCategorias = async () => {
 
 const fetchSede = async () => {
   const token = localStorage.getItem('token');
-
   if (!token) {
     console.error("Token de autenticación no encontrado.");
     return;
   }
-
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/sede`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     });
     sede.value = response.data;
   } catch (error) {
@@ -124,8 +187,124 @@ const fetchSede = async () => {
   }
 };
 
-//submit eventos
-async function handleSubmit() {
+async function enviarEvento(data) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    console.log('JSON enviado al backend (Evento):', JSON.stringify(data, null, 2));
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token,
+      },
+    });
+    console.log('Evento creado con éxito:', response.data);
+    return response.data;
+  } catch (err) {
+    if (err.response) {
+      console.error('Error del servidor al crear evento:', err.response.data);
+      throw new Error(err.response.data?.mensaje || 'Error al crear el evento.');
+    } else if (err.request) {
+      console.error('Error de red: No se recibió respuesta del servidor al crear evento.');
+      throw new Error('Fallo en la conexión con el servidor.');
+    } else {
+      console.error('Error al configurar la solicitud para crear evento:', err.message);
+      throw new Error('Error interno al procesar la solicitud de evento.');
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function enviarCronogramas(cronogramaData, eventId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const payload = { ...cronogramaData, evento_id: eventId };
+    console.log('JSON enviado al backend (Cronograma):', JSON.stringify(payload, null, 2));
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token,
+      },
+    });
+    console.log('Cronograma creado con éxito:', response.data);
+    return response.data;
+  } catch (err) {
+    if (err.response) {
+      console.error('Error del servidor al crear cronograma:', err.response.data);
+      throw new Error(err.response.data?.mensaje || 'Error al crear el cronograma.');
+    } else if (err.request) {
+      console.error('Error de red: No se recibió respuesta del servidor al crear cronograma.');
+      throw new Error('Fallo en la conexión con el servidor.');
+    } else {
+      console.error('Error al configurar la solicitud para crear cronograma:', err.message);
+      throw new Error('Error interno al procesar la solicitud de cronograma.');
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function enviarActividad(activityData, cronogramaBackendId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  try {
+    const payload = {
+      ...activityData,
+      cronograma_id: cronogramaBackendId,
+      fecha_inicio: activityData.fecha_inicio + 'T00:00:00.000000Z',
+      fecha_fin: activityData.fecha_fin + 'T00:00:00.000000Z',
+    };
+    console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2));
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+    });
+    console.log('Actividad creada con éxito:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al enviar actividad:', error);
+    throw new Error(error.response?.data?.message || 'Fallo al añadir la actividad.');
+  }
+}
+
+async function updateActivityOrderAndDependency(activityId, cronogramaBackendId, orden, dependenciaId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  const payload = {
+    cronograma_id: cronogramaBackendId,
+    orden: orden,
+    dependencia_id: dependenciaId,
+  };
+  try {
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityId}`, payload, {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+    });
+    console.log(`Actividad ID ${activityId} orden y dependencia actualizadas:`, response.data);
+    return true;
+  } catch (error) {
+    console.error(`Error al actualizar el orden/dependencia de la actividad ID ${activityId}:`, error);
+    throw new Error(error.response?.data?.message || `Fallo al actualizar la actividad ID ${activityId}.`);
+  }
+}
+
+function handleSubmit() {
   error.value = '';
 
   if (
@@ -146,8 +325,8 @@ async function handleSubmit() {
     return;
   }
 
-  const fechaInicio = new Date(form.fecha_inicio)
-  const fechaFin = new Date(form.fecha_fin)
+  const fechaInicio = new Date(form.fecha_inicio);
+  const fechaFin = new Date(form.fecha_fin);
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
     error.value = '⚠️ Las fechas y horas ingresadas no son válidas.';
@@ -159,329 +338,111 @@ async function handleSubmit() {
     return;
   }
 
-  const formatDateTime = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-  };
-
-  const payload = {
-    ...form,
-    fecha_inicio: formatDateTime(fechaInicio),
-    fecha_fin: formatDateTime(fechaFin),
-    hayEquipos: Number(form.hayEquipos),
-    hayFormulario: Boolean(form.hayFormulario),
-    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
-  };
-
-  await enviarEvento(payload);
+  activeTab.value = 'imagenes';
+  saveToLocalStorage();
 }
-
-async function enviarEvento(data) {
-  const token = localStorage.getItem('token')
-
-  if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
-    return
-  }
-
-  loading.value = true
-  try {
-    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2));
-
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`,
-      data,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token,
-        },
-      }
-    );
-
-    const result = response.data;
-    console.log('Evento creado con éxito:', result);
-
-    eventIdStore.value = result.id;
-    console.log('Stored event ID globally:', eventIdStore.value);
-
-    activeTab.value = 'imagenes';
-  } catch (err) {
-    if (err.response) {
-      console.error('Error del servidor:', err.response.data);
-      error.value = err.response.data?.mensaje || 'Error al crear el evento.';
-    } else if (err.request) {
-      // The request was made but no response was received
-      console.error('Error de red: No se recibió respuesta del servidor.');
-      error.value = 'Fallo en la conexión con el servidor.';
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Error al configurar la solicitud:', err.message);
-      error.value = 'Error interno al procesar la solicitud.';
-    }
-  } finally {
-    loading.value = false;
-  }
-}
-
-
-
-
-
-
-
-
-// Aqui se maneja la carga de imágenes del segundo modal
-
-const coverInput = ref(null)
-const additionalInput = ref(null)
-const coverPreview = ref(imageHolder)
-const additionalPreviews = ref([])
-
-
 
 function handleCoverChange(event) {
-  const file = event.target.files[0]
-
-  if (!file) {
-    return
-  }
-
+  const file = event.target.files[0];
+  if (!file) return;
   if (file.size <= 10240 * 10240) {
-    coverPreview.value = URL.createObjectURL(file)
+    coverPreview.value = URL.createObjectURL(file);
   } else {
-    event.target.value = ''
-    coverPreview.value = '/assets/iconos/imageHolder.png'
-    alert('La imagen debe pesar menos de 10 MB.')
+    event.target.value = '';
+    coverPreview.value = imageHolder;
+    alert('La imagen debe pesar menos de 10 MB.');
   }
+  saveToLocalStorage();
 }
 
 function handleAdditionalChange(event) {
-  const files = Array.from(event.target.files)
-  additionalPreviews.value = files.map((file) => URL.createObjectURL(file))
+  const files = Array.from(event.target.files);
+  additionalPreviews.value = files.map((file) => URL.createObjectURL(file));
+  saveToLocalStorage();
 }
 
 function handleDrop(event) {
-  const files = Array.from(event.dataTransfer.files)
-  additionalPreviews.value = files.map((file) => URL.createObjectURL(file))
+  const files = Array.from(event.dataTransfer.files);
+  additionalPreviews.value = files.map((file) => URL.createObjectURL(file));
+  saveToLocalStorage();
 }
 
-
-
-
-
-
-
-
-
-// Aqui se maneja la carga de cronogramas del tercer modal
-
-const cronogramaIdStore = ref([]);
-const showSuccessModal = ref(false);
-const successMessage = ref(''); // This will hold the dynamic message for the modal
-
-
-
-const cronogramaForm = reactive({
-  evento_id: '',
-  titulo: '',
-  descripcion: '',
-  fecha_inicio: '',
-  fecha_fin: '',
-})
-
-//submit cronograma
-async function handleCronogramaSubmit() {
+function handleCronogramaSubmit() {
+  error.value = '';
 
   if (
     !cronogramaForm.titulo ||
     !cronogramaForm.descripcion ||
     !cronogramaForm.fecha_inicio ||
     !cronogramaForm.fecha_fin
-  ){
-    error.value = '⚠️ Por favor, completa todos los campos obligatorios.'
-    return
+  ) {
+    error.value = '⚠️ Por favor, completa todos los campos obligatorios del cronograma.';
+    return;
   }
 
-  const fechaInicio = new Date(cronogramaForm.fecha_inicio)
-  const fechaFin = new Date(cronogramaForm.fecha_fin)
+  const fechaInicio = new Date(cronogramaForm.fecha_inicio);
+  const fechaFin = new Date(cronogramaForm.fecha_fin);
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas ingresadas no son válidas.'
-    return
+    error.value = '⚠️ Las fechas ingresadas para el cronograma no son válidas.';
+    return;
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha de inicio debe ser anterior a la fecha de fin.'
-    return
-  }
-
-  const payload = {
-    ...cronogramaForm,
-    evento_id: eventIdStore.value
-    // evento_id: 1 // Temporarily hardcoded for testing, replace with eventIdStore.value when ready
-  };
-  await enviarCronogramas(payload)
-}
-
-async function enviarCronogramas(data) {
-  const token = localStorage.getItem('token')
-  console.log('Id del evento:', eventIdStore.value);
-  if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
-    return
-  }
-
-  loading.value = true
-  try {
-    console.log('JSON enviado al backend:', JSON.stringify(data, null, 2));
-
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`,
-      data,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token,
-        },
-      }
-    );
-
-    const result = response.data;
-    console.log('Cronograma creado con éxito:', result);
-
-    cronogramaIdStore.value.push(result.id);
-    console.log('Stored cronograma ID globally:', cronogramaIdStore.value);
-
-    successMessage.value = `El cronograma "<strong>${data.titulo}</strong>" ha sido creado con éxito.`;
-    showSuccessModal.value = true;
-    ConfModalMessage.value = `¿Estás seguro de que deseas continuar a añadir actividades? Una vez que pases a la siguiente sección,
-    **no podrás volver a crear cronogramas** para este evento. Sin embargo, podrás editar los cronogramas existentes más tarde.`
-
-  } catch (err) {
-    if (err.response) {
-      console.error('Error del servidor:', err.response.data);
-      error.value = err.response.data?.mensaje || 'Error al crear el cronograma.';
-    } else if (err.request) {
-      // The request was made but no response was received
-      console.error('Error de red: No se recibió respuesta del servidor.');
-      error.value = 'Fallo en la conexión con el servidor.';
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Error al configurar la solicitud:', err.message);
-      error.value = 'Error interno al procesar la solicitud.';
-    }
-  } finally {
-    loading.value = false;
-  }
-}
-
-function confirmProceedToActivities() {
-  showConfirmationModal.value = true;
-}
-
-async function handleConfirmationConfirm() {
-  showConfirmationModal.value = false; // Always close the modal
-
-  if (activeTab.value === 'cronograma') {
-    activeTab.value = 'actividades';
-    console.log('Switched to Activities tab after confirmation.');
-  } else if (activeTab.value === 'actividades') {
-
-    console.log('Activities save confirmed. Updating dependencies...');
-    await updateActivitiesDependencies();
-    successMessage.value = 'Se a creado el evento con exito';
-    showSuccessModal.value = true;
-    emit('close');
-  }
-}
-
-function handleConfirmationCancel() {
-  showConfirmationModal.value = false;
-}
-
-
-
-
-
-
-
-
-
-// Aqui se maneja la carga de actividades del cuarto modal
-
-
-const cronogramasOptions = ref([]);
-
-
-const actividadForm = reactive({
-  cronograma_id: '',
-  titulo: '',
-  descripcion: '',
-  fecha_inicio: '',
-  fecha_fin: '',
-  dependencia_id: null,
-});
-
-// Function to fetch details for each cronograma ID
-async function fetchCronogramasDetails() {
-  cronogramasOptions.value = [];
-  const token = localStorage.getItem('token');
-
-  if (cronogramaIdStore.value.length === 0) {
-    console.log('No cronograma IDs to fetch yet.');
+    error.value = '⚠️ La fecha de inicio del cronograma debe ser anterior a la fecha de fin.';
     return;
   }
-  const fetchPromises = cronogramaIdStore.value.map(async (id) => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${id}`, {
-        headers: {
-          Authorization: token,
-        },
-      });
-      return { id: response.data.id, titulo: response.data.titulo };
-    } catch (error) {
-      console.error(`Error al obtener detalles del cronograma con ID ${id}:`, error);
-      return null;
-    }
+
+  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  cronogramas.value.push({
+    ...JSON.parse(JSON.stringify(cronogramaForm)),
+    tempId: tempId,
+    actividades: [],
+    orden: cronogramas.value.length + 1
   });
 
-  const results = await Promise.all(fetchPromises);
+  cronogramaForm.titulo = '';
+  cronogramaForm.descripcion = '';
+  cronogramaForm.fecha_inicio = '';
+  cronogramaForm.fecha_fin = '';
+  error.value = '';
 
-  cronogramasOptions.value = results.filter(item => item !== null);
-  console.log('Opciones de cronogramas cargadas:', cronogramasOptions.value);
+  successMessage.value = `El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`;
+  showSuccessModal.value = true;
+
+  saveToLocalStorage();
 }
 
-watch(
-  () => cronogramaIdStore.value,
-  (newIds) => {
-    console.log('cronogramaIdStore updated. Re-fetching cronograma details.');
-    fetchCronogramasDetails();
-  },
-  { deep: true } // Watch for changes inside the array
-);
+function proceedToActivities() {
+  if (cronogramas.value.length === 0) {
+    error.value = '⚠️ Debes añadir al menos un cronograma antes de pasar a las actividades.';
+    return;
+  }
+  activeTab.value = 'actividades';
+  saveToLocalStorage();
+}
 
+const cronogramasOptions = computed(() => {
+  return cronogramas.value.map(c => ({ id: c.tempId, titulo: c.titulo }));
+});
 
-
-const actividades = ref([])
-
-const addingActividad = ref(false);
-const reorderingActividades = ref(false);
-const actividadError = ref(null);
+const activitiesForSelectedCronograma = computed(() => {
+  if (!actividadForm.cronograma_id) {
+    return [];
+  }
+  const selectedCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
+  return selectedCronograma ? selectedCronograma.actividades.sort((a, b) => a.orden - b.orden) : [];
+});
 
 async function handleActividadAdd() {
-  actividadError.value = null; // Clear previous errors
+  actividadError.value = null;
   addingActividad.value = true;
-  console.log('Actividad Form Data before validation:', JSON.parse(JSON.stringify(actividadForm)));
 
-  // Basic client-side validation
   if (
     !actividadForm.titulo ||
     !actividadForm.descripcion ||
-    !actividadForm.cronograma_id || // Use cronograma_id here
+    !actividadForm.cronograma_id ||
     !actividadForm.fecha_inicio ||
     !actividadForm.fecha_fin
   ) {
@@ -490,309 +451,205 @@ async function handleActividadAdd() {
     return;
   }
 
-  const newOrder = actividades.value.length > 0 ? Math.max(...actividades.value.map(a => a.orden)) + 1 : 1;
+  const parentCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
 
-  const payload = {
-    cronograma_id: actividadForm.cronograma_id,
-    titulo: actividadForm.titulo,
-    descripcion: actividadForm.descripcion,
-    fecha_inicio: actividadForm.fecha_inicio + 'T00:00:00.000000Z',
-    fecha_fin: actividadForm.fecha_fin + 'T00:00:00.000000Z',
-    orden: newOrder,
-    dependencia_id: actividadForm.dependencia_id || null,
-  };
-
-  const token = localStorage.getItem('token');
-  if (!token) {
-    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+  if (!parentCronograma) {
+    actividadError.value = 'Cronograma padre seleccionado no encontrado en el borrador.';
     addingActividad.value = false;
     return;
   }
 
-  try {
-    loading.value = true;
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
-      headers: {
-        Authorization: token,
-        'Content-Type': 'application/json',
-      },
-    });
-
-
-    actividades.value.push(response.data);
-
-
-    actividadForm.titulo = '';
-    actividadForm.descripcion = '';
-
-    actividadForm.fecha_inicio = '';
-    actividadForm.fecha_fin = '';
-    actividadForm.dependencia_id = null;
-
-    console.log('Actividad añadida:', response.data);
-    successMessage.value = `La actividad "<strong>${response.data.titulo}</strong>" ha sido creada con éxito.`;
-    showSuccessModal.value = true;
-
-  } catch (error) {
-    console.error('Error al añadir actividad:', error);
-    actividadError.value = error.response?.data?.message || 'Fallo al añadir la actividad.';
-  } finally {
-    addingActividad.value = false;
-    loading.value = false;
-  }
-}
-
-async function updateSingleActivityOrder(activity) {
-  actividadError.value = null;
-
-  const token = localStorage.getItem('token');
-  if (!token) {
-    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
-    return false;
+  if (!parentCronograma.actividades) {
+    parentCronograma.actividades = [];
   }
 
-  if (!activity.id) {
-    console.error('Attempted to update an activity without an ID:', activity);
-    actividadError.value = 'Error: No se pudo actualizar la actividad sin un ID.';
-    return false;
-  }
+  const newOrder = parentCronograma.actividades.length > 0 ?
+    Math.max(...parentCronograma.actividades.map(a => a.orden)) + 1 : 1;
 
-  const payload = {
-    cronograma_id: activity.cronograma_id,
-    orden: activity.orden,
+  const tempActivityId = `temp_act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  const newActivity = {
+    tempId: tempActivityId,
+    cronograma_id: actividadForm.cronograma_id,
+    titulo: actividadForm.titulo,
+    descripcion: actividadForm.descripcion,
+    fecha_inicio: actividadForm.fecha_inicio,
+    fecha_fin: actividadForm.fecha_fin,
+    orden: newOrder,
+    dependencia_id: null,
   };
 
-  try {
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activity.id}`, payload, {
-      headers: {
-        Authorization: token,
-        'Content-Type': 'application/json',
-      },
-    });
-    console.log(`Actividad ID ${activity.id} orden actualizada:`, response.data);
-    return true;
-  } catch (error) {
-    console.error(`Error al actualizar el orden de la actividad ID ${activity.id}:`, error);
-    actividadError.value = error.response?.data?.message || `Fallo al actualizar la actividad ID ${activity.id}.`;
-    return false;
-  }
+  parentCronograma.actividades.push(newActivity);
+
+  actividadForm.titulo = '';
+  actividadForm.descripcion = '';
+  actividadForm.fecha_inicio = '';
+  actividadForm.fecha_fin = '';
+  actividadForm.dependencia_id = null;
+
+  successMessage.value = `La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida localmente.`;
+  showSuccessModal.value = true;
+  addingActividad.value = false;
+  saveToLocalStorage();
 }
 
-function swapActivities(idx1, idx2) {
-  const temp = actividades.value[idx1];
-  actividades.value[idx1] = actividades.value[idx2];
-  actividades.value[idx2] = temp;
+function swapActivities(cronogramaTempId, idx1, idx2) {
+  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  if (!parentCronograma || !parentCronograma.actividades) return;
 
-  actividades.value.forEach((act, index) => {
+  const activitiesArray = parentCronograma.actividades;
+  const temp = activitiesArray[idx1];
+  activitiesArray[idx1] = activitiesArray[idx2];
+  activitiesArray[idx2] = temp;
+
+  activitiesArray.forEach((act, index) => {
     act.orden = index + 1;
   });
+  saveToLocalStorage();
 }
 
-async function moverArriba(idx) {
-  if (idx === 0) return;
-
-  reorderingActividades.value = true;
-  actividadError.value = null;
-
-  const prevIdx = idx - 1;
-
-  const originalActivities = JSON.parse(JSON.stringify(actividades.value));
-
-  swapActivities(idx, prevIdx);
-
-  const activityToUpdate1 = actividades.value[prevIdx];
-  const activityToUpdate2 = actividades.value[idx];
-
-
-  const success1 = await updateSingleActivityOrder(activityToUpdate1);
-  const success2 = await updateSingleActivityOrder(activityToUpdate2);
-
-  if (!success1 || !success2) {
-
-    actividades.value = originalActivities;
-    alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
-  }
-
-  reorderingActividades.value = false;
+function moverArriba(cronogramaTempId, idx) {
+  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  if (!parentCronograma || !parentCronograma.actividades || idx === 0) return;
+  swapActivities(cronogramaTempId, idx, idx - 1);
 }
 
-async function moverAbajo(idx) {
-  if (idx === actividades.value.length - 1) return;
-
-  reorderingActividades.value = true;
-  actividadError.value = null;
-
-  const nextIdx = idx + 1;
-
-
-  const originalActivities = JSON.parse(JSON.stringify(actividades.value));
-
-
-  swapActivities(idx, nextIdx);
-
-
-  const activityToUpdate1 = actividades.value[idx];
-  const activityToUpdate2 = actividades.value[nextIdx];
-
-
-  const success1 = await updateSingleActivityOrder(activityToUpdate1);
-  const success2 = await updateSingleActivityOrder(activityToUpdate2);
-
-  if (!success1 || !success2) {
-    actividades.value = originalActivities;
-    alert('Fallo al actualizar el orden de las actividades en el servidor. Revirtiendo cambios locales.');
-  }
-
-  reorderingActividades.value = false;
+function moverAbajo(cronogramaTempId, idx) {
+  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  if (!parentCronograma || !parentCronograma.actividades || idx === parentCronograma.actividades.length - 1) return;
+  swapActivities(cronogramaTempId, idx, idx + 1);
 }
 
-function getDependenciaDisplayText(act, idx) {
-  if (act.dependencia_id) {
-    const dependentActivity = actividades.value.find(a => a.id === act.dependencia_id);
-    return dependentActivity ? dependentActivity.titulo : `ID ${act.dependencia_id} (No encontrado)`;
+function getDependenciaDisplayText(act, cronogramaTempId) {
+  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  if (!parentCronograma || !parentCronograma.actividades) return 'N/A';
+
+  const idx = parentCronograma.actividades.findIndex(a => a.tempId === act.tempId);
+
+  if (idx === 0) {
+    return '------';
   } else {
-    if (idx === 0) {
-      return '------';
-    } else {
-      if (actividades.value[idx - 1]) {
-        return actividades.value[idx - 1].titulo;
-      }
-      return 'N/A';
-    }
+    const previousActivity = parentCronograma.actividades[idx - 1];
+    return previousActivity ? previousActivity.titulo : 'N/A';
   }
 }
 
 function handleSaveButtonClick() {
+  isClosingModal.value = false;
   ConfModalMessage.value = '¿Deseas guardar la configuración actual de todas las actividades asociadas a tus cronogramas? Esta acción consolidará los cambios.';
   showConfirmationModal.value = true;
 }
 
+async function handleConfirmationConfirm() {
+  showConfirmationModal.value = false;
 
-watch(
-  () => actividadForm.cronograma_id,
-  async (newCronogramaId) => {
-    if (newCronogramaId) {
-      console.log(`Selected cronograma changed to ${newCronogramaId}. Fetching existing activities.`);
-      await fetchActividadesForCronograma(newCronogramaId);
-    } else {
-      actividades.value = [];
-    }
-  },
-  { immediate: true }
-);
-
-async function fetchActividadesForCronograma(cronogramaId) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    actividadError.value = 'Token de autenticación no encontrado.';
-    return;
+  if (isClosingModal.value) {
+    clearLocalStorage();
+    emit('close');
+  } else if (activeTab.value === 'cronograma') {
+    activeTab.value = 'actividades';
+    console.log('Switched to Activities tab after confirmation.');
+  } else if (activeTab.value === 'actividades') {
+    console.log('Final save initiated. Sending all data to backend...');
+    await processFinalSave();
+    emit('close');
   }
-  try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaId}/actividades`, {
-      headers: { Authorization: token },
-    });
-    actividades.value = response.data.sort((a, b) => a.orden - b.orden);
-    console.log('Existing activities loaded:', actividades.value);
-  } catch (error) {
-    console.error(`Error al cargar actividades para cronograma ${cronogramaId}:`, error);
-    actividadError.value = error.response?.data?.message || 'Fallo al cargar actividades existentes.';
-  }
+  isClosingModal.value = false;
 }
 
+function handleConfirmationCancel() {
+  showConfirmationModal.value = false;
+  isClosingModal.value = false;
+}
 
-// Final Update for the dependencies to confirm all the event
-async function updateActivitiesDependencies() {
+async function processFinalSave() {
   loading.value = true;
-  actividadError.value = null;
-  const token = localStorage.getItem('token');
-
-  if (!token) {
-    actividadError.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
-    loading.value = false;
-    return;
-  }
-
-  // Group activities by cronograma_id to process them logically
-  const activitiesByCronograma = actividades.value.reduce((acc, activity) => {
-    if (!acc[activity.cronograma_id]) {
-      acc[activity.cronograma_id] = [];
-    }
-    acc[activity.cronograma_id].push(activity);
-    return acc;
-  }, {});
-
-  const updatePromises = [];
-
-  for (const cronogramaId in activitiesByCronograma) {
-    // Sort activities for each cronograma by their current 'orden'
-    const sortedActivities = activitiesByCronograma[cronogramaId].sort((a, b) => a.orden - b.orden);
-
-    let previousActivityId = null;
-
-    for (let i = 0; i < sortedActivities.length; i++) {
-      const currentActivity = sortedActivities[i];
-      let dependenciaId = null;
-
-      if (i === 0) {
-        // The first activity in the sorted list depends on itself
-        dependenciaId = currentActivity.id;
-      } else {
-        // Subsequent activities depend on the previous one's ID
-        dependenciaId = previousActivityId;
-      }
-
-      // Check if the dependency_id actually needs an update
-      if (currentActivity.dependencia_id !== dependenciaId) {
-        const payload = {
-          cronograma_id: currentActivity.cronograma_id, // Ensure cronograma_id is included as per your PUT requirement
-          orden: currentActivity.orden, // Include order if the API expects it even if not changing
-          dependencia_id: dependenciaId,
-        };
-
-        updatePromises.push(
-          axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${currentActivity.id}`, payload, {
-            headers: {
-              Authorization: token,
-              'Content-Type': 'application/json',
-            },
-          }).then(response => {
-            // Update the local state to reflect the change
-            currentActivity.dependencia_id = dependenciaId;
-            console.log(`Updated dependency for Activity ID ${currentActivity.id}:`, response.data);
-            return response.data;
-          })
-        );
-      }
-      previousActivityId = currentActivity.id; // Set for the next iteration
-    }
-  }
+  error.value = null;
 
   try {
-    await Promise.all(updatePromises);
-    console.log('All activity dependencies updated successfully!');
-    successMessage.value = '¡Todas las dependencias de actividades se han actualizado con éxito!';
+    const formatDateTime = (dateString) => {
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+
+    const eventPayload = {
+      ...JSON.parse(JSON.stringify(form)),
+      fecha_inicio: formatDateTime(form.fecha_inicio),
+      fecha_fin: formatDateTime(form.fecha_fin),
+      hayEquipos: Number(form.hayEquipos),
+      hayFormulario: Boolean(form.hayFormulario),
+      inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas)
+    };
+
+    const createdEvent = await enviarEvento(eventPayload);
+    eventIdStore.value = createdEvent.id;
+    successMessage.value = 'Evento creado con éxito.';
     showSuccessModal.value = true;
-  } catch (error) {
-    console.error('Error during mass activity dependency update:', error);
-    actividadError.value = error.response?.data?.message || 'Fallo al actualizar las dependencias de las actividades.';
+
+    const cronogramaIdMap = new Map();
+
+    for (const cronograma of cronogramas.value) {
+      const createdCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
+      cronogramaIdMap.set(cronograma.tempId, createdCronograma.id);
+
+      if (cronograma.actividades && cronograma.actividades.length > 0) {
+        let previousActivityBackendId = null;
+
+        const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
+
+        for (let i = 0; i < sortedActivities.length; i++) {
+          const activity = sortedActivities[i];
+
+          const createdActivity = await enviarActividad(JSON.parse(JSON.stringify(activity)), createdCronograma.id);
+          const activityBackendId = createdActivity.id;
+
+          let dependencyId = null;
+          if (i === 0) {
+            dependencyId = activityBackendId;
+          } else {
+            dependencyId = previousActivityBackendId;
+          }
+
+          await updateActivityOrderAndDependency(activityBackendId, createdCronograma.id, activity.orden, dependencyId);
+
+          previousActivityBackendId = activityBackendId;
+        }
+      }
+    }
+
+    successMessage.value = '¡Evento, cronogramas y actividades creados y configurados con éxito!';
+    showSuccessModal.value = true;
+    clearLocalStorage();
+  } catch (err) {
+    console.error('Error during final save process:', err);
+    error.value = err.message || 'Error desconocido durante el proceso de guardado final.';
   } finally {
     loading.value = false;
   }
 }
 
 onMounted(async () => {
-  fetchCategorias()
-  fetchSede()
-  fetchCronogramasDetails()
-})
+  await fetchCategorias();
+  await fetchSede();
+  loadFromLocalStorage();
 
+  if (cronogramas.value.length > 0 && !actividadForm.cronograma_id) {
+    actividadForm.cronograma_id = cronogramas.value[0].tempId;
+  }
+});
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
+  <div v-if="show" class="modal-overlay" @click.self="promptCloseConfirmation">
     <div class="modal-content fade-in">
       <h2 class="modal-title">Evento
-        <i class="fa-solid fa-xmark close-modal-button" @click="$emit('close')"></i>
+        <i class="fa-solid fa-xmark close-modal-button" @click="promptCloseConfirmation"></i>
       </h2>
 
       <div class="modal-tabs">
@@ -840,7 +697,6 @@ onMounted(async () => {
 
       <h3 class="modal-title2">{{ tabTitle }}</h3>
 
-      <!-- Modal Información del Evento -->
       <ScrollBar>
       <div v-if="activeTab === 'info'">
         <form @submit.prevent="handleSubmit" class="custom-form">
@@ -913,11 +769,11 @@ onMounted(async () => {
               <label>Sede *</label>
             </div>
 
+
             <div class="form-group span-1">
               <input
                 v-model.number="form.capacidad"
                 type="number"
-                placeholder="#"
                 min="0"
                 required
               />
@@ -963,14 +819,11 @@ onMounted(async () => {
         </form>
       </div>
 
-      <!-- Modal Imágenes del Evento -->
       <div v-if="activeTab === 'imagenes'">
         <div class="imagenes-section">
-          <!-- Cover del Evento -->
           <div>
             <label class="imagenes-label">Cover del Evento *</label>
             <div class="imagenes-cover-row">
-              <!-- Imagen del cover -->
               <div class="cover-preview-box">
                 <img
                   v-if="coverPreview"
@@ -980,7 +833,6 @@ onMounted(async () => {
                 />
                 <div v-else class="cover-preview-empty">Sin imagen</div>
               </div>
-              <!-- Botón de carga -->
               <div class="imagenes-upload-box">
                 <input
                   type="file"
@@ -997,7 +849,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Imágenes adicionales -->
           <div>
             <label class="imagenes-label">Imágenes adicionales *</label>
             <div class="imagenes-dropzone" @dragover.prevent @drop.prevent="handleDrop">
@@ -1032,18 +883,17 @@ onMounted(async () => {
             <button type="button" class="btn btn-cancel" @click="activeTab = 'info'">
               <i class="fas fa-angle-left"></i>Volver
             </button>
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary" @click="activeTab = 'cronograma'">
               Siguiente<i class="fas fa-angle-right"></i>
             </button>
             <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'">
               Omitir <i class="fas fa-forward"></i>
             </button>
-          </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Modal Añadir Cronogramas -->
       <div v-if="activeTab === 'cronograma'">
         <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
           <div class="form-group span-3">
@@ -1071,22 +921,43 @@ onMounted(async () => {
               Crear cronograma <i class="fas fa-plus"></i>
             </button>
           </div>
-
-
-          <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="activeTab = 'imagenes'">
-              <i class="fas fa-angle-left"></i> Volver
-            </button>
-            <button type="button" class="btn btn-primary" @click="confirmProceedToActivities">
-              Siguiente <i class="fas fa-angle-right"></i>
-            </button>
-
-
-          </div>
         </form>
+
+        <div class="tabla-cronogramas" v-if="cronogramas.length">
+          <h4>Cronogramas Creados:</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Título</th>
+                <th>Descripción</th>
+                <th>Inicia</th>
+                <th>Finaliza</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(cronograma, idx) in cronogramas" :key="cronograma.tempId">
+                <td>{{ cronograma.orden }}</td>
+                <td>{{ cronograma.titulo }}</td>
+                <td>{{ cronograma.descripcion }}</td>
+                <td>{{ cronograma.fecha_inicio }}</td>
+                <td>{{ cronograma.fecha_fin }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="no-cronogramas-message">Aún no has añadido ningún cronograma.</p>
+
+        <div class="button-row">
+          <button type="button" class="btn btn-cancel" @click="activeTab = 'imagenes'">
+            <i class="fas fa-angle-left"></i> Volver
+          </button>
+          <button type="button" class="btn btn-primary" @click="proceedToActivities">
+            Siguiente <i class="fas fa-angle-right"></i>
+          </button>
+        </div>
       </div>
 
-      <!-- Modal Añadir Actividades -->
       <div v-if="activeTab === 'actividades'">
         <form class="actividad-form" @submit.prevent="handleActividadAdd">
           <div class="form-group span-3">
@@ -1142,25 +1013,25 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(act, idx) in actividades" :key="act.id || idx">
+              <tr v-for="(act, idx) in activitiesForSelectedCronograma" :key="act.tempId">
                 <td>
-                  <button @click="moverArriba(idx)" :disabled="idx === 0 || reorderingActividades">▲</button>
-                  {{ act.orden }} <button @click="moverAbajo(idx)" :disabled="idx === actividades.length - 1 || reorderingActividades">
+                  <button @click="moverArriba(actividadForm.cronograma_id, idx)" :disabled="idx === 0 || reorderingActividades">▲</button>
+                  {{ act.orden }} <button @click="moverAbajo(actividadForm.cronograma_id, idx)" :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades">
                     ▼
                   </button>
                 </td>
                 <td>{{ act.titulo }}</td>
                 <td>{{ act.descripcion }}</td>
-                <td>{{ act.fecha_inicio.split('T')[0] }}</td>
-                <td>{{ act.fecha_fin.split('T')[0] }}</td>
-                <td>{{ getDependenciaDisplayText(act, idx) }}</td>
+                <td>{{ act.fecha_inicio }}</td>
+                <td>{{ act.fecha_fin }}</td>
+                <td>{{ getDependenciaDisplayText(act, actividadForm.cronograma_id) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <div class="button-row">
-          <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" disabled>
+          <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" >
             <i class="fas fa-angle-left"></i> Volver
           </button>
           <button type="button" class="btn btn-primary" @click="handleSaveButtonClick">
@@ -1171,7 +1042,6 @@ onMounted(async () => {
       </ScrollBar>
 
     </div>
-      <!-- Loader  -->
       <Loader v-if="loading" />
 
   </div>
@@ -1193,8 +1063,73 @@ onMounted(async () => {
     :duration="2000"
   />
 </template>
-
 <style scoped>
+
+/* Styles for the Cronogramas Table */
+.tabla-cronogramas {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto; /* Ensures table is scrollable on small screens */
+  border-radius: 8px; /* Apply border-radius to the container for consistency */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Consistent with modal-content shadow */
+}
+
+.tabla-cronogramas h4 {
+  font-size: 1.1rem;
+  color: #333; /* Consistent dark text */
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.tabla-cronogramas table {
+  width: 100%;
+  border-collapse: collapse;
+  /* box-shadow and border-radius moved to parent for better overflow handling */
+}
+
+.tabla-cronogramas thead {
+  background-color: #174384; /* Using the deep blue from .btn-primary and .tab.active */
+  color: white;
+}
+
+.tabla-cronogramas th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap; /* Prevent header text from wrapping too early */
+}
+
+.tabla-cronogramas tbody tr:nth-child(even) {
+  background-color: #f8f9fa; /* Keeping a light background for even rows */
+}
+
+.tabla-cronogramas tbody tr:hover {
+  background-color: #e2f0ff; /* Lighter blue on hover, consistent with previous suggestion */
+}
+
+.tabla-cronogramas td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #dee2e6; /* Light border between rows */
+  font-size: 0.875rem;
+  color: #495057; /* Consistent with other neutral text */
+}
+
+.tabla-cronogramas tbody tr:last-child td {
+  border-bottom: none; /* No border for the last row */
+}
+
+/* Message when no cronogramas are added */
+.no-cronogramas-message {
+  text-align: center;
+  color: #6c757d; /* Consistent gray text */
+  font-style: italic;
+  padding: 1.5rem 0;
+  border: 1px dashed #ced4da; /* Light gray dashed border */
+  border-radius: 5px;
+  background-color: #fefefe; /* Very light background */
+  margin-top: 1.5rem;
+}
 
 .overlay-loader {
   position: absolute;
