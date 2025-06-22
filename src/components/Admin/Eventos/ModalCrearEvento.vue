@@ -1212,24 +1212,22 @@ onMounted(async () => {
 
 /* Styles for the Cronogramas Table */
 .tabla-cronogramas {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   margin-bottom: 1.5rem;
   overflow-x: auto; /* Ensures table is scrollable on small screens */
-  border-radius: 8px; /* Apply border-radius to the container for consistency */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Consistent with modal-content shadow */
 }
 
 .tabla-cronogramas h4 {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   color: #333; /* Consistent dark text */
-  margin-bottom: 1rem;
+  margin-top: 0.7rem;
+  margin-bottom: 0.7rem;
   text-align: center;
 }
 
 .tabla-cronogramas table {
   width: 100%;
   border-collapse: collapse;
-  /* box-shadow and border-radius moved to parent for better overflow handling */
 }
 
 .tabla-cronogramas thead {
@@ -1241,8 +1239,9 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   text-align: left;
   font-weight: 600;
-  font-size: 0.9rem;
-  white-space: nowrap; /* Prevent header text from wrapping too early */
+  font-size: 0.7rem;
+  white-space: nowrap;
+
 }
 
 .tabla-cronogramas tbody tr:nth-child(even) {
@@ -1250,13 +1249,13 @@ onMounted(async () => {
 }
 
 .tabla-cronogramas tbody tr:hover {
-  background-color: #e2f0ff; /* Lighter blue on hover, consistent with previous suggestion */
+  background-color: #e5eef8; /* Lighter blue on hover, consistent with previous suggestion */
 }
 
 .tabla-cronogramas td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #dee2e6; /* Light border between rows */
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #495057; /* Consistent with other neutral text */
 }
 
@@ -1774,7 +1773,8 @@ onMounted(async () => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1rem;
+  padding-left: 2px;
 }
 
 .cronograma-row {
@@ -1795,7 +1795,7 @@ onMounted(async () => {
   padding: 0.7rem 0.9rem;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 1rem;
+
   background: #fff;
   box-sizing: border-box;
 }
