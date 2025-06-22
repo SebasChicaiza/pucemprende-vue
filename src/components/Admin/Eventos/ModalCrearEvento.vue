@@ -68,7 +68,7 @@ const successMessage = ref('');
 const coverInput = ref(null);
 const additionalInput = ref(null);
 const coverPreview = ref(imageHolder);
-const additionalPreviews = ref([]);
+const additionalPreviews = ref([]); // Store image URLs, not File objects
 const addingActividad = ref(false);
 const reorderingActividades = ref(false);
 const actividadError = ref(null);
@@ -459,28 +459,95 @@ function handleSubmit() {
   saveToLocalStorage();
 }
 
-function handleCoverChange(event) {
+// Function to upload a single file
+async function uploadFileToBackend(file, type) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Token de autenticación no encontrado. Por favor, inicie sesión.');
+    return null;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', file.name.split('.')[0]); // Optional: send base name
+  formData.append('tipo', type); // 'cover' or 'additional'
+
+  loading.value = true;
+  try {
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/upload-file`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data', // Crucial for file uploads
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    console.log(`File uploaded (${type}):`, response.data);
+    // Return the URL provided by the backend
+    return response.data.file.url;
+  } catch (error) {
+    console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
+    alert(`Error al subir la imagen (${type}).`);
+    return null;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleCoverChange(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size <= 10 * 1024 * 1024) {
-    coverPreview.value = URL.createObjectURL(file);
+
+  if (file.size <= 10 * 1024 * 1024) { // Check file size (10 MB)
+    const uploadedUrl = await uploadFileToBackend(file, 'cover');
+    if (uploadedUrl) {
+      coverPreview.value = uploadedUrl; // Update preview with the backend URL
+    } else {
+      // If upload failed, revert to placeholder or clear input
+      event.target.value = '';
+      coverPreview.value = imageHolder;
+    }
   } else {
     event.target.value = '';
     coverPreview.value = imageHolder;
-    alert('La imagen debe pesar menos de 10 MB.');
+    alert('La imagen de portada debe pesar menos de 10 MB.');
   }
   saveToLocalStorage();
 }
 
-function handleAdditionalChange(event) {
+async function handleAdditionalChange(event) {
   const files = Array.from(event.target.files);
-  additionalPreviews.value = files.map((file) => URL.createObjectURL(file));
+  const uploadedUrls = [];
+
+  for (const file of files) {
+    if (file.size <= 10 * 1024 * 1024) { // You might want a different size limit for additional images
+      const uploadedUrl = await uploadFileToBackend(file, 'additional');
+      if (uploadedUrl) {
+        uploadedUrls.push(uploadedUrl);
+      }
+    } else {
+      alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se subirá.`);
+    }
+  }
+  // Append new URLs to existing ones
+  additionalPreviews.value = [...additionalPreviews.value, ...uploadedUrls];
+  event.target.value = ''; // Clear the input for next selections
   saveToLocalStorage();
 }
 
-function handleDrop(event) {
+async function handleDrop(event) {
   const files = Array.from(event.dataTransfer.files);
-  additionalPreviews.value = files.map((file) => URL.createObjectURL(file));
+  const uploadedUrls = [];
+
+  for (const file of files) {
+    if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
+      const uploadedUrl = await uploadFileToBackend(file, 'additional');
+      if (uploadedUrl) {
+        uploadedUrls.push(uploadedUrl);
+      }
+    } else {
+      alert(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se subirá.`);
+    }
+  }
+  additionalPreviews.value = [...additionalPreviews.value, ...uploadedUrls];
   saveToLocalStorage();
 }
 
@@ -1023,17 +1090,14 @@ onMounted(async () => {
                 />
               </div>
             </div>
-            <div class="button-row">
+          </div>
+          <div class="button-row">
             <button type="button" class="btn btn-cancel" @click="activeTab = 'info'">
               <i class="fas fa-angle-left"></i>Volver
             </button>
             <button type="submit" class="btn btn-primary" @click="activeTab = 'cronograma'">
               Siguiente<i class="fas fa-angle-right"></i>
             </button>
-            <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'">
-              Omitir <i class="fas fa-forward"></i>
-            </button>
-            </div>
           </div>
         </div>
       </div>
