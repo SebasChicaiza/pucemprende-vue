@@ -9,6 +9,7 @@ import EventsView from '@/views/Admin/EventsView.vue'
 import CuentaView from '@/views/CuentaView.vue'
 import OrganizadoresView from '@/views/Admin/OrganizadoresView.vue'
 import ProyectosView from '@/views/Admin/ProyectosView.vue'
+import EventDetailView from '@/views/Admin/EventDetailView.vue'
 
 
 const router = createRouter({
@@ -78,7 +79,16 @@ const router = createRouter({
       meta: {
         title: 'Proyectos',
       },
-    }
+    },
+    {
+      path: '/admin/eventos/:id',
+      name: 'Detalle evento',
+      component: EventDetailView,
+      props: true,
+      meta: {
+        title: 'Eventos - id',
+      },
+    },
     /* EJEMPLO LAZY LOADING
     {
       path: '/about',

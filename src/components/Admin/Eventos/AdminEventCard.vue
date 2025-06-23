@@ -8,10 +8,16 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['edit-event']);
+// Add 'view-event' to the emitted events
+const emit = defineEmits(['edit-event', 'view-event']);
 
 const emitEditEvent = () => {
   emit('edit-event', props.event);
+};
+
+// New function to emit the event for viewing
+const emitViewEvent = () => {
+  emit('view-event', props.event.id); // Emit just the ID for viewing
 };
 </script>
 
@@ -47,7 +53,8 @@ const emitEditEvent = () => {
 
 
       <div class="d-flex gap-2 ">
-        <button class="btn btn-outline-primary btn-sm">Ver evento</button>
+        <!-- Attach the new emitViewEvent function to the button -->
+        <button class="btn btn-outline-primary btn-sm" @click="emitViewEvent">Ver evento</button>
         <button v-if="event.inscripcionesAbiertas" class="btn btn-primary btn-sm">Inscribirse</button>
         <p v-else class="text-muted mb-0 d-flex align-items-center justify-content-center" style="font-size: 0.85rem;">
           Inscripciones aún no abiertas

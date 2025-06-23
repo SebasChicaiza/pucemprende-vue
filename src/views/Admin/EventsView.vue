@@ -6,6 +6,9 @@ import axios from 'axios';
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
 import AdminEventCard from '@/components/Admin/Eventos/AdminEventCard.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
+import { useRouter } from 'vue-router'; // Import useRouter
+
+const router = useRouter(); // Initialize useRouter
 
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
@@ -72,7 +75,7 @@ async function fetchEventDetailsForEdit(eventId) {
   const token = localStorage.getItem('token');
   if (!token) {
     error.value = 'Token de autenticación no encontrado.';
-    return null; // Return null if token is missing
+    return null;
   }
 
   loading.value = true;
@@ -86,11 +89,11 @@ async function fetchEventDetailsForEdit(eventId) {
     console.log('Detailed Event Data for Edit:', response.data);
     currentEventToEdit.value = response.data;
     showCreateEditModal.value = true;
-    return response.data; // Return the fetched data
+    return response.data;
   } catch (err) {
     console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
     error.value = `Error al cargar detalles del evento: ${err.response?.data?.message || err.message}`;
-    return null; // Return null on error
+    return null;
   } finally {
     loading.value = false;
   }
@@ -109,20 +112,22 @@ const handleModalClose = () => {
   currentEventToEdit.value = null;
 };
 
-// MODIFIED handleModalSubmit
 const handleModalSubmit = async (emittedEventData) => {
   showCreateEditModal.value = false;
   currentEventToEdit.value = null;
 
   if (emittedEventData && emittedEventData.id) {
-    // Re-fetch the complete event data to ensure the list is updated with all details,
-    // especially if new cronogramas/activities were added/updated.
-    await fetchEvents(); // Or you could specifically refetch only the one event if performance is critical
+    await fetchEvents();
     console.log('Event list refreshed after modal submission.');
   } else {
     console.warn('No event ID received on submit, performing full re-fetch.');
     fetchEvents();
   }
+};
+
+const handleViewEvent = (eventId) => {
+  router.push({ path: `/admin/eventos/${eventId}` });
+
 };
 </script>
 
@@ -152,6 +157,7 @@ const handleModalSubmit = async (emittedEventData) => {
               <AdminEventCard
                 :event="event"
                 @edit-event="handleEditEvent"
+                @view-event="handleViewEvent"
               />
             </div>
             <div v-if="filteredEvents.length === 0 && !loading" class="col-12 text-center text-muted mt-5">

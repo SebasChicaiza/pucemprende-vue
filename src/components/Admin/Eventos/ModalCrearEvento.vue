@@ -929,7 +929,7 @@ async function processFinalSave() {
         coverImage.id = uploadedCover.id;
         coverImage.url = uploadedCover.url;
         allImagesToLink.push(uploadedCover.id);
-        await showTimedSuccessMessage('Cover image uploaded.');
+        await showTimedSuccessMessage('Cover del evento cargada');
       }
     } else if (coverImage.id) { // If an existing cover image is present (no new file selected)
       allImagesToLink.push(coverImage.id);
@@ -944,7 +944,7 @@ async function processFinalSave() {
           img.id = uploadedImg.id;
           img.url = uploadedImg.url;
           allImagesToLink.push(uploadedImg.id);
-          await showTimedSuccessMessage(`Additional image "${img.file.name}" uploaded.`);
+          await showTimedSuccessMessage(`Imagen adicional del evento "${img.file.name}" cargada.`);
         }
       } else if (img.id) { // If an existing additional image is present (no new file selected)
         allImagesToLink.push(img.id);
@@ -959,7 +959,7 @@ async function processFinalSave() {
           await linkArchivoToEvento(archivoId, eventIdStore.value);
         }
       }
-      await showTimedSuccessMessage('All images linked to event.');
+      await showTimedSuccessMessage('Todas las imagenes han sido guardadas con el evento');
     }
     // --- End Image Upload and Linking Logic ---
 
