@@ -8,6 +8,7 @@ import DashboardView from '@/views/Admin/DashboardView.vue'
 import EventsView from '@/views/Admin/EventsView.vue'
 import CuentaView from '@/views/CuentaView.vue'
 import OrganizadoresView from '@/views/Admin/OrganizadoresView.vue'
+import ProyectosView from '@/views/Admin/ProyectosView.vue'
 
 
 const router = createRouter({
@@ -68,6 +69,14 @@ const router = createRouter({
       component: OrganizadoresView,
       meta: {
         title: 'Organizadores',
+      },
+    },
+    {
+      path: '/admin/proyectos',
+      name: 'Proyectos',
+      component: ProyectosView,
+      meta: {
+        title: 'Proyectos',
       },
     }
     /* EJEMPLO LAZY LOADING
