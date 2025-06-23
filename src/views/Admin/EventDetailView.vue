@@ -6,6 +6,9 @@ import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DefaultImage from '@/assets/banners/EventoConstruccion.png'
+import DeleteModal from '@/components/DeleteModal.vue'
+import OkModal from '@/components/OkModal.vue'
+import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue' // Import the creation/edit modal
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +21,14 @@ const error = ref(null)
 
 const mainImage = ref('');
 const DEFAULT_IMAGE_URL = DefaultImage;
+
+const deleteModalRef = ref(null);
+const showOkModal = ref(false);
+const okModalMessage = ref('');
+
+// State for the edit modal (copied from EventsView logic)
+const showCreateEditModal = ref(false)
+const currentEventToEdit = ref(null)
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -115,6 +126,111 @@ async function fetchEventImages() {
   }
 }
 
+const showDeleteConfirmation = () => {
+  if (deleteModalRef.value) {
+    deleteModalRef.value.show();
+  }
+};
+
+const deleteEvent = async () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.';
+    return;
+  }
+
+  loading.value = true;
+  try {
+    await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    okModalMessage.value = '¡El evento ha sido eliminado exitosamente!';
+    showOkModal.value = true;
+
+    setTimeout(() => {
+      router.push("/admin/eventos/");
+    }, 2000);
+
+  } catch (err) {
+    console.error('Error deleting event:', err.response?.data || err.message);
+    error.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
+  } finally {
+    if (deleteModalRef.value) {
+      deleteModalRef.value.hide();
+    }
+    loading.value = false;
+  }
+};
+
+const handleOkModalClose = () => {
+  showOkModal.value = false;
+};
+
+// --- Edit Event Logic (Adapted from EventsView) ---
+async function fetchEventDetailsForEdit(idToEdit) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.';
+    return null;
+  }
+
+  // Use a separate loading state or manage the main one carefully if it affects rendering
+  // For simplicity, we'll use the main 'loading' here.
+  loading.value = true;
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    console.log('Detailed Event Data for Edit:', response.data);
+    currentEventToEdit.value = response.data;
+    showCreateEditModal.value = true;
+    return response.data;
+  } catch (err) {
+    console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
+    error.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`;
+    return null;
+  } finally {
+    loading.value = false;
+  }
+}
+
+const handleEditButtonClick = () => {
+  // Pass the current eventId to the fetch function
+  if (eventId.value) {
+    fetchEventDetailsForEdit(eventId.value);
+  } else {
+    console.error('Cannot edit: Event ID is not available.');
+  }
+};
+
+const handleModalClose = () => {
+  showCreateEditModal.value = false;
+  currentEventToEdit.value = null; // Clear event data when modal closes
+};
+
+const handleModalSubmit = async (emittedEventData) => {
+  showCreateEditModal.value = false;
+  currentEventToEdit.value = null;
+
+  // After edit/create, refresh the event details on the page
+  // The eventId is already available from the route params
+  if (eventId.value) {
+    await fetchEventDetails(); // Re-fetch the current event's details
+    await fetchEventImages(); // Re-fetch images in case they changed
+  }
+};
+// --- End Edit Event Logic ---
+
+
 onMounted(async () => {
   try {
     eventId.value = route.params.id;
@@ -182,12 +298,20 @@ const formatDate = (dateString) => {
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container-fluid" v-else-if="eventDetails">
           <div class="d-flex align-items-center justify-content-between mb-4">
-            <h1 class="mb-0">{{ eventDetails.nombre }}</h1>
-            <button class="btn btn-secondary" @click="goBack">
-              <i class="fas fa-arrow-left me-2"></i>Volver
-            </button>
+            <div class="d-flex align-items-center">
+              <button class="btn btn-secondary me-3" @click="goBack">
+                <i class="fas fa-arrow-left me-2"></i>Volver
+              </button>
+              <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
+            </div>
+            <div class="d-flex">
+                <button class="btn btn-primary btn-m me-2" @click="handleEditButtonClick">Editar</button>
+                <button class="btn btn-danger btn-m" @click="showDeleteConfirmation">
+                    <i class="fas fa-trash-alt me-2"></i>Eliminar
+                </button>
+            </div>
           </div>
-          <div class="row align-items-stretch mb-5 main-event-details">
+          <div class="row align-items-stretch mb-5">
             <div class="col-md-7 d-flex">
               <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
                 <div v-if="loadingImages" class="text-center my-3">
@@ -218,10 +342,6 @@ const formatDate = (dateString) => {
             </div>
 
             <div class="col-md-5 event-info-section">
-              <div class="d-flex justify-content-between align-items-start mb-3">
-                <h2 class="mb-0">{{ eventDetails.nombre }}</h2>
-                <button class="btn btn-primary btn-sm">Editar</button>
-              </div>
 
               <div class="info-group">
                 <p class="info-label">Descripción</p>
@@ -304,30 +424,45 @@ const formatDate = (dateString) => {
       </div>
     </div>
   </div>
+
+  <DeleteModal
+    ref="deleteModalRef"
+    message="¿Estás seguro de que quieres eliminar este evento?"
+    warning="Esta acción es irreversible y eliminará permanentemente el evento y todos sus datos asociados."
+    confirmButtonText="Sí, Eliminar Evento"
+    @confirmed="deleteEvent"
+  />
+
+  <OkModal
+    :show="showOkModal"
+    :message="okModalMessage"
+    @close="handleOkModalClose"
+  />
+
+  <ModalCrearEvento
+    :show="showCreateEditModal"
+    :eventData="currentEventToEdit"
+    @close="handleModalClose"
+    @submit="handleModalSubmit"
+  />
 </template>
 
 <style scoped>
-.main-event-details {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
+/* Your existing styles remain here */
 
 .image-thumbnail-sidebar {
-  width: 100px;
+  width: 120px;
   flex-shrink: 0;
   max-height: 400px;
   overflow-y: auto;
   padding-right: 10px;
+  padding-left: 10px;
 }
 
 .thumbnail-container {
   width: 100px;
   height: 60px;
   border: 2px solid transparent;
-  border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
@@ -335,18 +470,38 @@ const formatDate = (dateString) => {
 }
 
 .thumbnail-container:hover {
-  border-color: #007bff;
+  border-color: #84b5ff;
 }
 
 .thumbnail-container.active-thumbnail {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  border-color: #174384;
+  border-width: 3px;
 }
 
 .thumbnail-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.btn-primary {
+  background-color: #174384;
+  border-color: #174384;
+}
+.btn-primary:hover {
+  background-color: #ffffff;
+  border-color: #174384;
+  color: #174384;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  border-color: #dc3545;
+}
+.btn-danger:hover {
+  background-color: #ffffff;
+  border-color: #dc3545;
+  color: #dc3545;
 }
 
 .main-image-display {
@@ -377,7 +532,7 @@ const formatDate = (dateString) => {
 }
 
 .info-group {
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 }
 
 .info-label {
