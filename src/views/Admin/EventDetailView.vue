@@ -5,10 +5,10 @@ import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
+import DefaultImage from '@/assets/banners/EventoConstruccion.png'
 
 const route = useRoute()
 const router = useRouter()
-
 const eventId = ref(null)
 const eventDetails = ref(null)
 const eventImages = ref([])
@@ -17,7 +17,7 @@ const loadingImages = ref(true)
 const error = ref(null)
 
 const mainImage = ref('');
-const DEFAULT_IMAGE_URL = 'https://i.ytimg.com/vi/pqWx4hfQPPU/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLBcMkzu56cQTMJdbi6686pW6uSqQw';
+const DEFAULT_IMAGE_URL = DefaultImage;
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
