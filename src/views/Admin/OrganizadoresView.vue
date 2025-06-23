@@ -4,6 +4,7 @@ import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import FormOrganizadores from '@/components/Admin/FormOrganizadores.vue'
 
 const abrir = ref(false)
 const organizadores = ref([])
@@ -12,12 +13,21 @@ const loading = ref(false)
 const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = 15
+const organizadorEdit = ref(null)
 
 const totalPages = computed(() => Math.ceil(filteredOrganizadores.value.length / pageSize))
 
 const filteredOrganizadores = computed(() =>
-  organizadores.value.filter((org) =>
-    org.organizacion?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  organizadores.value.filter(
+    (org) =>
+      org.nombre_organizacion?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.abreviatura?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.nombre_persona?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.apellido?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.identificacion?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.rol_interno?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.telefono?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.email?.toLowerCase().includes(searchQuery.value.toLowerCase()),
   ),
 )
 
@@ -35,7 +45,7 @@ async function fetchOrganizadores() {
   }
   loading.value = true
   try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/afiliaciones`, {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/vw-organizaciones`, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
@@ -59,17 +69,25 @@ async function fetchOrganizadores() {
 }
 
 function editarOrganizador(org) {
-  alert('Editar: ' + org.organizacion)
+  organizadorEdit.value = { ...org }
+  abrir.value = true
 }
 
 function eliminarOrganizador(org) {
   if (confirm('¿Eliminar organizador?')) {
-    organizadores.value = organizadores.value.filter((o) => o.id !== org.id)
+    organizadores.value = organizadores.value.filter(
+      (o) =>
+        !(
+          o.nombre_organizacion === org.nombre_organizacion &&
+          o.identificacion === org.identificacion &&
+          o.rol_interno === org.rol_interno
+        ),
+    )
   }
 }
 
 function abrirModalAgregar() {
-  alert('Abrir modal para agregar organizador')
+  abrir.value = true
 }
 
 onMounted(fetchOrganizadores)
@@ -86,7 +104,7 @@ onMounted(fetchOrganizadores)
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Buscar organización"
+            placeholder="Buscar organización, persona, rol, etc."
             class="form-control"
           />
           <button class="btn btn-default" @click="abrirModalAgregar">
@@ -99,8 +117,9 @@ onMounted(fetchOrganizadores)
             <thead>
               <tr>
                 <th>Organización</th>
-                <th>Abreviaturas</th>
-                <th>Encargado</th>
+                <th>Abreviatura</th>
+                <th>Nombre</th>
+                <th>Apellido</th>
                 <th>Identificación</th>
                 <th>Rol Interno</th>
                 <th>Teléfono</th>
@@ -109,14 +128,18 @@ onMounted(fetchOrganizadores)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="org in paginatedOrganizadores" :key="org.id">
-                <td>{{ org.organizacion }}</td>
+              <tr
+                v-for="org in paginatedOrganizadores"
+                :key="org.nombre_organizacion + org.identificacion + org.rol_interno"
+              >
+                <td>{{ org.nombre_organizacion }}</td>
                 <td>{{ org.abreviatura }}</td>
-                <td>{{ org.encargado }}</td>
+                <td>{{ org.nombre_persona }}</td>
+                <td>{{ org.apellido }}</td>
                 <td>{{ org.identificacion }}</td>
                 <td>{{ org.rol_interno }}</td>
                 <td>{{ org.telefono }}</td>
-                <td>{{ org.correo }}</td>
+                <td>{{ org.email }}</td>
                 <td>
                   <button class="icon-btn" @click="editarOrganizador(org)">
                     <span class="icon-pencil"></span>
@@ -138,6 +161,23 @@ onMounted(fetchOrganizadores)
               {{ page }}
             </button>
           </div>
+          <FormOrganizadores
+            v-if="abrir"
+            :organizador="organizadorEdit"
+            @close="
+              () => {
+                abrir = false
+                organizadorEdit = null
+              }
+            "
+            @submit="
+              (nuevo) => {
+                abrir = false
+                organizadorEdit = null
+                fetchOrganizadores()
+              }
+            "
+          />
         </div>
       </div>
     </div>
