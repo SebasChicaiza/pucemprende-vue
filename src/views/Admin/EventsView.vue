@@ -41,7 +41,6 @@ async function fetchEvents() {
     console.log('Response Status:', response.status);
     console.log('Response Data:', response.data);
 
-    // Directly assign the fetched data
     events.value = response.data;
     error.value = null;
 
@@ -69,42 +68,59 @@ const openCreateModal = () => {
   showCreateEditModal.value = true;
 };
 
+async function fetchEventDetailsForEdit(eventId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.';
+    return null; // Return null if token is missing
+  }
+
+  loading.value = true;
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${eventId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    console.log('Detailed Event Data for Edit:', response.data);
+    currentEventToEdit.value = response.data;
+    showCreateEditModal.value = true;
+    return response.data; // Return the fetched data
+  } catch (err) {
+    console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
+    error.value = `Error al cargar detalles del evento: ${err.response?.data?.message || err.message}`;
+    return null; // Return null on error
+  } finally {
+    loading.value = false;
+  }
+}
+
 const handleEditEvent = (eventData) => {
-  currentEventToEdit.value = eventData;
-  showCreateEditModal.value = true;
+  if (eventData && eventData.id) {
+    fetchEventDetailsForEdit(eventData.id);
+  } else {
+    console.error('No event ID found for editing.');
+  }
 };
 
 const handleModalClose = () => {
   showCreateEditModal.value = false;
   currentEventToEdit.value = null;
-  // No need to fetch events here. Changes are handled by handleModalSubmit.
 };
 
-// --- MODIFIED handleModalSubmit ---
-// This function now receives the actual event data from the modal
-const handleModalSubmit = (updatedOrCreatedEvent) => {
-  // Hide the modal (moved here for explicit control)
+// MODIFIED handleModalSubmit
+const handleModalSubmit = async (emittedEventData) => {
   showCreateEditModal.value = false;
-  currentEventToEdit.value = null; // Clear event data
+  currentEventToEdit.value = null;
 
-  if (updatedOrCreatedEvent && updatedOrCreatedEvent.id) {
-    const index = events.value.findIndex(e => e.id === updatedOrCreatedEvent.id);
-
-    if (index !== -1) {
-      // Event exists, so it was an UPDATE
-      // Replace the old event object with the updated one
-      events.value[index] = updatedOrCreatedEvent;
-      console.log('Event updated in list:', updatedOrCreatedEvent.nombre);
-    } else {
-      // Event does not exist, so it was a CREATION
-      // Add the new event to the beginning of the list
-      events.value.unshift(updatedOrCreatedEvent);
-      console.log('New event added to list:', updatedOrCreatedEvent.nombre);
-    }
+  if (emittedEventData && emittedEventData.id) {
+    // Re-fetch the complete event data to ensure the list is updated with all details,
+    // especially if new cronogramas/activities were added/updated.
+    await fetchEvents(); // Or you could specifically refetch only the one event if performance is critical
+    console.log('Event list refreshed after modal submission.');
   } else {
-    // Fallback: If for some reason no event data was passed, re-fetch all.
-    // This should ideally not be hit if ModalCrearEvento correctly emits data.
-    console.warn('No event data received on submit, performing full re-fetch.');
+    console.warn('No event ID received on submit, performing full re-fetch.');
     fetchEvents();
   }
 };
@@ -156,22 +172,3 @@ const handleModalSubmit = (updatedOrCreatedEvent) => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.btn-default {
-  background-color: #174384;
-  border-color: #174384;
-  color: #fff;
-}
-.btn-default:hover {
-  background-color: #ffffff;
-  border-color: #174384;
-  color: #174384;
-}
-
-.error-text {
-  color: red;
-  font-weight: bold;
-  margin-top: 10px;
-}
-</style>

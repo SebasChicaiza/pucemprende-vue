@@ -38,20 +38,20 @@ const cronogramaForm = reactive({
   evento_id: '',
   titulo: '',
   descripcion: '',
-  fecha_inicio: '',
-  fecha_fin: '',
+  fecha_inicio: '', // Now holds date AND time
+  fecha_fin: '',     // Now holds date AND time
 });
 
 const actividadForm = reactive({
   cronograma_id: '',
   titulo: '',
   descripcion: '',
-  fecha_inicio: '',
-  fecha_fin: '',
+  fecha_inicio: '', // Now holds date AND time
+  fecha_fin: '',     // Now holds date AND time
   dependencia_id: null,
 });
 
-const cronogramas = ref([]);
+const cronogramas = ref([]); // This will now hold cronograms with their activities
 
 const activeTab = ref('info');
 const descripcionCount = computed(() => form.descripcion.length);
@@ -60,7 +60,7 @@ const loading = ref(false);
 const categorias = ref([]); // This holds the fetched categories with IDs
 const sede = ref([]);
 const eventIdStore = ref(null);
-const cronogramaIdStore = ref([]);
+const cronogramaIdStore = ref([]); // This might still be useful for new cronogramas before saving
 const showConfirmationModal = ref(false);
 const ConfModalMessage = ref('');
 const showSuccessModal = ref(false);
@@ -68,7 +68,7 @@ const successMessage = ref('');
 const coverInput = ref(null);
 const additionalInput = ref(null);
 const coverPreview = ref(imageHolder);
-const additionalPreviews = ref([]); // Store image URLs, not File objects
+const additionalPreviews = ref([]);
 const addingActividad = ref(false);
 const reorderingActividades = ref(false);
 const actividadError = ref(null);
@@ -209,10 +209,11 @@ watch(() => props.show, (newVal) => {
     resetForm();
     clearLocalStorage();
   } else {
-    loadFromLocalStorage();
+    loadFromLocalStorage(); // Load draft if any when modal opens
   }
 });
 
+// IMPORTANT: This watcher is updated to handle the full eventData including cronograms and activities
 watch(() => props.eventData, (newEventData) => {
   if (newEventData) {
     console.log('newEventData received in ModalCrearEvento:', newEventData);
@@ -233,6 +234,7 @@ watch(() => props.eventData, (newEventData) => {
       id: newEventData.id,
       nombre: newEventData.nombre,
       descripcion: newEventData.descripcion,
+      // Format dates for input type="datetime-local"
       fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
       fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
       capacidad: newEventData.capacidad,
@@ -246,13 +248,48 @@ watch(() => props.eventData, (newEventData) => {
       inscripcionesAbiertas: newEventData.inscripcionesAbiertas,
     });
     activeTab.value = 'info';
-    cronogramas.value = [];
     eventIdStore.value = newEventData.id;
+
+    // Populate cronogramas with activities
+    if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
+      cronogramas.value = newEventData.cronogramas.map(c => {
+        const tempCronogramaId = c.id;
+        return {
+          id: c.id,
+          tempId: tempCronogramaId,
+          evento_id: c.evento_id,
+          titulo: c.titulo,
+          descripcion: c.descripcion,
+          // Format cronograma dates for input type="datetime-local"
+          fecha_inicio: new Date(c.fecha_inicio).toISOString().slice(0, 16),
+          fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
+          actividades: c.actividades_cronogramas ? c.actividades_cronogramas.map(a => ({
+            id: a.id,
+            tempId: `temp_act_${a.id}`,
+            cronograma_id: tempCronogramaId,
+            titulo: a.titulo,
+            descripcion: a.descripcion,
+            // Format activity dates for input type="datetime-local"
+            fecha_inicio: new Date(a.fecha_inicio).toISOString().slice(0, 16),
+            fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
+            orden: a.orden,
+            dependencia_id: a.dependencia_id,
+          })).sort((a,b) => a.orden - b.orden) : [],
+        };
+      });
+      if (cronogramas.value.length > 0) {
+        actividadForm.cronograma_id = cronogramas.value[0].tempId;
+      }
+    } else {
+      cronogramas.value = [];
+    }
+
   } else {
     console.log('newEventData is null, resetting form for new event creation.');
     resetForm();
   }
 }, { immediate: true });
+
 
 const fetchCategorias = async () => {
   const token = localStorage.getItem('token');
@@ -337,7 +374,13 @@ async function enviarCronogramas(cronogramaData, eventId) {
   }
   loading.value = true;
   try {
-    const payload = { ...cronogramaData, evento_id: eventId };
+    const payload = {
+      ...cronogramaData,
+      evento_id: eventId,
+      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
+      fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
+      fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
+    };
     console.log('JSON enviado al backend (Cronograma):', JSON.stringify(payload, null, 2));
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`, payload, {
       headers: {
@@ -373,8 +416,9 @@ async function enviarActividad(activityData, cronogramaBackendId) {
     const payload = {
       ...activityData,
       cronograma_id: cronogramaBackendId,
-      fecha_inicio: activityData.fecha_inicio + 'T00:00:00.000000Z',
-      fecha_fin: activityData.fecha_fin + 'T00:00:00.000000Z',
+      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
+      fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
+      fecha_fin: new Date(activityData.fecha_fin).toISOString(),
     };
     console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2));
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
@@ -388,6 +432,35 @@ async function enviarActividad(activityData, cronogramaBackendId) {
   } catch (error) {
     console.error('Error al enviar actividad:', error);
     throw new Error(error.response?.data?.message || 'Fallo al añadir la actividad.');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function updateCronograma(cronogramaData) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const payload = {
+      ...JSON.parse(JSON.stringify(cronogramaData)),
+      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
+      fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
+      fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
+    };
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${payload.id}`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('Cronograma actualizado con éxito:', response.data);
+    return response.data;
+  } catch (err) {
+    console.error('Error del servidor al actualizar cronograma:', err.response?.data || err.message);
+    throw new Error(err.response?.data?.mensaje || 'Error al actualizar el cronograma.');
   } finally {
     loading.value = false;
   }
@@ -459,7 +532,6 @@ function handleSubmit() {
   saveToLocalStorage();
 }
 
-// Function to upload a single file
 async function uploadFileToBackend(file, type) {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -481,7 +553,6 @@ async function uploadFileToBackend(file, type) {
       },
     });
     console.log(`File uploaded (${type}):`, response.data);
-    // Return the URL provided by the backend
     return response.data.file.url;
   } catch (error) {
     console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
@@ -496,12 +567,11 @@ async function handleCoverChange(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  if (file.size <= 10 * 1024 * 1024) { // Check file size (10 MB)
+  if (file.size <= 10 * 1024 * 1024) {
     const uploadedUrl = await uploadFileToBackend(file, 'cover');
     if (uploadedUrl) {
-      coverPreview.value = uploadedUrl; // Update preview with the backend URL
+      coverPreview.value = uploadedUrl;
     } else {
-      // If upload failed, revert to placeholder or clear input
       event.target.value = '';
       coverPreview.value = imageHolder;
     }
@@ -518,7 +588,7 @@ async function handleAdditionalChange(event) {
   const uploadedUrls = [];
 
   for (const file of files) {
-    if (file.size <= 10 * 1024 * 1024) { // You might want a different size limit for additional images
+    if (file.size <= 10 * 1024 * 1024) {
       const uploadedUrl = await uploadFileToBackend(file, 'additional');
       if (uploadedUrl) {
         uploadedUrls.push(uploadedUrl);
@@ -527,9 +597,8 @@ async function handleAdditionalChange(event) {
       alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se subirá.`);
     }
   }
-  // Append new URLs to existing ones
   additionalPreviews.value = [...additionalPreviews.value, ...uploadedUrls];
-  event.target.value = ''; // Clear the input for next selections
+  event.target.value = '';
   saveToLocalStorage();
 }
 
@@ -568,12 +637,12 @@ function handleCronogramaSubmit() {
   const fechaFin = new Date(cronogramaForm.fecha_fin);
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas ingresadas para el cronograma no son válidas.';
+    error.value = '⚠️ Las fechas y horas ingresadas para el cronograma no son válidas.';
     return;
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha de inicio del cronograma debe ser anterior a la fecha de fin.';
+    error.value = '⚠️ La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.';
     return;
   }
 
@@ -583,7 +652,7 @@ function handleCronogramaSubmit() {
     ...JSON.parse(JSON.stringify(cronogramaForm)),
     tempId: tempId,
     actividades: [],
-    orden: cronogramas.value.length + 1
+    orden: cronogramas.value.length + 1,
   });
 
   cronogramaForm.titulo = '';
@@ -717,6 +786,15 @@ function getDependenciaDisplayText(act, cronogramaTempId) {
   }
 }
 
+// Helper to format date-time for display
+const formatDisplayDateTime = (isoString) => {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+  return date.toLocaleDateString('es-ES', options);
+};
+
+
 function handleSaveButtonClick() {
   isClosingModal.value = false;
   ConfModalMessage.value = '¿Deseas guardar la configuración actual de todas las actividades asociadas a tus cronogramas? Esta acción consolidará los cambios.';
@@ -745,22 +823,10 @@ function handleConfirmationCancel() {
 async function processFinalSave() {
   error.value = null;
 
-  const formatDateTime = (dateString) => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-  };
-
-  // Ensure category_id is always a number before sending
+  // Event dates are already formatted as datetime-local strings
   const eventPayload = {
     ...JSON.parse(JSON.stringify(form)),
-    fecha_inicio: formatDateTime(form.fecha_inicio),
-    fecha_fin: formatDateTime(form.fecha_fin),
+    // Dates are already in ISO format from datetime-local for direct use by backend
     hayEquipos: Number(form.hayEquipos),
     hayFormulario: Boolean(form.hayFormulario),
     inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
@@ -775,58 +841,67 @@ async function processFinalSave() {
     loading.value = false;
     await showTimedSuccessMessage(isEditing ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
-    if (!isEditing && cronogramas.value.length > 0) {
-      const cronogramaIdMap = new Map();
-
-      for (const cronograma of cronogramas.value) {
+    for (const cronograma of cronogramas.value) {
+      let createdOrUpdatedCronograma = null;
+      if (cronograma.id) {
         loading.value = true;
-        const createdCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
-        cronogramaIdMap.set(cronograma.tempId, createdCronograma.id);
+        createdOrUpdatedCronograma = await updateCronograma(cronograma);
+        loading.value = false;
+        await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" actualizado con éxito.`);
+      } else {
+        loading.value = true;
+        createdOrUpdatedCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
+        cronograma.id = createdOrUpdatedCronograma.id;
+        cronograma.tempId = createdOrUpdatedCronograma.id;
         loading.value = false;
         await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" creado con éxito.`);
+      }
 
-        if (cronograma.actividades && cronograma.actividades.length > 0) {
-          let previousActivityBackendId = null;
-          const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
+      if (cronograma.actividades && cronograma.actividades.length > 0) {
+        let previousActivityBackendId = null;
+        const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
 
-          for (let i = 0; i < sortedActivities.length; i++) {
-            const activity = sortedActivities[i];
+        for (let i = 0; i < sortedActivities.length; i++) {
+          const activity = sortedActivities[i];
+          let dependencyIdToSend = null;
+          if (i > 0) {
+            const previousActivityInOrder = sortedActivities[i - 1];
+            dependencyIdToSend = previousActivityInOrder.id || previousActivityBackendId;
+          }
 
+          if (activity.id) {
             loading.value = true;
-            const createdActivity = await enviarActividad(JSON.parse(JSON.stringify(activity)), createdCronograma.id);
-            const activityBackendId = createdActivity.id;
+            await updateActivityOrderAndDependency(activity.id, createdOrUpdatedCronograma.id, activity.orden, dependencyIdToSend);
+            previousActivityBackendId = activity.id;
+            loading.value = false;
+            await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" actualizada con éxito.`);
+          } else {
+            const activityPayload = {
+              ...JSON.parse(JSON.stringify(activity)),
+              cronograma_id: createdOrUpdatedCronograma.id,
+              // Dates are already in ISO format from datetime-local for direct use by backend
+            };
+            loading.value = true;
+            const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
+            activity.id = createdOrUpdatedActivity.id;
+            activity.tempId = createdOrUpdatedActivity.id;
+
+            previousActivityBackendId = activity.id;
             loading.value = false;
             await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" creada con éxito.`);
 
-            let dependencyId = null;
-            if (i === 0) {
-              dependencyId = null;
-            } else {
-              dependencyId = previousActivityBackendId;
-            }
-
             loading.value = true;
-            await updateActivityOrderAndDependency(activityBackendId, createdCronograma.id, activity.orden, dependencyId);
+            await updateActivityOrderAndDependency(activity.id, createdOrUpdatedCronograma.id, activity.orden, dependencyIdToSend);
             loading.value = false;
-
-            previousActivityBackendId = activityBackendId;
           }
         }
       }
     }
 
-    // --- IMPORTANT: Prepare the event data for the parent component ---
-    const updatedEventForParent = { ...createdOrUpdatedEvent };
-    const foundCategory = categorias.value.find(cat => cat.id === form.categoria_id);
-    if (foundCategory) {
-      updatedEventForParent.categoria = foundCategory.nombre;
-    } else {
-      updatedEventForParent.categoria = 'Categoría Desconocida'; // Fallback
-    }
-
     await showTimedSuccessMessage(isEditing ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
+
     clearLocalStorage();
-    emit('submit', updatedEventForParent); // Emit the modified event data
+    emit('submit', { id: eventIdStore.value });
     emit('close');
   } catch (err) {
     console.error('Error during final save process:', err);
@@ -839,16 +914,6 @@ async function processFinalSave() {
 onMounted(async () => {
   await fetchCategorias();
   await fetchSede();
-
-  if (props.eventData && categorias.value.length > 0 && form.categoria_id === null) {
-    const foundCategory = categorias.value.find(
-      (cat) => cat.nombre === props.eventData.categoria
-    );
-    if (foundCategory) {
-      form.categoria_id = foundCategory.id;
-      console.log('Category ID set post-fetch in onMounted for existing event:', form.categoria_id);
-    }
-  }
 
   if (cronogramas.value.length > 0 && !actividadForm.cronograma_id) {
     actividadForm.cronograma_id = cronogramas.value[0].tempId;
@@ -1116,12 +1181,12 @@ onMounted(async () => {
           </div>
           <div class="cronograma-row">
             <div class="form-group">
-              <input v-model="cronogramaForm.fecha_inicio" type="date" placeholder=" " required />
-              <label>Fecha de Inicio *</label>
+              <input v-model="cronogramaForm.fecha_inicio" type="datetime-local" placeholder=" " required />
+              <label>Fecha y Hora de Inicio *</label>
             </div>
             <div class="form-group">
-              <input v-model="cronogramaForm.fecha_fin" type="date" placeholder=" " required />
-              <label>Fecha de Fin *</label>
+              <input v-model="cronogramaForm.fecha_fin" type="datetime-local" placeholder=" " required />
+              <label>Fecha y Hora de Fin *</label>
             </div>
           </div>
           <div class="form-group span-3">
@@ -1148,8 +1213,8 @@ onMounted(async () => {
                 <td>{{ cronograma.orden }}</td>
                 <td>{{ cronograma.titulo }}</td>
                 <td>{{ cronograma.descripcion }}</td>
-                <td>{{ cronograma.fecha_inicio }}</td>
-                <td>{{ cronograma.fecha_fin }}</td>
+                <td>{{ formatDisplayDateTime(cronograma.fecha_inicio) }}</td>
+                <td>{{ formatDisplayDateTime(cronograma.fecha_fin) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1187,15 +1252,19 @@ onMounted(async () => {
               </select>
               <label>Cronograma *</label>
             </div>
+
+          </div>
+          <div class="form-row">
             <div class="form-group">
-              <input v-model="actividadForm.fecha_inicio" type="date" placeholder=" " required />
-              <label>Fecha de Inicio *</label>
+              <input v-model="actividadForm.fecha_inicio" type="datetime-local" placeholder=" " required />
+              <label>Fecha y Hora de Inicio *</label>
             </div>
             <div class="form-group">
-              <input v-model="actividadForm.fecha_fin" type="date" placeholder=" " required />
-              <label>Fecha de Fin *</label>
+              <input v-model="actividadForm.fecha_fin" type="datetime-local" placeholder=" " required />
+              <label>Fecha y Hora de Fin *</label>
             </div>
           </div>
+
           <div class="button-row" style="justify-content: center; margin-top: 0rem;">
             <button type="submit" class="btn btn-primary" :disabled="addingActividad">
               {{ addingActividad ? 'Añadiendo...' : 'Añadir Actividad' }}
@@ -1237,8 +1306,8 @@ onMounted(async () => {
                 </td>
                 <td>{{ act.titulo }}</td>
                 <td>{{ act.descripcion }}</td>
-                <td>{{ act.fecha_inicio }}</td>
-                <td>{{ act.fecha_fin }}</td>
+                <td>{{ formatDisplayDateTime(act.fecha_inicio) }}</td>
+                <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
                 <td>{{ getDependenciaDisplayText(act, actividadForm.cronograma_id) }}</td>
               </tr>
             </tbody>
@@ -1279,6 +1348,7 @@ onMounted(async () => {
     :duration="1000"
   />
 </template>
+
 <style scoped>
 
 /* Styles for the Cronogramas Table */
@@ -1890,7 +1960,7 @@ onMounted(async () => {
   margin: 0 auto 2rem auto;
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 0.8rem;
 }
 
 .form-row {
