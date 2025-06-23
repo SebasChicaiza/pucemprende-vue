@@ -7,6 +7,15 @@ import OkModal from '@/components/OkModal.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import axios from 'axios';
 
+
+// Define tabTitleMap here, at the top level of script setup
+const tabTitleMap = computed(() => ({
+  info: 'Información del Evento',
+  imagenes: 'Imágenes del Evento',
+  cronograma: 'Añadir Cronogramas',
+  actividades: 'Añadir Actividades'
+}));
+
 const props = defineProps({
   show: Boolean,
   eventData: {
@@ -39,7 +48,7 @@ const cronogramaForm = reactive({
   titulo: '',
   descripcion: '',
   fecha_inicio: '', // Now holds date AND time
-  fecha_fin: '',     // Now holds date AND time
+  fecha_fin: '',    // Now holds date AND time
 });
 
 const actividadForm = reactive({
@@ -47,7 +56,7 @@ const actividadForm = reactive({
   titulo: '',
   descripcion: '',
   fecha_inicio: '', // Now holds date AND time
-  fecha_fin: '',     // Now holds date AND time
+  fecha_fin: '',    // Now holds date AND time
   dependencia_id: null,
 });
 
@@ -68,9 +77,7 @@ const successMessage = ref('');
 const coverInput = ref(null);
 const additionalInput = ref(null);
 
-// Updated to store an object { id: ..., url: ... } or null
 const coverImage = reactive({ id: null, url: imageHolder, file: null });
-// Updated to store an array of objects { id: ..., url: ..., file: ... }
 const additionalImages = ref([]);
 
 
@@ -80,7 +87,18 @@ const actividadError = ref(null);
 
 const isClosingModal = ref(false);
 
-const tabOrder = ['info', 'imagenes', 'cronograma', 'actividades'];
+const isEditing = computed(() => form.id !== null);
+
+const tabOrder = computed(() => {
+  return isEditing.value ? ['info', 'cronograma', 'actividades'] : ['info', 'imagenes', 'cronograma', 'actividades'];
+});
+
+const goToPreviousTab = () => {
+  const currentTabIndex = tabOrder.value.indexOf(activeTab.value);
+  if (currentTabIndex > 0) {
+    activeTab.value = tabOrder.value[currentTabIndex - 1];
+  }
+};
 
 const handleModalClose = () => {
   showSuccessModal.value = false;
@@ -100,8 +118,8 @@ const promptCloseConfirmation = () => {
 };
 
 const isTabCompleted = (tabName) => {
-  const activeIndex = tabOrder.indexOf(activeTab.value);
-  const tabIndex = tabOrder.indexOf(tabName);
+  const activeIndex = tabOrder.value.indexOf(activeTab.value);
+  const tabIndex = tabOrder.value.indexOf(tabName);
   return tabIndex < activeIndex;
 };
 
@@ -137,8 +155,8 @@ const saveToLocalStorage = () => {
     activeTab: activeTab.value,
     eventIdStore: eventIdStore.value,
     cronogramaIdStore: cronogramaIdStore.value,
-    coverImage: { id: coverImage.id, url: coverImage.url }, // Store only necessary info for cover
-    additionalImages: additionalImages.value.map(img => ({ id: img.id, url: img.url })), // Store only necessary info for additional
+    coverImage: { id: coverImage.id, url: coverImage.url },
+    additionalImages: additionalImages.value.map(img => ({ id: img.id, url: img.url })),
   };
   localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
 };
@@ -156,20 +174,18 @@ const loadFromLocalStorage = () => {
     eventIdStore.value = parsedData.eventIdStore || null;
     cronogramaIdStore.value = parsedData.cronogramaIdStore || [];
 
-    // Load cover image
     if (parsedData.coverImage) {
       coverImage.id = parsedData.coverImage.id;
       coverImage.url = parsedData.coverImage.url;
-      coverImage.file = null; // file property is not persisted
+      coverImage.file = null;
     } else {
       coverImage.id = null;
       coverImage.url = imageHolder;
       coverImage.file = null;
     }
 
-    // Load additional images
     if (parsedData.additionalImages) {
-      additionalImages.value = parsedData.additionalImages.map(img => ({ ...img, file: null })); // file property is not persisted
+      additionalImages.value = parsedData.additionalImages.map(img => ({ ...img, file: null }));
     } else {
       additionalImages.value = [];
     }
@@ -232,11 +248,10 @@ watch(() => props.show, (newVal) => {
     resetForm();
     clearLocalStorage();
   } else {
-    loadFromLocalStorage(); // Load draft if any when modal opens
+    loadFromLocalStorage();
   }
 });
 
-// IMPORTANT: This watcher is updated to handle the full eventData including cronograms and activities
 watch(() => props.eventData, (newEventData) => {
   if (newEventData) {
     console.log('newEventData received in ModalCrearEvento:', newEventData);
@@ -257,7 +272,6 @@ watch(() => props.eventData, (newEventData) => {
       id: newEventData.id,
       nombre: newEventData.nombre,
       descripcion: newEventData.descripcion,
-      // Format dates for input type="datetime-local"
       fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
       fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
       capacidad: newEventData.capacidad,
@@ -273,7 +287,6 @@ watch(() => props.eventData, (newEventData) => {
     activeTab.value = 'info';
     eventIdStore.value = newEventData.id;
 
-    // Load existing cover and additional images from eventData
     if (newEventData.archivos && newEventData.archivos.length > 0) {
       const cover = newEventData.archivos.find(a => a.tipo === 'cover');
       if (cover) {
@@ -294,7 +307,6 @@ watch(() => props.eventData, (newEventData) => {
     }
 
 
-    // Populate cronogramas with activities
     if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
       cronogramas.value = newEventData.cronogramas.map(c => {
         const tempCronogramaId = c.id;
@@ -304,7 +316,6 @@ watch(() => props.eventData, (newEventData) => {
           evento_id: c.evento_id,
           titulo: c.titulo,
           descripcion: c.descripcion,
-          // Format cronograma dates for input type="datetime-local"
           fecha_inicio: new Date(c.fecha_inicio).toISOString().slice(0, 16),
           fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
           actividades: c.actividades_cronogramas ? c.actividades_cronogramas.map(a => ({
@@ -313,7 +324,6 @@ watch(() => props.eventData, (newEventData) => {
             cronograma_id: tempCronogramaId,
             titulo: a.titulo,
             descripcion: a.descripcion,
-            // Format activity dates for input type="datetime-local"
             fecha_inicio: new Date(a.fecha_inicio).toISOString().slice(0, 16),
             fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
             orden: a.orden,
@@ -421,7 +431,6 @@ async function enviarCronogramas(cronogramaData, eventId) {
     const payload = {
       ...cronogramaData,
       evento_id: eventId,
-      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
       fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
       fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
     };
@@ -460,7 +469,6 @@ async function enviarActividad(activityData, cronogramaBackendId) {
     const payload = {
       ...activityData,
       cronograma_id: cronogramaBackendId,
-      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
       fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
       fecha_fin: new Date(activityData.fecha_fin).toISOString(),
     };
@@ -490,7 +498,6 @@ async function updateCronograma(cronogramaData) {
   try {
     const payload = {
       ...JSON.parse(JSON.stringify(cronogramaData)),
-      // Ensure datetime-local strings are properly formatted for backend (e.g., to ISO 8601 with Z)
       fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
       fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
     };
@@ -538,7 +545,6 @@ async function updateActivityOrderAndDependency(activityId, cronogramaBackendId,
   }
 }
 
-// New function to link archivo to evento
 async function linkArchivoToEvento(archivoId, eventoId) {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -602,11 +608,14 @@ function handleSubmit() {
     return;
   }
 
-  activeTab.value = 'imagenes';
+  // Navigate to the next tab based on whether it's editing or creating
+  const currentTabIndex = tabOrder.value.indexOf(activeTab.value);
+  if (currentTabIndex < tabOrder.value.length - 1) {
+    activeTab.value = tabOrder.value[currentTabIndex + 1];
+  }
   saveToLocalStorage();
 }
 
-// Modified uploadFileToBackend to return { id, url }
 async function uploadFileToBackend(file, type) {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -621,7 +630,7 @@ async function uploadFileToBackend(file, type) {
 
   loading.value = true;
   try {
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, { // <-- Change made here!
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${token}`,
@@ -643,10 +652,9 @@ async function handleCoverChange(event) {
   if (!file) return;
 
   if (file.size <= 10 * 1024 * 1024) {
-    // Store the file locally for now, don't upload yet
-    coverImage.url = URL.createObjectURL(file); // For immediate preview
-    coverImage.file = file; // Store the actual file object
-    coverImage.id = null; // Reset ID as it's not uploaded yet
+    coverImage.url = URL.createObjectURL(file);
+    coverImage.file = file;
+    coverImage.id = null;
   } else {
     event.target.value = '';
     coverImage.url = imageHolder;
@@ -663,11 +671,10 @@ async function handleAdditionalChange(event) {
 
   for (const file of files) {
     if (file.size <= 10 * 1024 * 1024) {
-      // Store the file locally for now, don't upload yet
       newAdditionalImages.push({
-        id: null, // No ID yet
-        url: URL.createObjectURL(file), // For immediate preview
-        file: file, // Store the actual file object
+        id: null,
+        url: URL.createObjectURL(file),
+        file: file,
       });
     } else {
       alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`);
@@ -684,11 +691,10 @@ async function handleDrop(event) {
 
   for (const file of files) {
     if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
-      // Store the file locally for now, don't upload yet
       newAdditionalImages.push({
-        id: null, // No ID yet
-        url: URL.createObjectURL(file), // For immediate preview
-        file: file, // Store the actual file object
+        id: null,
+        url: URL.createObjectURL(file),
+        file: file,
       });
     } else {
       alert(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`);
@@ -864,7 +870,6 @@ function getDependenciaDisplayText(act, cronogramaTempId) {
   }
 }
 
-// Helper to format date-time for display
 const formatDisplayDateTime = (isoString) => {
   if (!isoString) return '';
   const date = new Date(isoString);
@@ -903,10 +908,8 @@ async function processFinalSave() {
 
   try {
     loading.value = true;
-    const isEditing = form.id !== null;
     const eventPayload = {
       ...JSON.parse(JSON.stringify(form)),
-      // Dates are already in ISO format from datetime-local for direct use by backend
       hayEquipos: Number(form.hayEquipos),
       hayFormulario: Boolean(form.hayFormulario),
       inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
@@ -916,53 +919,49 @@ async function processFinalSave() {
     const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id);
     eventIdStore.value = createdOrUpdatedEvent.id;
     loading.value = false;
-    await showTimedSuccessMessage(isEditing ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
+    await showTimedSuccessMessage(isEditing.value ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
-    // --- Image Upload and Linking Logic ---
-    const allImagesToLink = [];
+    if (!isEditing.value) { // Only handle image upload/linking if not in edit mode
+      const allImagesToLink = [];
 
-    // 1. Handle Cover Image
-    if (coverImage.file) { // Only upload if a new file was selected
-      console.log('Uploading cover image...');
-      const uploadedCover = await uploadFileToBackend(coverImage.file, 'cover');
-      if (uploadedCover) {
-        coverImage.id = uploadedCover.id;
-        coverImage.url = uploadedCover.url;
-        allImagesToLink.push(uploadedCover.id);
-        await showTimedSuccessMessage('Cover del evento cargada');
-      }
-    } else if (coverImage.id) { // If an existing cover image is present (no new file selected)
-      allImagesToLink.push(coverImage.id);
-    }
-
-    // 2. Handle Additional Images
-    for (const img of additionalImages.value) {
-      if (img.file) { // Only upload if a new file was selected
-        console.log(`Uploading additional image: ${img.file.name}`);
-        const uploadedImg = await uploadFileToBackend(img.file, 'additional');
-        if (uploadedImg) {
-          img.id = uploadedImg.id;
-          img.url = uploadedImg.url;
-          allImagesToLink.push(uploadedImg.id);
-          await showTimedSuccessMessage(`Imagen adicional del evento "${img.file.name}" cargada.`);
+      if (coverImage.file) {
+        console.log('Uploading cover image...');
+        const uploadedCover = await uploadFileToBackend(coverImage.file, 'cover');
+        if (uploadedCover) {
+          coverImage.id = uploadedCover.id;
+          coverImage.url = uploadedCover.url;
+          allImagesToLink.push(uploadedCover.id);
+          await showTimedSuccessMessage('Cover del evento cargada');
         }
-      } else if (img.id) { // If an existing additional image is present (no new file selected)
-        allImagesToLink.push(img.id);
+      } else if (coverImage.id) {
+        allImagesToLink.push(coverImage.id);
       }
-    }
 
-    // 3. Link all images to the event
-    if (eventIdStore.value && allImagesToLink.length > 0) {
-      for (const archivoId of allImagesToLink) {
-        if (archivoId) { // Ensure ID is not null
-          console.log(`Linking archivo ID ${archivoId} to event ID ${eventIdStore.value}`);
-          await linkArchivoToEvento(archivoId, eventIdStore.value);
+      for (const img of additionalImages.value) {
+        if (img.file) {
+          console.log(`Uploading additional image: ${img.file.name}`);
+          const uploadedImg = await uploadFileToBackend(img.file, 'additional');
+          if (uploadedImg) {
+            img.id = uploadedImg.id;
+            img.url = uploadedImg.url;
+            allImagesToLink.push(uploadedImg.id);
+            await showTimedSuccessMessage(`Imagen adicional del evento "${img.file.name}" cargada.`);
+          }
+        } else if (img.id) {
+          allImagesToLink.push(img.id);
         }
       }
-      await showTimedSuccessMessage('Todas las imagenes han sido guardadas con el evento');
-    }
-    // --- End Image Upload and Linking Logic ---
 
+      if (eventIdStore.value && allImagesToLink.length > 0) {
+        for (const archivoId of allImagesToLink) {
+          if (archivoId) {
+            console.log(`Linking archivo ID ${archivoId} to event ID ${eventIdStore.value}`);
+            await linkArchivoToEvento(archivoId, eventIdStore.value);
+          }
+        }
+        await showTimedSuccessMessage('Todas las imagenes han sido guardadas con el evento');
+      }
+    }
 
     for (const cronograma of cronogramas.value) {
       let createdOrUpdatedCronograma = null;
@@ -1002,7 +1001,6 @@ async function processFinalSave() {
             const activityPayload = {
               ...JSON.parse(JSON.stringify(activity)),
               cronograma_id: createdOrUpdatedCronograma.id,
-              // Dates are already in ISO format from datetime-local for direct use by backend
             };
             loading.value = true;
             const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
@@ -1021,7 +1019,7 @@ async function processFinalSave() {
       }
     }
 
-    await showTimedSuccessMessage(isEditing ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
+    await showTimedSuccessMessage(isEditing.value ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
 
     clearLocalStorage();
     emit('submit', { id: eventIdStore.value });
@@ -1053,400 +1051,372 @@ onMounted(async () => {
 
       <div class="modal-tabs">
         <button
+          v-for="tab in tabOrder"
+          :key="tab"
           :class="[
             'tab',
-            activeTab === 'info' ? 'active' : '',
-            isTabCompleted('info') ? 'completed' : ''
+            activeTab === tab ? 'active' : '',
+            isTabCompleted(tab) ? 'completed' : ''
           ]"
-          @click="activeTab = 'info'"
+          @click="activeTab = tab"
         >
-          Información del Evento
-        </button>
-        <button
-          :class="[
-            'tab',
-            activeTab === 'imagenes' ? 'active' : '',
-            isTabCompleted('imagenes') ? 'completed' : ''
-          ]"
-          @click="activeTab = 'imagenes'"
-        >
-          Imágenes del Evento
-        </button>
-        <button
-          :class="[
-            'tab',
-            activeTab === 'cronograma' ? 'active' : '',
-            isTabCompleted('cronograma') ? 'completed' : ''
-          ]"
-          @click="activeTab = 'cronograma'"
-        >
-          Añadir Cronogramas
-        </button>
-        <button
-          :class="[
-            'tab',
-            activeTab === 'actividades' ? 'active' : '',
-            isTabCompleted('actividades') ? 'completed' : ''
-          ]"
-          @click="activeTab = 'actividades'"
-        >
-          Añadir Actividades
+          {{ tabTitleMap[tab] }}
         </button>
       </div>
 
       <h3 class="modal-title2">{{ tabTitle }}</h3>
 
       <ScrollBar>
-      <div v-if="activeTab === 'info'">
-        <form @submit.prevent="handleSubmit" class="custom-form">
-          <div class="form-grid">
+        <div v-if="activeTab === 'info'">
+          <form @submit.prevent="handleSubmit" class="custom-form">
+            <div class="form-grid">
+              <div class="form-group span-3">
+                <input v-model="form.nombre" type="text" required />
+                <label>Nombre del evento*</label>
+              </div>
+
+              <div class="form-group textarea-group span-3">
+                <textarea v-model="form.descripcion" maxlength="225" required></textarea>
+                <label>Descripción *</label>
+                <div class="char-count">{{ descripcionCount }}/225</div>
+              </div>
+
+              <div class="form-group-row span-3">
+                <div class="form-group half">
+                  <select v-model.number="form.categoria_id" required>
+                    <option disabled value="">Seleccione una categoría</option>
+                    <option v-for="cat in categorias" :key="cat.id" :value="cat.id">
+                      {{ cat.nombre }}
+                    </option>
+                  </select>
+                  <label>Categoría *</label>
+                </div>
+
+                <div class="form-group half">
+                  <select v-model="form.modalidad" required>
+                    <option disabled value="">Seleccione una modalidad</option>
+                    <option>Presencial</option>
+                    <option>Virtual</option>
+                    <option>Híbrida</option>
+                  </select>
+                  <label>Modalidad *</label>
+                </div>
+                <div class="form-group half">
+                  <select v-model="form.estado" required>
+                    <option disabled value="">Seleccione un estado</option>
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                  </select>
+                  <label>Estado del Evento *</label>
+                </div>
+              </div>
+
+              <div class="form-group-row span-3">
+                <div class="form-group half">
+                  <input v-model="form.fecha_inicio" type="datetime-local" required />
+                  <label>Fecha y Hora de Inicio *</label>
+                </div>
+
+                <div class="form-group half">
+                  <input v-model="form.fecha_fin" type="datetime-local" required />
+                  <label>Fecha y Hora de Fin *</label>
+                </div>
+              </div>
+
+              <div class="form-group span-1">
+                <input v-model="form.espacio" type="text" required />
+                <label>Espacio *</label>
+              </div>
+
+              <div class="form-group span-1">
+                <select v-model.number="form.sede_id" required>
+                  <option disabled value="">Seleccione una sede</option>
+                  <option v-for="s in sede" :key="s.id" :value="s.id">
+                    {{ s.nombre }}
+                  </option>
+                </select>
+                <label>Sede *</label>
+              </div>
+
+
+              <div class="form-group span-1">
+                <input
+                  v-model.number="form.capacidad"
+                  type="number"
+                  min="0"
+                  required
+                />
+                <label>Capacidad *</label>
+              </div>
+
+            </div>
+
+            <div class="switch-group">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  v-model="form.hayEquipos"
+                  :true-value="1"
+                  :false-value="0"
+                />
+                <label class="form-check-label">Ingresos de Proyectos</label>
+              </div>
+
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" v-model="form.hayFormulario" />
+                <label class="form-check-label">Se necesita Rubricas</label>
+              </div>
+
+
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" v-model="form.inscripcionesAbiertas" />
+                <label class="form-check-label">Inscripciones Abiertas</label>
+              </div>
+            </div>
+
+            <p v-if="error" class="error-text">{{ error }}</p>
+
+            <div class="button-row">
+              <button type="button" class="btn btn-cancel" disabled>
+                <i class="fas fa-angle-left"></i>Volver
+              </button>
+              <button type="submit" class="btn btn-primary">
+                Siguiente<i class="fas fa-angle-right"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div v-if="activeTab === 'imagenes'">
+          <div class="imagenes-section">
+            <div>
+              <label class="imagenes-label">Cover del Evento *</label>
+              <div class="imagenes-cover-row">
+                <div class="cover-preview-box">
+                  <img
+                    v-if="coverImage.url"
+                    :src="coverImage.url"
+                    class="cover-preview-img"
+                    alt="Cover Preview"
+                  />
+                  <div v-else class="cover-preview-empty">Sin imagen</div>
+                </div>
+                <div class="imagenes-upload-box">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    @change="handleCoverChange"
+                    class="imagenes-file-input"
+                    ref="coverInput"
+                  />
+                  <button type="button" @click="coverInput.click()" class="imagenes-btn">
+                    Elegir archivo...
+                  </button>
+                  <p class="imagenes-help-text">Suba una imagen que no pese más de 10 mb</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="imagenes-label">Imágenes adicionales *</label>
+              <div class="imagenes-dropzone" @dragover.prevent @drop.prevent="handleDrop">
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpg, .png, .webp"
+                  @change="handleAdditionalChange"
+                  class="imagenes-file-input"
+                  ref="additionalInput"
+                />
+                <div class="imagenes-dropzone-content">
+                  <i class="fa-solid fa-folder imagenes-svg"></i>
+                  <p>Puedes arrastrar y soltar archivos aquí para añadirlos</p>
+                  <span class="imagenes-or">OR</span>
+                  <button type="button" @click="additionalInput.click()" class="imagenes-btn">
+                    Buscar en archivos
+                  </button>
+                  <p class="imagenes-help-text">Solo se aceptan archivos .jpg, .png o .webp</p>
+                </div>
+                <div v-if="additionalImages.length" class="imagenes-grid">
+                  <img
+                    v-for="(img, idx) in additionalImages"
+                    :key="idx"
+                    :src="img.url"
+                    class="imagenes-thumb"
+                    alt="Imagen adicional"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn btn-cancel" @click="activeTab = 'info'">
+                <i class="fas fa-angle-left"></i>Volver
+              </button>
+              <button type="submit" class="btn btn-primary" @click="activeTab = 'cronograma'">
+                Siguiente<i class="fas fa-angle-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+
+        <div v-if="activeTab === 'cronograma'">
+          <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
             <div class="form-group span-3">
-              <input v-model="form.nombre" type="text" required />
-              <label>Nombre del evento*</label>
+              <input id="cronograma-titulo" v-model="cronogramaForm.titulo" type="text" required />
+              <label for="cronograma-titulo">Titulo del cronograma*</label>
             </div>
 
             <div class="form-group textarea-group span-3">
-              <textarea v-model="form.descripcion" maxlength="225" required></textarea>
-              <label>Descripción *</label>
+              <textarea id="cronograma-desc" v-model="cronogramaForm.descripcion" maxlength="225" required></textarea>
+              <label for="cronograma-desc">Descripción *</label>
+              <div class="char-count">{{ descripcionCount }}/225</div>
+            </div>
+            <div class="cronograma-row">
+              <div class="form-group">
+                <input v-model="cronogramaForm.fecha_inicio" type="datetime-local" placeholder=" " required />
+                <label>Fecha y Hora de Inicio *</label>
+              </div>
+              <div class="form-group">
+                <input v-model="cronogramaForm.fecha_fin" type="datetime-local" placeholder=" " required />
+                <label>Fecha y Hora de Fin *</label>
+              </div>
+            </div>
+            <div class="form-group span-3">
+              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 200px;">
+                Crear cronograma <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </form>
+
+          <div class="tabla-cronogramas" v-if="cronogramas.length">
+            <h4>Cronogramas Creados:</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Orden</th>
+                  <th>Título</th>
+                  <th>Descripción</th>
+                  <th>Inicia</th>
+                  <th>Finaliza</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(cronograma, idx) in cronogramas" :key="cronograma.tempId">
+                  <td>{{ cronograma.orden }}</td>
+                  <td>{{ cronograma.titulo }}</td>
+                  <td>{{ cronograma.descripcion }}</td>
+                  <td>{{ formatDisplayDateTime(cronograma.fecha_inicio) }}</td>
+                  <td>{{ formatDisplayDateTime(cronograma.fecha_fin) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="no-cronogramas-message">Aún no has añadido ningún cronograma.</p>
+
+          <div class="button-row">
+            <button type="button" class="btn btn-cancel" @click="goToPreviousTab()">
+              <i class="fas fa-angle-left"></i> Volver
+            </button>
+            <button type="button" class="btn btn-primary" @click="proceedToActivities">
+              Siguiente <i class="fas fa-angle-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'actividades'">
+          <form class="actividad-form" @submit.prevent="handleActividadAdd">
+            <div class="form-group span-3">
+              <input v-model="actividadForm.titulo" type="text" required />
+              <label for="cronograma-titulo">Título*</label>
+            </div>
+
+            <div class="form-group textarea-group span-3">
+              <textarea id="cronograma-desc" v-model="actividadForm.descripcion" maxlength="225" required></textarea>
+              <label for="cronograma-desc">Descripción *</label>
               <div class="char-count">{{ descripcionCount }}/225</div>
             </div>
 
-            <div class="form-group-row span-3">
-              <div class="form-group half">
-                <select v-model.number="form.categoria_id" required>
-                  <option disabled value="">Seleccione una categoría</option>
-                  <option v-for="cat in categorias" :key="cat.id" :value="cat.id">
-                    {{ cat.nombre }}
-                  </option>
+            <div class="form-row">
+              <div class="form-group">
+                <select v-model="actividadForm.cronograma_id" required>
+                  <option disabled value="">Cronograma *</option>
+                  <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">{{ c.titulo }}</option>
                 </select>
-                <label>Categoría *</label>
+                <label>Cronograma *</label>
               </div>
 
-              <div class="form-group half">
-                <select v-model="form.modalidad" required>
-                  <option disabled value="">Seleccione una modalidad</option>
-                  <option>Presencial</option>
-                  <option>Virtual</option>
-                  <option>Híbrida</option>
-                </select>
-                <label>Modalidad *</label>
-              </div>
-              <div class="form-group half">
-                <select v-model="form.estado" required>
-                  <option disabled value="">Seleccione un estado</option>
-                  <option value="activo">Activo</option>
-                  <option value="inactivo">Inactivo</option>
-                </select>
-                <label>Estado del Evento *</label>
-              </div>
             </div>
-
-            <div class="form-group-row span-3">
-              <div class="form-group half">
-                <input v-model="form.fecha_inicio" type="datetime-local" required />
+            <div class="form-row">
+              <div class="form-group">
+                <input v-model="actividadForm.fecha_inicio" type="datetime-local" placeholder=" " required />
                 <label>Fecha y Hora de Inicio *</label>
               </div>
-
-              <div class="form-group half">
-                <input v-model="form.fecha_fin" type="datetime-local" required />
+              <div class="form-group">
+                <input v-model="actividadForm.fecha_fin" type="datetime-local" placeholder=" " required />
                 <label>Fecha y Hora de Fin *</label>
               </div>
             </div>
 
-            <div class="form-group span-1">
-              <input v-model="form.espacio" type="text" required />
-              <label>Espacio *</label>
+            <div class="button-row" style="justify-content: center; margin-top: 0rem;">
+              <button type="submit" class="btn btn-primary" :disabled="addingActividad">
+                {{ addingActividad ? 'Añadiendo...' : 'Añadir Actividad' }}
+              </button>
             </div>
 
-            <div class="form-group span-1">
-              <select v-model.number="form.sede_id" required>
-                <option disabled value="">Seleccione una sede</option>
-                <option v-for="s in sede" :key="s.id" :value="s.id">
-                  {{ s.nombre }}
-                </option>
-              </select>
-              <label>Sede *</label>
+          </form>
+          <div v-if="actividadError" class="alert alert-danger mt-3">{{ actividadError }}</div>
+
+          <div class="tabla-actividades">
+            <div v-if="reorderingActividades" class="overlay-loader">
+              <div class="spinner"></div> Actualizando orden...
             </div>
-
-
-            <div class="form-group span-1">
-              <input
-                v-model.number="form.capacidad"
-                type="number"
-                min="0"
-                required
-              />
-              <label>Capacidad *</label>
-            </div>
-
+            <table>
+              <thead>
+                <tr>
+                  <th>Orden</th>
+                  <th>Título</th>
+                  <th>Descripción</th>
+                  <th>Inicia</th>
+                  <th>Finaliza</th>
+                  <th>Depende de</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(act, idx) in activitiesForSelectedCronograma" :key="act.tempId">
+                  <td>
+                    <div class="order-controls-horizontal">
+                      <button @click="moverArriba(actividadForm.cronograma_id, idx)"
+                        :disabled="idx === 0 || reorderingActividades" class="order-btn">
+                        <i class="fas fa-caret-up"></i>
+                      </button>
+                      <span class="order-number">{{ act.orden }}</span>
+                      <button @click="moverAbajo(actividadForm.cronograma_id, idx)"
+                        :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades" class="order-btn">
+                        <i class="fas fa-caret-down"></i>
+                      </button>
+                    </div>
+                  </td>
+                  <td>{{ act.titulo }}</td>
+                  <td>{{ act.descripcion }}</td>
+                  <td>{{ formatDisplayDateTime(act.fecha_inicio) }}</td>
+                  <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
+                  <td>{{ getDependenciaDisplayText(act, actividadForm.cronograma_id) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-
-          <div class="switch-group">
-            <div class="form-check form-switch">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                v-model="form.hayEquipos"
-                :true-value="1"
-                :false-value="0"
-              />
-              <label class="form-check-label">Ingresos de Proyectos</label>
-            </div>
-
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" v-model="form.hayFormulario" />
-              <label class="form-check-label">Se necesita Rubricas</label>
-            </div>
-
-
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" v-model="form.inscripcionesAbiertas" />
-              <label class="form-check-label">Inscripciones Abiertas</label>
-            </div>
-          </div>
-
-          <p v-if="error" class="error-text">{{ error }}</p>
 
           <div class="button-row">
-            <button type="button" class="btn btn-cancel" disabled>
-              <i class="fas fa-angle-left"></i>Volver
+            <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" >
+              <i class="fas fa-angle-left"></i> Volver
             </button>
-            <button type="submit" class="btn btn-primary">
-              Siguiente<i class="fas fa-angle-right"></i>
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <div v-if="activeTab === 'imagenes'">
-        <div class="imagenes-section">
-          <div>
-            <label class="imagenes-label">Cover del Evento *</label>
-            <div class="imagenes-cover-row">
-              <div class="cover-preview-box">
-                <img
-                  v-if="coverImage.url"
-                  :src="coverImage.url"
-                  class="cover-preview-img"
-                  alt="Cover Preview"
-                />
-                <div v-else class="cover-preview-empty">Sin imagen</div>
-              </div>
-              <div class="imagenes-upload-box">
-                <input
-                  type="file"
-                  accept="image/*"
-                  @change="handleCoverChange"
-                  class="imagenes-file-input"
-                  ref="coverInput"
-                />
-                <button type="button" @click="coverInput.click()" class="imagenes-btn">
-                  Elegir archivo...
-                </button>
-                <p class="imagenes-help-text">Suba una imagen que no pese más de 10 mb</p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label class="imagenes-label">Imágenes adicionales *</label>
-            <div class="imagenes-dropzone" @dragover.prevent @drop.prevent="handleDrop">
-              <input
-                type="file"
-                multiple
-                accept=".jpg, .png, .webp"
-                @change="handleAdditionalChange"
-                class="imagenes-file-input"
-                ref="additionalInput"
-              />
-              <div class="imagenes-dropzone-content">
-                <i class="fa-solid fa-folder imagenes-svg"></i>
-                <p>Puedes arrastrar y soltar archivos aquí para añadirlos</p>
-                <span class="imagenes-or">OR</span>
-                <button type="button" @click="additionalInput.click()" class="imagenes-btn">
-                  Buscar en archivos
-                </button>
-                <p class="imagenes-help-text">Solo se aceptan archivos .jpg, .png o .webp</p>
-              </div>
-              <div v-if="additionalImages.length" class="imagenes-grid">
-                <img
-                  v-for="(img, idx) in additionalImages"
-                  :key="idx"
-                  :src="img.url"
-                  class="imagenes-thumb"
-                  alt="Imagen adicional"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="activeTab = 'info'">
-              <i class="fas fa-angle-left"></i>Volver
-            </button>
-            <button type="submit" class="btn btn-primary" @click="activeTab = 'cronograma'">
-              Siguiente<i class="fas fa-angle-right"></i>
+            <button type="button" class="btn btn-primary" @click="handleSaveButtonClick">
+              Guardar <i class="fas fa-angle-right"></i>
             </button>
           </div>
         </div>
-      </div>
-
-
-      <div v-if="activeTab === 'cronograma'">
-        <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
-          <div class="form-group span-3">
-            <input id="cronograma-titulo" v-model="cronogramaForm.titulo" type="text" required />
-            <label for="cronograma-titulo">Titulo del cronograma*</label>
-          </div>
-
-          <div class="form-group textarea-group span-3">
-            <textarea id="cronograma-desc" v-model="cronogramaForm.descripcion" maxlength="225" required></textarea>
-            <label for="cronograma-desc">Descripción *</label>
-            <div class="char-count">{{ descripcionCount }}/225</div>
-          </div>
-          <div class="cronograma-row">
-            <div class="form-group">
-              <input v-model="cronogramaForm.fecha_inicio" type="datetime-local" placeholder=" " required />
-              <label>Fecha y Hora de Inicio *</label>
-            </div>
-            <div class="form-group">
-              <input v-model="cronogramaForm.fecha_fin" type="datetime-local" placeholder=" " required />
-              <label>Fecha y Hora de Fin *</label>
-            </div>
-          </div>
-          <div class="form-group span-3">
-            <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 200px;">
-              Crear cronograma <i class="fas fa-plus"></i>
-            </button>
-          </div>
-        </form>
-
-        <div class="tabla-cronogramas" v-if="cronogramas.length">
-          <h4>Cronogramas Creados:</h4>
-          <table>
-            <thead>
-              <tr>
-                <th>Orden</th>
-                <th>Título</th>
-                <th>Descripción</th>
-                <th>Inicia</th>
-                <th>Finaliza</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(cronograma, idx) in cronogramas" :key="cronograma.tempId">
-                <td>{{ cronograma.orden }}</td>
-                <td>{{ cronograma.titulo }}</td>
-                <td>{{ cronograma.descripcion }}</td>
-                <td>{{ formatDisplayDateTime(cronograma.fecha_inicio) }}</td>
-                <td>{{ formatDisplayDateTime(cronograma.fecha_fin) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="no-cronogramas-message">Aún no has añadido ningún cronograma.</p>
-
-        <div class="button-row">
-          <button type="button" class="btn btn-cancel" @click="activeTab = 'imagenes'">
-            <i class="fas fa-angle-left"></i> Volver
-          </button>
-          <button type="button" class="btn btn-primary" @click="proceedToActivities">
-            Siguiente <i class="fas fa-angle-right"></i>
-          </button>
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'actividades'">
-        <form class="actividad-form" @submit.prevent="handleActividadAdd">
-          <div class="form-group span-3">
-            <input v-model="actividadForm.titulo" type="text" required />
-            <label for="cronograma-titulo">Título*</label>
-          </div>
-
-          <div class="form-group textarea-group span-3">
-            <textarea id="cronograma-desc" v-model="actividadForm.descripcion" maxlength="225" required></textarea>
-            <label for="cronograma-desc">Descripción *</label>
-            <div class="char-count">{{ descripcionCount }}/225</div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <select v-model="actividadForm.cronograma_id" required>
-                <option disabled value="">Cronograma *</option>
-                <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">{{ c.titulo }}</option>
-              </select>
-              <label>Cronograma *</label>
-            </div>
-
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <input v-model="actividadForm.fecha_inicio" type="datetime-local" placeholder=" " required />
-              <label>Fecha y Hora de Inicio *</label>
-            </div>
-            <div class="form-group">
-              <input v-model="actividadForm.fecha_fin" type="datetime-local" placeholder=" " required />
-              <label>Fecha y Hora de Fin *</label>
-            </div>
-          </div>
-
-          <div class="button-row" style="justify-content: center; margin-top: 0rem;">
-            <button type="submit" class="btn btn-primary" :disabled="addingActividad">
-              {{ addingActividad ? 'Añadiendo...' : 'Añadir Actividad' }}
-            </button>
-          </div>
-
-        </form>
-        <div v-if="actividadError" class="alert alert-danger mt-3">{{ actividadError }}</div>
-
-        <div class="tabla-actividades">
-          <div v-if="reorderingActividades" class="overlay-loader">
-            <div class="spinner"></div> Actualizando orden...
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Orden</th>
-                <th>Título</th>
-                <th>Descripción</th>
-                <th>Inicia</th>
-                <th>Finaliza</th>
-                <th>Depende de</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(act, idx) in activitiesForSelectedCronograma" :key="act.tempId">
-                <td>
-                  <div class="order-controls-horizontal">
-                    <button @click="moverArriba(actividadForm.cronograma_id, idx)"
-                      :disabled="idx === 0 || reorderingActividades" class="order-btn">
-                      <i class="fas fa-caret-up"></i>
-                    </button>
-                    <span class="order-number">{{ act.orden }}</span>
-                    <button @click="moverAbajo(actividadForm.cronograma_id, idx)"
-                      :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades" class="order-btn">
-                      <i class="fas fa-caret-down"></i>
-                    </button>
-                  </div>
-                </td>
-                <td>{{ act.titulo }}</td>
-                <td>{{ act.descripcion }}</td>
-                <td>{{ formatDisplayDateTime(act.fecha_inicio) }}</td>
-                <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
-                <td>{{ getDependenciaDisplayText(act, actividadForm.cronograma_id) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="button-row">
-          <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" >
-            <i class="fas fa-angle-left"></i> Volver
-          </button>
-          <button type="button" class="btn btn-primary" @click="handleSaveButtonClick">
-            Guardar <i class="fas fa-angle-right"></i>
-          </button>
-        </div>
-      </div>
       </ScrollBar>
 
     </div>
