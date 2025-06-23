@@ -67,8 +67,13 @@ const showSuccessModal = ref(false);
 const successMessage = ref('');
 const coverInput = ref(null);
 const additionalInput = ref(null);
-const coverPreview = ref(imageHolder);
-const additionalPreviews = ref([]);
+
+// Updated to store an object { id: ..., url: ... } or null
+const coverImage = reactive({ id: null, url: imageHolder, file: null });
+// Updated to store an array of objects { id: ..., url: ..., file: ... }
+const additionalImages = ref([]);
+
+
 const addingActividad = ref(false);
 const reorderingActividades = ref(false);
 const actividadError = ref(null);
@@ -132,8 +137,8 @@ const saveToLocalStorage = () => {
     activeTab: activeTab.value,
     eventIdStore: eventIdStore.value,
     cronogramaIdStore: cronogramaIdStore.value,
-    coverPreview: coverPreview.value,
-    additionalPreviews: additionalPreviews.value,
+    coverImage: { id: coverImage.id, url: coverImage.url }, // Store only necessary info for cover
+    additionalImages: additionalImages.value.map(img => ({ id: img.id, url: img.url })), // Store only necessary info for additional
   };
   localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
 };
@@ -150,8 +155,24 @@ const loadFromLocalStorage = () => {
     activeTab.value = parsedData.activeTab || 'info';
     eventIdStore.value = parsedData.eventIdStore || null;
     cronogramaIdStore.value = parsedData.cronogramaIdStore || [];
-    coverPreview.value = parsedData.coverPreview || imageHolder;
-    additionalPreviews.value = parsedData.additionalPreviews || [];
+
+    // Load cover image
+    if (parsedData.coverImage) {
+      coverImage.id = parsedData.coverImage.id;
+      coverImage.url = parsedData.coverImage.url;
+      coverImage.file = null; // file property is not persisted
+    } else {
+      coverImage.id = null;
+      coverImage.url = imageHolder;
+      coverImage.file = null;
+    }
+
+    // Load additional images
+    if (parsedData.additionalImages) {
+      additionalImages.value = parsedData.additionalImages.map(img => ({ ...img, file: null })); // file property is not persisted
+    } else {
+      additionalImages.value = [];
+    }
   }
 };
 
@@ -195,12 +216,14 @@ const resetForm = () => {
   activeTab.value = 'info';
   eventIdStore.value = null;
   cronogramaIdStore.value = [];
-  coverPreview.value = imageHolder;
-  additionalPreviews.value = [];
+  coverImage.id = null;
+  coverImage.url = imageHolder;
+  coverImage.file = null;
+  additionalImages.value = [];
   error.value = '';
 };
 
-watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverPreview, additionalPreviews], () => {
+watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverImage, additionalImages], () => {
   saveToLocalStorage();
 }, { deep: true });
 
@@ -249,6 +272,27 @@ watch(() => props.eventData, (newEventData) => {
     });
     activeTab.value = 'info';
     eventIdStore.value = newEventData.id;
+
+    // Load existing cover and additional images from eventData
+    if (newEventData.archivos && newEventData.archivos.length > 0) {
+      const cover = newEventData.archivos.find(a => a.tipo === 'cover');
+      if (cover) {
+        coverImage.id = cover.id;
+        coverImage.url = cover.url;
+      } else {
+        coverImage.id = null;
+        coverImage.url = imageHolder;
+      }
+
+      additionalImages.value = newEventData.archivos
+        .filter(a => a.tipo === 'additional')
+        .map(a => ({ id: a.id, url: a.url, file: null }));
+    } else {
+      coverImage.id = null;
+      coverImage.url = imageHolder;
+      additionalImages.value = [];
+    }
+
 
     // Populate cronogramas with activities
     if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
@@ -494,6 +538,36 @@ async function updateActivityOrderAndDependency(activityId, cronogramaBackendId,
   }
 }
 
+// New function to link archivo to evento
+async function linkArchivoToEvento(archivoId, eventoId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const payload = {
+      archivo_id: archivoId,
+      evento_id: eventoId,
+    };
+    console.log('JSON enviado al backend (Link Archivo-Evento):', JSON.stringify(payload, null, 2));
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('Archivo vinculado al evento con éxito:', response.data);
+    return response.data;
+  } catch (err) {
+    console.error('Error al vincular archivo al evento:', err.response?.data || err.message);
+    throw new Error(err.response?.data?.message || 'Fallo al vincular archivo al evento.');
+  } finally {
+    loading.value = false;
+  }
+}
+
+
 function handleSubmit() {
   error.value = '';
 
@@ -532,6 +606,7 @@ function handleSubmit() {
   saveToLocalStorage();
 }
 
+// Modified uploadFileToBackend to return { id, url }
 async function uploadFileToBackend(file, type) {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -541,19 +616,19 @@ async function uploadFileToBackend(file, type) {
 
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('name', file.name.split('.')[0]); // Optional: send base name
-  formData.append('tipo', type); // 'cover' or 'additional'
+  formData.append('name', file.name.split('.')[0]);
+  formData.append('tipo', type);
 
   loading.value = true;
   try {
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/upload-file`, formData, {
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, { // <-- Change made here!
       headers: {
-        'Content-Type': 'multipart/form-data', // Crucial for file uploads
+        'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${token}`,
       },
     });
     console.log(`File uploaded (${type}):`, response.data);
-    return response.data.file.url;
+    return { id: response.data.file.id, url: response.data.file.url };
   } catch (error) {
     console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
     alert(`Error al subir la imagen (${type}).`);
@@ -568,16 +643,15 @@ async function handleCoverChange(event) {
   if (!file) return;
 
   if (file.size <= 10 * 1024 * 1024) {
-    const uploadedUrl = await uploadFileToBackend(file, 'cover');
-    if (uploadedUrl) {
-      coverPreview.value = uploadedUrl;
-    } else {
-      event.target.value = '';
-      coverPreview.value = imageHolder;
-    }
+    // Store the file locally for now, don't upload yet
+    coverImage.url = URL.createObjectURL(file); // For immediate preview
+    coverImage.file = file; // Store the actual file object
+    coverImage.id = null; // Reset ID as it's not uploaded yet
   } else {
     event.target.value = '';
-    coverPreview.value = imageHolder;
+    coverImage.url = imageHolder;
+    coverImage.file = null;
+    coverImage.id = null;
     alert('La imagen de portada debe pesar menos de 10 MB.');
   }
   saveToLocalStorage();
@@ -585,38 +659,42 @@ async function handleCoverChange(event) {
 
 async function handleAdditionalChange(event) {
   const files = Array.from(event.target.files);
-  const uploadedUrls = [];
+  const newAdditionalImages = [];
 
   for (const file of files) {
     if (file.size <= 10 * 1024 * 1024) {
-      const uploadedUrl = await uploadFileToBackend(file, 'additional');
-      if (uploadedUrl) {
-        uploadedUrls.push(uploadedUrl);
-      }
+      // Store the file locally for now, don't upload yet
+      newAdditionalImages.push({
+        id: null, // No ID yet
+        url: URL.createObjectURL(file), // For immediate preview
+        file: file, // Store the actual file object
+      });
     } else {
-      alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se subirá.`);
+      alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`);
     }
   }
-  additionalPreviews.value = [...additionalPreviews.value, ...uploadedUrls];
+  additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
   event.target.value = '';
   saveToLocalStorage();
 }
 
 async function handleDrop(event) {
   const files = Array.from(event.dataTransfer.files);
-  const uploadedUrls = [];
+  const newAdditionalImages = [];
 
   for (const file of files) {
     if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
-      const uploadedUrl = await uploadFileToBackend(file, 'additional');
-      if (uploadedUrl) {
-        uploadedUrls.push(uploadedUrl);
-      }
+      // Store the file locally for now, don't upload yet
+      newAdditionalImages.push({
+        id: null, // No ID yet
+        url: URL.createObjectURL(file), // For immediate preview
+        file: file, // Store the actual file object
+      });
     } else {
-      alert(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se subirá.`);
+      alert(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`);
     }
   }
-  additionalPreviews.value = [...additionalPreviews.value, ...uploadedUrls];
+  additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
   saveToLocalStorage();
 }
 
@@ -823,23 +901,68 @@ function handleConfirmationCancel() {
 async function processFinalSave() {
   error.value = null;
 
-  // Event dates are already formatted as datetime-local strings
-  const eventPayload = {
-    ...JSON.parse(JSON.stringify(form)),
-    // Dates are already in ISO format from datetime-local for direct use by backend
-    hayEquipos: Number(form.hayEquipos),
-    hayFormulario: Boolean(form.hayFormulario),
-    inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
-    categoria_id: Number(form.categoria_id)
-  };
-
   try {
     loading.value = true;
     const isEditing = form.id !== null;
+    const eventPayload = {
+      ...JSON.parse(JSON.stringify(form)),
+      // Dates are already in ISO format from datetime-local for direct use by backend
+      hayEquipos: Number(form.hayEquipos),
+      hayFormulario: Boolean(form.hayFormulario),
+      inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
+      categoria_id: Number(form.categoria_id)
+    };
+
     const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id);
     eventIdStore.value = createdOrUpdatedEvent.id;
     loading.value = false;
     await showTimedSuccessMessage(isEditing ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
+
+    // --- Image Upload and Linking Logic ---
+    const allImagesToLink = [];
+
+    // 1. Handle Cover Image
+    if (coverImage.file) { // Only upload if a new file was selected
+      console.log('Uploading cover image...');
+      const uploadedCover = await uploadFileToBackend(coverImage.file, 'cover');
+      if (uploadedCover) {
+        coverImage.id = uploadedCover.id;
+        coverImage.url = uploadedCover.url;
+        allImagesToLink.push(uploadedCover.id);
+        await showTimedSuccessMessage('Cover image uploaded.');
+      }
+    } else if (coverImage.id) { // If an existing cover image is present (no new file selected)
+      allImagesToLink.push(coverImage.id);
+    }
+
+    // 2. Handle Additional Images
+    for (const img of additionalImages.value) {
+      if (img.file) { // Only upload if a new file was selected
+        console.log(`Uploading additional image: ${img.file.name}`);
+        const uploadedImg = await uploadFileToBackend(img.file, 'additional');
+        if (uploadedImg) {
+          img.id = uploadedImg.id;
+          img.url = uploadedImg.url;
+          allImagesToLink.push(uploadedImg.id);
+          await showTimedSuccessMessage(`Additional image "${img.file.name}" uploaded.`);
+        }
+      } else if (img.id) { // If an existing additional image is present (no new file selected)
+        allImagesToLink.push(img.id);
+      }
+    }
+
+    // 3. Link all images to the event
+    if (eventIdStore.value && allImagesToLink.length > 0) {
+      for (const archivoId of allImagesToLink) {
+        if (archivoId) { // Ensure ID is not null
+          console.log(`Linking archivo ID ${archivoId} to event ID ${eventIdStore.value}`);
+          await linkArchivoToEvento(archivoId, eventIdStore.value);
+        }
+      }
+      await showTimedSuccessMessage('All images linked to event.');
+    }
+    // --- End Image Upload and Linking Logic ---
+
 
     for (const cronograma of cronogramas.value) {
       let createdOrUpdatedCronograma = null;
@@ -1102,8 +1225,8 @@ onMounted(async () => {
             <div class="imagenes-cover-row">
               <div class="cover-preview-box">
                 <img
-                  v-if="coverPreview"
-                  :src="coverPreview"
+                  v-if="coverImage.url"
+                  :src="coverImage.url"
                   class="cover-preview-img"
                   alt="Cover Preview"
                 />
@@ -1145,11 +1268,11 @@ onMounted(async () => {
                 </button>
                 <p class="imagenes-help-text">Solo se aceptan archivos .jpg, .png o .webp</p>
               </div>
-              <div v-if="additionalPreviews.length" class="imagenes-grid">
+              <div v-if="additionalImages.length" class="imagenes-grid">
                 <img
-                  v-for="(img, idx) in additionalPreviews"
+                  v-for="(img, idx) in additionalImages"
                   :key="idx"
-                  :src="img"
+                  :src="img.url"
                   class="imagenes-thumb"
                   alt="Imagen adicional"
                 />
@@ -1166,6 +1289,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+
 
       <div v-if="activeTab === 'cronograma'">
         <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
