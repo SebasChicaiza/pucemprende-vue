@@ -13,14 +13,12 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = 15
 
-const totalPages = computed(() =>
-  Math.ceil(filteredOrganizadores.value.length / pageSize)
-)
+const totalPages = computed(() => Math.ceil(filteredOrganizadores.value.length / pageSize))
 
 const filteredOrganizadores = computed(() =>
-  organizadores.value.filter(org =>
-    org.organizacion?.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  organizadores.value.filter((org) =>
+    org.organizacion?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  ),
 )
 
 const paginatedOrganizadores = computed(() => {
@@ -37,17 +35,18 @@ async function fetchOrganizadores() {
   }
   loading.value = true
   try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/organizadores`, {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/afiliaciones`, {
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     })
     organizadores.value = response.data
     error.value = ''
   } catch (err) {
     if (err.response) {
-      const errorMessage = err.response.data?.message || err.response.statusText || `HTTP Error ${err.response.status}`
+      const errorMessage =
+        err.response.data?.message || err.response.statusText || `HTTP Error ${err.response.status}`
       error.value = `Error al cargar los organizadores: ${errorMessage}`
     } else if (err.request) {
       error.value = 'No se pudo conectar con el servidor. Verifique su conexión de red.'
@@ -65,7 +64,7 @@ function editarOrganizador(org) {
 
 function eliminarOrganizador(org) {
   if (confirm('¿Eliminar organizador?')) {
-    organizadores.value = organizadores.value.filter(o => o.id !== org.id)
+    organizadores.value = organizadores.value.filter((o) => o.id !== org.id)
   }
 }
 
@@ -77,14 +76,19 @@ onMounted(fetchOrganizadores)
 </script>
 
 <template>
-  <LoaderComponent v-if="loading"/>
+  <LoaderComponent v-if="loading" />
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
       <PageHeaderRoute />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <div class="d-flex align-items-center mb-3 gap-2">
-          <input v-model="searchQuery" type="text" placeholder="Buscar organización" class="form-control"/>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Buscar organización"
+            class="form-control"
+          />
           <button class="btn btn-default" @click="abrirModalAgregar">
             <i class="fas fa-plus"></i>
           </button>
@@ -175,10 +179,10 @@ onMounted(fetchOrganizadores)
   font-size: 1.1rem;
 }
 .icon-pencil::before {
-  content: "✏️";
+  content: '✏️';
 }
 .icon-trash::before {
-  content: "🗑️";
+  content: '🗑️';
 }
 .btn-default {
   background-color: #174384;
