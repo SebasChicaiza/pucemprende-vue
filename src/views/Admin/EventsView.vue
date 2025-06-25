@@ -17,6 +17,7 @@ const events = ref([])
 const error = ref('')
 const loading = ref(false)
 const searchQuery = ref('')
+let searchTimeout = null; // To hold our debounce timeout
 
 const currentPage = ref(1)
 const itemsPerPage = ref(12)
@@ -53,11 +54,8 @@ async function fetchEvents() {
             },
         });
 
-        // ⭐⭐⭐ KEY CHANGE HERE ⭐⭐⭐
-        // Now that the backend returns { data: [...], total: N }
         events.value = Array.isArray(response.data.data) ? response.data.data : [];
         totalEvents.value = typeof response.data.total === 'number' ? response.data.total : 0;
-        // ⭐⭐⭐ END KEY CHANGE ⭐⭐⭐
 
         error.value = null;
 
@@ -80,12 +78,30 @@ async function fetchEvents() {
     }
 }
 
-watch(searchQuery, (newVal, oldVal) => {
-    if (newVal !== oldVal) {
-        currentPage.value = 1;
-    }
+// ⭐⭐⭐ Debounce and Enter key search implementation ⭐⭐⭐
+const handleSearchInput = () => {
+    // Clear any existing timeout to reset the debounce timer
+    clearTimeout(searchTimeout);
+    // Set a new timeout
+    searchTimeout = setTimeout(() => {
+        // Only trigger search if current page is 1, otherwise reset to 1
+        if (currentPage.value !== 1) {
+            currentPage.value = 1;
+        } else {
+            fetchEvents();
+        }
+    }, 500); // Wait 500ms (0.5 seconds) after typing stops
+};
+
+const handleSearchEnter = () => {
+    // Clear the debounce timeout immediately if Enter is pressed
+    clearTimeout(searchTimeout);
+    // Always go to the first page when a new search is initiated by Enter
+    currentPage.value = 1;
     fetchEvents();
-});
+};
+// ⭐⭐⭐ END Debounce and Enter key search implementation ⭐⭐⭐
+
 
 watch(currentPage, () => {
     fetchEvents();
@@ -180,7 +196,14 @@ const prevPage = () => {
 
             <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
                 <div class="d-flex align-items-center mb-3 gap-2">
-                    <input v-model="searchQuery" type="text" placeholder="Buscar por nombre" class="form-control"/>
+                    <input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Buscar por nombre"
+                        class="form-control"
+                        @input="handleSearchInput"
+                        @keyup.enter="handleSearchEnter"
+                    />
                     <button class="btn btn-default" @click="openCreateModal">
                         <i class="fas fa-plus"></i>
                     </button>
