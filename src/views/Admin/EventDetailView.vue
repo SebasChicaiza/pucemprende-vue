@@ -428,7 +428,7 @@ const goBack = () => {
 
 const formatDate = (dateString) => {
   if (!dateString) return '';
-  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }; // Added hour and minute
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     return 'Fecha inválida';
@@ -510,9 +510,11 @@ const formatDate = (dateString) => {
               </div>
 
               <div class="info-group">
-                <p class="info-label">Sede del evento</p>
+                <p class="info-label">Espacio donde se realizara el evento: </p>
                 <p class="info-content">{{ eventDetails.espacio }}</p>
               </div>
+
+
 
               <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
                 <div class="me-4">
@@ -550,43 +552,111 @@ const formatDate = (dateString) => {
               </div>
           </div>
 
-
-          <div class="mt-4" v-if="eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
-            <h4 class="mb-3">Cronogramas</h4>
-            <div class="accordion" id="accordionCronogramas">
-              <div class="accordion-item" v-for="(cronograma, index) in eventDetails.cronogramas" :key="cronograma.id">
-                <h2 class="accordion-header" :id="`heading${cronograma.id}`">
-                  <button
-                    class="accordion-button"
-                    :class="{ 'collapsed': index !== 0 }"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    :data-bs-target="`#collapse${cronograma.id}`"
-                    :aria-expanded="index === 0 ? 'true' : 'false'"
-                    :aria-controls="`collapse${cronograma.id}`"
-                  >
-                    {{ cronograma.titulo }}
-                  </button>
-                </h2>
-                <div :id="`collapse${cronograma.id}`" class="accordion-collapse collapse" :class="{ 'show': index === 0 }" :aria-labelledby="`heading${cronograma.id}`" data-bs-parent="#accordionCronogramas">
-                  <div class="accordion-body">
-                    <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
-                    <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
-                    <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
-                    <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
-                    <ul v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0" class="list-group list-group-flush">
-                      <li v-for="actividad in cronograma.actividades_cronogramas" :key="actividad.id" class="list-group-item">
-                        <i class="fas fa-check-circle activity-icon me-2"></i>
-                        {{ actividad.titulo }} ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
-                      </li>
-                    </ul>
-                    <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
+          <div class="mt-4">
+            <!-- Horizontal Tabs for Cronogramas, Equipos, Formularios -->
+            <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button
+                  class="nav-link active"
+                  id="pills-cronogramas-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-cronogramas"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-cronogramas"
+                  aria-selected="true"
+                >
+                  Cronogramas
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button
+                  class="nav-link"
+                  id="pills-equipos-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-equipos"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-equipos"
+                  aria-selected="false"
+                >
+                  Equipos
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button
+                  class="nav-link"
+                  id="pills-formularios-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-formularios"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-formularios"
+                  aria-selected="false"
+                >
+                  Formularios
+                </button>
+              </li>
+            </ul>
+            <div class="tab-content" id="pills-tabContent">
+              <!-- Cronogramas Tab Content -->
+              <div class="tab-pane fade show active" id="pills-cronogramas" role="tabpanel" aria-labelledby="pills-cronogramas-tab">
+                <div v-if="eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
+                  <div class="accordion" id="nestedAccordionCronogramas">
+                    <div class="accordion-item" v-for="(cronograma) in eventDetails.cronogramas" :key="cronograma.id">
+                      <h2 class="accordion-header" :id="`nestedHeading${cronograma.id}`">
+                        <button
+                          class="accordion-button nested-accordion-button collapsed"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          :data-bs-target="`#nestedCollapse${cronograma.id}`"
+                          aria-expanded="false"
+                          :aria-controls="`nestedCollapse${cronograma.id}`"
+                        >
+                          <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
+                          {{ cronograma.titulo }}
+                        </button>
+                      </h2>
+                      <div :id="`nestedCollapse${cronograma.id}`" class="accordion-collapse collapse" :aria-labelledby="`nestedHeading${cronograma.id}`" data-bs-parent="#nestedAccordionCronogramas">
+                        <div class="accordion-body nested-accordion-body">
+                          <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
+                          <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
+                          <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
+                          <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
+                          <ul v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0" class="list-group list-group-flush">
+                            <li v-for="actividad in cronograma.actividades_cronogramas" :key="actividad.id" class="list-group-item">
+                              <i class="fas fa-check-circle activity-icon me-2"></i>
+                              {{ actividad.titulo }} ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
+                            </li>
+                          </ul>
+                          <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+                </div>
+                <p v-else class="text-muted mt-3">No hay cronogramas disponibles para este evento.</p>
+              </div>
+
+              <!-- Equipos Tab Content -->
+              <div class="tab-pane fade" id="pills-equipos" role="tabpanel" aria-labelledby="pills-equipos-tab">
+                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                  <h5 class="mb-3">Información de Equipos</h5>
+                  <p class="mb-0">Equipos del evento: <strong>{{ eventDetails.nombre }}</strong></p>
+                  <p class="text-muted mt-2">Aquí se mostrará la información de los equipos asociados a este evento.</p>
+                </div>
+              </div>
+
+              <!-- Formularios Tab Content -->
+              <div class="tab-pane fade" id="pills-formularios" role="tabpanel" aria-labelledby="pills-formularios-tab">
+                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                  <h5 class="mb-3">Información de Formularios</h5>
+                  <p class="mb-0">Formularios del evento: <strong>{{ eventDetails.nombre }}</strong></p>
+                  <p class="text-muted mt-2">Aquí se mostrará la información de los formularios asociados a este evento.</p>
                 </div>
               </div>
             </div>
           </div>
-          <div v-else class="text-muted mt-3">No hay cronogramas disponibles para este evento.</div>
 
         </div>
         <div v-else-if="!loading" class="container text-center text-muted mt-5">
@@ -787,22 +857,40 @@ const formatDate = (dateString) => {
 
 /* Custom styles for the accordion */
 .accordion-button {
-  background-color: #e0e7ff; /* Light blue background for buttons */
-  color: #174384; /* Dark blue text */
+  /* Collapsed state (default) */
+  background-color: #174384; /* Dark blue background */
+  color: #ffffff; /* White text */
   font-weight: 600;
-  border-bottom: 1px solid #c3d9ff;
+  border-bottom: 1px solid #14386b; /* Slightly darker border for contrast */
   transition: background-color 0.2s ease, color 0.2s ease;
+  padding: 1rem 1.25rem; /* Standard Bootstrap padding */
 }
 
 .accordion-button:not(.collapsed) {
-  color: #ffffff; /* White text when expanded */
-  background-color: #174384; /* Darker blue when expanded */
+  /* Expanded state */
+  background-color: #e0e7ff; /* Light blue background */
+  color: #174384; /* Dark blue text */
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.125);
 }
 
 .accordion-button:focus {
   box-shadow: 0 0 0 0.25rem rgba(23, 67, 132, 0.25); /* Custom focus ring */
 }
+
+.accordion-button .accordion-indicator-icon {
+  transition: transform 0.2s ease-in-out, color 0.2s ease;
+  color: #ffffff; /* Default color when collapsed (matches button text) */
+}
+
+.accordion-button:not(.collapsed) .accordion-indicator-icon {
+  transform: rotate(90deg); /* Rotate icon when expanded */
+  color: #174384; /* Color when expanded (matches button text) */
+}
+
+.accordion-button::after {
+    display: none; /* Hide Bootstrap's default arrow icon */
+}
+
 
 .accordion-body {
   padding: 1.5rem;
@@ -845,5 +933,71 @@ const formatDate = (dateString) => {
 
 .activity-icon {
     color: #28a745; /* Green check icon */
+}
+
+/* Specific styles for nested accordion buttons */
+.nested-accordion-button {
+  background-color: #f0f5ff; /* Lighter blue for nested buttons */
+  color: #3730a3; /* Darker text for contrast */
+  font-weight: 500;
+}
+
+.nested-accordion-button:not(.collapsed) {
+  background-color: #c3d9ff; /* Even lighter when expanded */
+  color: #174384;
+}
+
+.nested-accordion-button .nested-accordion-icon {
+  color: #3730a3; /* Icon color for nested buttons */
+  transition: transform 0.2s ease-in-out;
+}
+
+.nested-accordion-button:not(.collapsed) .nested-accordion-icon {
+  transform: rotate(90deg);
+  color: #174384;
+}
+
+.nested-accordion-body {
+  background-color: #ffffff; /* White background for nested body */
+}
+
+/* Styles for Custom Nav Pills */
+.custom-pills .nav-link {
+    border-radius: 0.5rem 0.5rem 0 0; /* Rounded top corners */
+    margin-right: 0.25rem; /* Small space between pills */
+    padding: 0.75rem 1.5rem;
+    background-color: #e0e7ff; /* Light background for inactive tabs */
+    color: #174384; /* Text color for inactive tabs */
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: 1px solid #c3d9ff;
+    border-bottom: none; /* No bottom border for active tab continuity */
+}
+
+.custom-pills .nav-link:hover:not(.active) {
+    background-color: #d0e0ff; /* Slightly darker on hover */
+    color: #0d284a;
+}
+
+.custom-pills .nav-link.active {
+    background-color: #174384; /* Dark blue for active tab */
+    color: #ffffff; /* White text for active tab */
+    border-color: #174384;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow for active tab */
+}
+
+.tab-content {
+    background-color: #ffffff; /* White background for tab content */
+    border: 1px solid #e0e7ff; /* Border around the entire tab content area */
+    border-radius: 0 0.5rem 0.5rem 0.5rem; /* Rounded bottom and right corners */
+    padding: 1.5rem;
+    min-height: 200px; /* Minimum height for consistency */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05); /* Subtle shadow for content area */
+    transition: all 0.3s ease; /* Smooth transition for tab content change */
+}
+
+.custom-tab-content {
+  border: none !important; /* Remove card border if nested directly */
+  box-shadow: none !important; /* Remove card shadow if nested directly */
 }
 </style>
