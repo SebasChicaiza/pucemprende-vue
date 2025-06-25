@@ -4,11 +4,11 @@ import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
 import ScrollBar from '@/components/ScrollBar.vue'
 import OkModal from '@/components/OkModal.vue'
+import ErrorModal from '@/components/ErrorModal.vue'; // New import
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import axios from 'axios';
 
 
-// Define tabTitleMap here, at the top level of script setup
 const tabTitleMap = computed(() => ({
   info: 'Información del Evento',
   imagenes: 'Imágenes del Evento',
@@ -47,33 +47,36 @@ const cronogramaForm = reactive({
   evento_id: '',
   titulo: '',
   descripcion: '',
-  fecha_inicio: '', // Now holds date AND time
-  fecha_fin: '',    // Now holds date AND time
+  fecha_inicio: '',
+  fecha_fin: '',
 });
 
 const actividadForm = reactive({
   cronograma_id: '',
   titulo: '',
   descripcion: '',
-  fecha_inicio: '', // Now holds date AND time
-  fecha_fin: '',    // Now holds date AND time
+  fecha_inicio: '',
+  fecha_fin: '',
   dependencia_id: null,
 });
 
-const cronogramas = ref([]); // This will now hold cronograms with their activities
+const cronogramas = ref([]);
 
 const activeTab = ref('info');
 const descripcionCount = computed(() => form.descripcion.length);
-const error = ref('');
 const loading = ref(false);
-const categorias = ref([]); // This holds the fetched categories with IDs
+const categorias = ref([]);
 const sede = ref([]);
 const eventIdStore = ref(null);
-const cronogramaIdStore = ref([]); // This might still be useful for new cronogramas before saving
+const cronogramaIdStore = ref([]);
 const showConfirmationModal = ref(false);
 const ConfModalMessage = ref('');
 const showSuccessModal = ref(false);
 const successMessage = ref('');
+
+const showErrorModal = ref(false); // New reactive variable
+const errorMessage = ref(''); // New reactive variable
+
 const coverInput = ref(null);
 const additionalInput = ref(null);
 
@@ -83,7 +86,7 @@ const additionalImages = ref([]);
 
 const addingActividad = ref(false);
 const reorderingActividades = ref(false);
-const actividadError = ref(null);
+
 
 const isClosingModal = ref(false);
 
@@ -105,9 +108,20 @@ const handleModalClose = () => {
   successMessage.value = '';
 };
 
+const handleErrorModalClose = () => { // New function
+  showErrorModal.value = false;
+  errorMessage.value = '';
+};
+
 async function showTimedSuccessMessage(message, duration = 1000) {
   successMessage.value = message;
   showSuccessModal.value = true;
+  await new Promise(resolve => setTimeout(resolve, duration + 100));
+}
+
+async function showTimedErrorMessage(message, duration = 4000) { // New function
+  errorMessage.value = message;
+  showErrorModal.value = true;
   await new Promise(resolve => setTimeout(resolve, duration + 100));
 }
 
@@ -236,7 +250,7 @@ const resetForm = () => {
   coverImage.url = imageHolder;
   coverImage.file = null;
   additionalImages.value = [];
-  error.value = '';
+  // Removed: error.value = '';
 };
 
 watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverImage, additionalImages], () => {
@@ -574,8 +588,8 @@ async function linkArchivoToEvento(archivoId, eventoId) {
 }
 
 
-function handleSubmit() {
-  error.value = '';
+async function handleSubmit() { // Added async for showTimedErrorMessage
+  // Removed: error.value = '';
 
   if (
     !form.nombre ||
@@ -591,7 +605,7 @@ function handleSubmit() {
     !form.estado ||
     form.inscripcionesAbiertas === null
   ) {
-    error.value = '⚠️ Por favor, completa todos los campos obligatorios.';
+    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios.');
     return;
   }
 
@@ -599,16 +613,15 @@ function handleSubmit() {
   const fechaFin = new Date(form.fecha_fin);
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas y horas ingresadas no son válidas.';
+    await showTimedErrorMessage('Las fechas y horas ingresadas no son válidas.');
     return;
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha y hora de inicio debe ser anterior a la fecha y hora de fin.';
+    await showTimedErrorMessage('La fecha y hora de inicio debe ser anterior a la fecha y hora de fin.');
     return;
   }
 
-  // Navigate to the next tab based on whether it's editing or creating
   const currentTabIndex = tabOrder.value.indexOf(activeTab.value);
   if (currentTabIndex < tabOrder.value.length - 1) {
     activeTab.value = tabOrder.value[currentTabIndex + 1];
@@ -619,7 +632,7 @@ function handleSubmit() {
 async function uploadFileToBackend(file, type) {
   const token = localStorage.getItem('token');
   if (!token) {
-    alert('Token de autenticación no encontrado. Por favor, inicie sesión.');
+    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.'); // Replaced alert
     return null;
   }
 
@@ -640,7 +653,7 @@ async function uploadFileToBackend(file, type) {
     return { id: response.data.file.id, url: response.data.file.url };
   } catch (error) {
     console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
-    alert(`Error al subir la imagen (${type}).`);
+    await showTimedErrorMessage(`Error al subir la imagen (${type}).`); // Replaced alert
     return null;
   } finally {
     loading.value = false;
@@ -660,7 +673,7 @@ async function handleCoverChange(event) {
     coverImage.url = imageHolder;
     coverImage.file = null;
     coverImage.id = null;
-    alert('La imagen de portada debe pesar menos de 10 MB.');
+    await showTimedErrorMessage('La imagen de portada debe pesar menos de 10 MB.'); // Replaced alert
   }
   saveToLocalStorage();
 }
@@ -677,7 +690,7 @@ async function handleAdditionalChange(event) {
         file: file,
       });
     } else {
-      alert(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`);
+      await showTimedErrorMessage(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`); // Replaced alert
     }
   }
   additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
@@ -685,7 +698,7 @@ async function handleAdditionalChange(event) {
   saveToLocalStorage();
 }
 
-async function handleDrop(event) {
+async function handleDrop(event) { // Added async
   const files = Array.from(event.dataTransfer.files);
   const newAdditionalImages = [];
 
@@ -697,15 +710,15 @@ async function handleDrop(event) {
         file: file,
       });
     } else {
-      alert(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`);
+      await showTimedErrorMessage(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`); // Replaced alert
     }
   }
   additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
   saveToLocalStorage();
 }
 
-function handleCronogramaSubmit() {
-  error.value = '';
+async function handleCronogramaSubmit() { // Added async for showTimedErrorMessage
+  // Removed: error.value = '';
 
   if (
     !cronogramaForm.titulo ||
@@ -713,7 +726,7 @@ function handleCronogramaSubmit() {
     !cronogramaForm.fecha_inicio ||
     !cronogramaForm.fecha_fin
   ) {
-    error.value = '⚠️ Por favor, completa todos los campos obligatorios del cronograma.';
+    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios del cronograma.');
     return;
   }
 
@@ -721,14 +734,23 @@ function handleCronogramaSubmit() {
   const fechaFin = new Date(cronogramaForm.fecha_fin);
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    error.value = '⚠️ Las fechas y horas ingresadas para el cronograma no son válidas.';
+    await showTimedErrorMessage('Las fechas y horas ingresadas para el cronograma no son válidas.');
     return;
   }
 
   if (fechaInicio >= fechaFin) {
-    error.value = '⚠️ La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.';
+    await showTimedErrorMessage('La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.');
     return;
   }
+
+  const eventStartDate = new Date(form.fecha_inicio);
+  const eventEndDate = new Date(form.fecha_fin);
+
+  if (fechaInicio < eventStartDate || fechaFin > eventEndDate) {
+    await showTimedErrorMessage('Las fechas del cronograma deben estar dentro del rango de fechas del evento.');
+    return;
+  }
+
 
   const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -743,7 +765,7 @@ function handleCronogramaSubmit() {
   cronogramaForm.descripcion = '';
   cronogramaForm.fecha_inicio = '';
   cronogramaForm.fecha_fin = '';
-  error.value = '';
+  // Removed: error.value = '';
 
   successMessage.value = `El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`;
   showSuccessModal.value = true;
@@ -752,7 +774,7 @@ function handleCronogramaSubmit() {
 
 function proceedToActivities() {
   if (cronogramas.value.length === 0) {
-    error.value = '⚠️ Debes añadir al menos un cronograma antes de pasar a las actividades.';
+    showTimedErrorMessage('Debes añadir al menos un cronograma antes de pasar a las actividades.');
     return;
   }
   activeTab.value = 'actividades';
@@ -772,7 +794,7 @@ const activitiesForSelectedCronograma = computed(() => {
 });
 
 async function handleActividadAdd() {
-  actividadError.value = null;
+  // Removed: actividadError.value = null;
   addingActividad.value = true;
 
   if (
@@ -782,7 +804,7 @@ async function handleActividadAdd() {
     !actividadForm.fecha_inicio ||
     !actividadForm.fecha_fin
   ) {
-    actividadError.value = 'Por favor, completa todos los campos obligatorios de la actividad.';
+    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios de la actividad.');
     addingActividad.value = false;
     return;
   }
@@ -790,7 +812,24 @@ async function handleActividadAdd() {
   const parentCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
 
   if (!parentCronograma) {
-    actividadError.value = 'Cronograma padre seleccionado no encontrado en el borrador.';
+    await showTimedErrorMessage('Cronograma padre seleccionado no encontrado en el borrador.');
+    addingActividad.value = false;
+    return;
+  }
+
+  const activityStartDate = new Date(actividadForm.fecha_inicio);
+  const activityEndDate = new Date(actividadForm.fecha_fin);
+  const cronogramaStartDate = new Date(parentCronograma.fecha_inicio);
+  const cronogramaEndDate = new Date(parentCronograma.fecha_fin);
+
+  if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
+    await showTimedErrorMessage(`Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`);
+    addingActividad.value = false;
+    return;
+  }
+
+  if (activityStartDate >= activityEndDate) {
+    await showTimedErrorMessage('La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.');
     addingActividad.value = false;
     return;
   }
@@ -798,7 +837,6 @@ async function handleActividadAdd() {
   if (!parentCronograma.actividades) {
     parentCronograma.actividades = [];
   }
-
   const newOrder = parentCronograma.actividades.length > 0 ?
     Math.max(...parentCronograma.actividades.map(a => a.orden)) + 1 : 1;
 
@@ -904,9 +942,33 @@ function handleConfirmationCancel() {
 }
 
 async function processFinalSave() {
-  error.value = null;
+  // Removed: error.value = null;
 
   try {
+    const eventStartDate = new Date(form.fecha_inicio);
+    const eventEndDate = new Date(form.fecha_fin);
+
+    for (const cronograma of cronogramas.value) {
+      const cronogramaStartDate = new Date(cronograma.fecha_inicio);
+      const cronogramaEndDate = new Date(cronograma.fecha_fin);
+
+      if (cronogramaStartDate < eventStartDate || cronogramaEndDate > eventEndDate) {
+        await showTimedErrorMessage(`El cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango del evento principal. Por favor, ajusta las fechas.`, 3000);
+        return;
+      }
+
+      for (const activity of cronograma.actividades) {
+        const activityStartDate = new Date(activity.fecha_inicio);
+        const activityEndDate = new Date(activity.fecha_fin);
+
+        if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
+          await showTimedErrorMessage(`La actividad "<strong>${activity.titulo}</strong>" del cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango de su cronograma. Por favor, ajusta las fechas.`, 3000);
+          return;
+        }
+      }
+    }
+
+
     loading.value = true;
     const eventPayload = {
       ...JSON.parse(JSON.stringify(form)),
@@ -921,7 +983,7 @@ async function processFinalSave() {
     loading.value = false;
     await showTimedSuccessMessage(isEditing.value ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
-    if (!isEditing.value) { // Only handle image upload/linking if not in edit mode
+    if (!isEditing.value) {
       const allImagesToLink = [];
 
       if (coverImage.file) {
@@ -1026,7 +1088,7 @@ async function processFinalSave() {
     emit('close');
   } catch (err) {
     console.error('Error during final save process:', err);
-    error.value = err.message || 'Error desconocido durante el proceso de guardado final.';
+    await showTimedErrorMessage(err.message || 'Error desconocido durante el proceso de guardado final.'); // Display error with modal
   } finally {
     loading.value = false;
   }
@@ -1174,8 +1236,6 @@ onMounted(async () => {
                 <label class="form-check-label">Inscripciones Abiertas</label>
               </div>
             </div>
-
-            <p v-if="error" class="error-text">{{ error }}</p>
 
             <div class="button-row">
               <button type="button" class="btn btn-cancel" disabled>
@@ -1366,8 +1426,6 @@ onMounted(async () => {
             </div>
 
           </form>
-          <div v-if="actividadError" class="alert alert-danger mt-3">{{ actividadError }}</div>
-
           <div class="tabla-actividades">
             <div v-if="reorderingActividades" class="overlay-loader">
               <div class="spinner"></div> Actualizando orden...
@@ -1419,28 +1477,34 @@ onMounted(async () => {
         </div>
       </ScrollBar>
 
-    </div>
       <Loader v-if="loading" />
 
+    </div>
+      <ConfirmationModal
+        :show="showConfirmationModal"
+        title="Confirmar"
+        :message="ConfModalMessage"
+        confirm-text="Sí, continuar"
+        cancel-text="No, quedarme"
+        @confirm="handleConfirmationConfirm"
+        @cancel="handleConfirmationCancel"
+      />
+
+      <OkModal
+        :show="showSuccessModal"
+        title="Información"
+        :message="successMessage"
+        @close="handleModalClose"
+        :duration="1000"
+      />
+
+      <ErrorModal
+        :show="showErrorModal"
+        :message="errorMessage"
+        @close="handleErrorModalClose"
+        :duration="4000"
+      />
   </div>
-
-  <ConfirmationModal
-    :show="showConfirmationModal"
-    title="Confirmar"
-    :message="ConfModalMessage"
-    confirm-text="Sí, continuar"
-    cancel-text="No, quedarme"
-    @confirm="handleConfirmationConfirm"
-    @cancel="handleConfirmationCancel"
-  />
-
-  <OkModal
-    :show="showSuccessModal"
-    title="Información"
-    :message="successMessage"
-    @close="handleModalClose"
-    :duration="1000"
-  />
 </template>
 
 <style scoped>
