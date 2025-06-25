@@ -10,7 +10,9 @@ import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
 import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue';
-import ScrollBar from '@/components/ScrollBar.vue'; // Import ScrollBar Component
+import ScrollBar from '@/components/ScrollBar.vue';
+import ConfirmationModal from '@/components/ConfirmationModal.vue';
+import ErrorModal from '@/components/ErrorModal.vue'; // Import ErrorModal
 
 const route = useRoute()
 const router = useRouter()
@@ -34,11 +36,16 @@ const currentDeleteAction = ref(null);
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 
+const showErrorModal = ref(false); // State for Error Modal
+const errorMessage = ref(''); // Message for Error Modal
+
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
 const showImageManagementModal = ref(false);
 const imageToDelete = ref(null);
+
+const showReactivateConfirmModal = ref(false); // State for Reactivate Confirmation Modal
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -55,7 +62,8 @@ async function fetchEventDetails() {
   loading.value = true;
   const token = localStorage.getItem('token')
   if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
     return
   }
 
@@ -72,7 +80,8 @@ async function fetchEventDetails() {
     eventDetails.value = response.data
   } catch (err) {
     console.error('Error fetching event details:', err.response?.data || err.message)
-    error.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`
+    errorMessage.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
     throw err;
   } finally {
     loading.value = false;
@@ -112,6 +121,8 @@ async function fetchEventImages() {
 
   } catch (err) {
     console.error('Error fetching event images:', err.response?.data || err.message);
+    errorMessage.value = `Error al cargar las imágenes del evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
     mainImage.value = DEFAULT_IMAGE_URL;
   } finally {
     loadingImages.value = false;
@@ -139,7 +150,8 @@ const showDeleteConfirmation = () => {
 const deleteEvent = async () => {
   const token = localStorage.getItem('token');
   if (!token) {
-    error.value = 'Token de autenticación no encontrado.';
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
     return;
   }
 
@@ -163,7 +175,8 @@ const deleteEvent = async () => {
 
   } catch (err) {
     console.error('Error deleting event:', err.response?.data || err.message);
-    error.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
+    errorMessage.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
   } finally {
     if (universalDeleteModalRef.value) {
       universalDeleteModalRef.value.hide();
@@ -176,10 +189,16 @@ const handleOkModalClose = () => {
   showOkModal.value = false;
 };
 
+const handleErrorModalClose = () => {
+  showErrorModal.value = false;
+  errorMessage.value = '';
+};
+
 async function fetchEventDetailsForEdit(idToEdit) {
   const token = localStorage.getItem('token');
   if (!token) {
-    error.value = 'Token de autenticación no encontrado.';
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
     return null;
   }
 
@@ -197,7 +216,8 @@ async function fetchEventDetailsForEdit(idToEdit) {
     return response.data;
   } catch (err) {
     console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
-    error.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`;
+    errorMessage.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
     return null;
   } finally {
     loading.value = false;
@@ -209,6 +229,8 @@ const handleEditButtonClick = () => {
     fetchEventDetailsForEdit(eventId.value);
   } else {
     console.error('Cannot edit: Event ID is not available.');
+    errorMessage.value = 'No se puede editar: El ID del evento no está disponible.';
+    showErrorModal.value = true;
   }
 };
 
@@ -230,7 +252,8 @@ const handleModalSubmit = async (emittedEventData) => {
 async function uploadFileToBackend(file, type = 'general') {
   const token = localStorage.getItem('token');
   if (!token) {
-    alert('Token de autenticación no encontrado. Por favor, inicie sesión.');
+    errorMessage.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+    showErrorModal.value = true;
     return null;
   }
 
@@ -251,7 +274,8 @@ async function uploadFileToBackend(file, type = 'general') {
     return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo };
   } catch (error) {
     console.error('Error uploading file to Archivos:', error.response?.data || error.message);
-    alert(`Error al subir la imagen: ${error.response?.data?.message || error.message}`);
+    errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`;
+    showErrorModal.value = true;
     return null;
   } finally {
   }
@@ -281,7 +305,8 @@ const confirmDeleteImage = async () => {
 
   const token = localStorage.getItem('token');
   if (!token) {
-    console.error('Token de autenticación no encontrado para eliminar imagen.');
+    errorMessage.value = 'Token de autenticación no encontrado para eliminar imagen.';
+    showErrorModal.value = true;
     return;
   }
 
@@ -307,7 +332,8 @@ const confirmDeleteImage = async () => {
 
   } catch (err) {
     console.error('Error deleting image:', err.response?.data || err.message);
-    error.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
+    errorMessage.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
   } finally {
     if (universalDeleteModalRef.value) {
       universalDeleteModalRef.value.hide();
@@ -315,6 +341,48 @@ const confirmDeleteImage = async () => {
     imageToDelete.value = null;
     isLoadingImagesInModal.value = false;
   }
+};
+
+const triggerReactivateEvent = () => {
+    showReactivateConfirmModal.value = true;
+};
+
+const handleReactivateConfirm = async () => {
+  showReactivateConfirmModal.value = false;
+  const token = localStorage.getItem('token');
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
+    return;
+  }
+
+  loading.value = true;
+  try {
+    await axios.put(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
+      { estado_borrado: false },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    okModalMessage.value = '¡El evento ha sido reactivado exitosamente!';
+    showOkModal.value = true;
+    await fetchEventDetails(); // Re-fetch details to update estado_borrado
+
+  } catch (err) {
+    console.error('Error reactivating event:', err.response?.data || err.message);
+    errorMessage.value = `Error al reactivar el evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleReactivateCancel = () => {
+  showReactivateConfirmModal.value = false;
 };
 
 const uploadNewImages = async (newFiles) => {
@@ -325,7 +393,8 @@ const uploadNewImages = async (newFiles) => {
 
   const token = localStorage.getItem('token');
   if (!token) {
-    console.error('Token de autenticación no encontrado para subir imágenes.');
+    errorMessage.value = 'Token de autenticación no encontrado para subir imágenes.';
+    showErrorModal.value = true;
     return;
   }
 
@@ -359,7 +428,8 @@ const uploadNewImages = async (newFiles) => {
             return true;
           } catch (linkError) {
             console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
-            error.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
+            errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
+            showErrorModal.value = true;
             return false;
           }
         }
@@ -371,13 +441,14 @@ const uploadNewImages = async (newFiles) => {
   const results = await Promise.all(uploadPromises);
   const allSucceeded = results.every(result => result === true);
 
-  if (allSucceeded) {
+  if (!allSucceeded) { // If any upload failed, show error
+    errorMessage.value = '¡Algunas imágenes no pudieron subirse o asociarse correctamente!';
+    showErrorModal.value = true;
+  } else {
     okModalMessage.value = '¡Imágenes subidas y asociadas al evento exitosamente!';
     eventImages.value = [...eventImages.value, ...newlyUploadedImages];
-  } else {
-    okModalMessage.value = '¡Algunas imágenes no pudieron subirse o asociarse correctamente!';
+    showOkModal.value = true;
   }
-  showOkModal.value = true;
 
   isLoadingImagesInModal.value = false;
 };
@@ -389,11 +460,14 @@ onMounted(async () => {
       await fetchEventDetails();
       await fetchEventImages();
     } else {
-      error.value = 'ID de evento no proporcionado.';
+      errorMessage.value = 'ID de evento no proporcionado.';
+      showErrorModal.value = true;
       mainImage.value = DEFAULT_IMAGE_URL;
     }
   } catch (e) {
     console.error("Error during initial event details load:", e);
+    errorMessage.value = `Error durante la carga inicial de detalles del evento: ${e.message}`;
+    showErrorModal.value = true;
     mainImage.value = DEFAULT_IMAGE_URL;
   }
 });
@@ -405,7 +479,8 @@ watch(
       loading.value = true;
       try {
         eventId.value = newId;
-        error.value = null;
+        errorMessage.value = '';
+        showErrorModal.value = false;
         eventDetails.value = null;
         eventImages.value = [];
         mainImage.value = DEFAULT_IMAGE_URL;
@@ -415,6 +490,8 @@ watch(
         await fetchEventImages();
       } catch (e) {
         console.error("Error during route param change load:", e);
+        errorMessage.value = `Error durante el cambio de ruta y carga de datos: ${e.message}`;
+        showErrorModal.value = true;
       } finally {
         loading.value = false;
       }
@@ -428,7 +505,7 @@ const goBack = () => {
 
 const formatDate = (dateString) => {
   if (!dateString) return '';
-  const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }; // Added hour and minute
+  const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     return 'Fecha inválida';
@@ -446,18 +523,18 @@ const formatDate = (dateString) => {
       <PageHeaderRoute :currentRouteName="route.name" :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'" />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <p v-if="error" class="error-text">{{ error }}</p>
-        <div class="container-fluid" v-else-if="eventDetails">
+        <!-- Removed old error display -->
+        <div class="container-fluid" v-if="eventDetails">
           <div class="d-flex align-items-center justify-content-between mb-4">
             <div class="d-flex align-items-center">
-              <button class="btn btn-secondary me-3" @click="goBack">
+              <button class="btn btn-secondary me-3 animated-btn" @click="goBack">
                 <i class="fas fa-arrow-left me-2"></i>Volver
               </button>
               <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
             </div>
             <div class="d-flex">
-                <button class="btn btn-primary btn-m me-2" @click="handleEditButtonClick">Editar</button>
-                <button class="btn btn-danger btn-m" @click="showDeleteConfirmation">
+                <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">Editar</button>
+                <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
                     <i class="fas fa-trash-alt me-2"></i>Eliminar
                 </button>
             </div>
@@ -483,7 +560,7 @@ const formatDate = (dateString) => {
                     </div>
                   </div>
                 </ScrollBar>
-                <button class="btn btn-primary add-image-plus-btn" @click="openImageManagementModal" title="Editar Imágenes">
+                <button class="btn btn-primary add-image-plus-btn animated-btn" @click="openImageManagementModal" title="Editar Imágenes">
                     <i class="fas fa-plus"></i>
                 </button>
               </div>
@@ -510,11 +587,9 @@ const formatDate = (dateString) => {
               </div>
 
               <div class="info-group">
-                <p class="info-label">Espacio donde se realizara el evento: </p>
+                <p class="info-label">Sede del evento</p>
                 <p class="info-content">{{ eventDetails.espacio }}</p>
               </div>
-
-
 
               <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
                 <div class="me-4">
@@ -527,7 +602,8 @@ const formatDate = (dateString) => {
                 </div>
               </div>
 
-              <button class="btn btn-success mb-4">Inscribirse</button>
+              <button v-if="eventDetails.inscripcionesAbiertas" class="btn btn-success mb-4 animated-btn">Inscribirse</button>
+              <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
             </div>
 
             <hr class="my-3">
@@ -550,6 +626,25 @@ const formatDate = (dateString) => {
                   <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
                 </div>
               </div>
+          </div>
+
+          <!-- New Section for Event Status and Reactivate Button -->
+          <div class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section">
+            <div class="d-flex align-items-center">
+              <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
+                <i class="fas fa-check-circle me-2"></i> Este evento está activo
+              </span>
+              <span v-else class="text-danger status-text">
+                <i class="fas fa-times-circle me-2"></i> El evento está desactivado
+              </span>
+            </div>
+            <button
+              v-if="eventDetails.estado_borrado"
+              class="btn btn-success animated-btn"
+              @click="triggerReactivateEvent"
+            >
+              Reactivar evento
+            </button>
           </div>
 
           <div class="mt-4">
@@ -690,6 +785,16 @@ const formatDate = (dateString) => {
     @upload-images="uploadNewImages"
   />
 
+  <ConfirmationModal
+    :show="showReactivateConfirmModal"
+    title="Reactivar Evento"
+    message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
+    confirmText="Sí, Reactivar"
+    cancelText="Cancelar"
+    @confirm="handleReactivateConfirm"
+    @cancel="handleReactivateCancel"
+  />
+
   <DeleteModal
     ref="universalDeleteModalRef"
     :title="modalTitle"
@@ -697,6 +802,12 @@ const formatDate = (dateString) => {
     :warning="modalWarning"
     :confirmButtonText="modalConfirmText"
     @confirmed="handleDeleteConfirmed"
+  />
+
+  <ErrorModal
+    :show="showErrorModal"
+    :message="errorMessage"
+    @close="handleErrorModalClose"
   />
 </template>
 
@@ -738,6 +849,14 @@ const formatDate = (dateString) => {
   object-fit: cover;
 }
 
+/* Base styles for all animated buttons */
+.animated-btn {
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+
 .btn-primary {
   background-color: #174384;
   border-color: #174384;
@@ -754,6 +873,25 @@ const formatDate = (dateString) => {
 .btn-danger:hover {
   background-color: #c82333;
   border-color: #bd2130;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+.btn-secondary:hover {
+  background-color: #5a6268;
+  border-color: #545b62;
 }
 
 .main-image-display {
@@ -842,12 +980,11 @@ const formatDate = (dateString) => {
     font-size: 1.2rem;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     z-index: 10;
-    transition: background-color 0.2s, box-shadow 0.2s;
+    transition: background-color 0.2s;
 }
 
 .add-image-plus-btn:hover {
-    background-color: #0d284a; /* Darker blue on hover */
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    background-color: #0d284a;
 }
 
 .error-text {
@@ -857,53 +994,51 @@ const formatDate = (dateString) => {
 
 /* Custom styles for the accordion */
 .accordion-button {
-  /* Collapsed state (default) */
-  background-color: #174384; /* Dark blue background */
-  color: #ffffff; /* White text */
+  background-color: #174384;
+  color: #ffffff;
   font-weight: 600;
-  border-bottom: 1px solid #14386b; /* Slightly darker border for contrast */
-  transition: background-color 0.2s ease, color 0.2s ease;
-  padding: 1rem 1.25rem; /* Standard Bootstrap padding */
+  border-bottom: 1px solid #14386b;
+  transition: all 0.2s ease, color 0.2s ease;
+  padding: 1rem 1.25rem;
 }
 
 .accordion-button:not(.collapsed) {
-  /* Expanded state */
-  background-color: #e0e7ff; /* Light blue background */
-  color: #174384; /* Dark blue text */
+  background-color: #e0e7ff;
+  color: #174384;
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.125);
 }
 
 .accordion-button:focus {
-  box-shadow: 0 0 0 0.25rem rgba(23, 67, 132, 0.25); /* Custom focus ring */
+  box-shadow: 0 0 0 0.25rem rgba(23, 67, 132, 0.25);
 }
 
 .accordion-button .accordion-indicator-icon {
   transition: transform 0.2s ease-in-out, color 0.2s ease;
-  color: #ffffff; /* Default color when collapsed (matches button text) */
+  color: #ffffff;
 }
 
 .accordion-button:not(.collapsed) .accordion-indicator-icon {
-  transform: rotate(90deg); /* Rotate icon when expanded */
-  color: #174384; /* Color when expanded (matches button text) */
+  transform: rotate(90deg);
+  color: #174384;
 }
 
 .accordion-button::after {
-    display: none; /* Hide Bootstrap's default arrow icon */
+    display: none;
 }
 
 
 .accordion-body {
   padding: 1.5rem;
-  background-color: #fdfdff; /* Very light background for body */
+  background-color: #fdfdff;
   border-top: 1px dashed #e0e0e0;
 }
 
 .accordion-item {
-  margin-bottom: 10px; /* Space between accordion items */
-  border: 1px solid #dcdcdc; /* Lighter border for overall item */
-  border-radius: 0.5rem; /* Rounded corners for accordion item */
-  overflow: hidden; /* Ensures rounded corners are visible */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Subtle shadow */
+  margin-bottom: 10px;
+  border: 1px solid #dcdcdc;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
 .accordion-item:first-of-type {
@@ -917,7 +1052,7 @@ const formatDate = (dateString) => {
 }
 
 .cronograma-activities-title {
-    color: #174384; /* Match primary brand color */
+    color: #174384;
     font-weight: 700;
     border-bottom: 2px solid #e0e7ff;
     padding-bottom: 5px;
@@ -925,30 +1060,30 @@ const formatDate = (dateString) => {
 }
 
 .list-group-item {
-    border-color: #f0f0f0; /* Lighter borders for list items */
-    padding-left: 0.5rem; /* Adjust padding for list items */
+    border-color: #f0f0f0;
+    padding-left: 0.5rem;
     font-size: 0.95rem;
     color: #495057;
 }
 
 .activity-icon {
-    color: #28a745; /* Green check icon */
+    color: #28a745;
 }
 
 /* Specific styles for nested accordion buttons */
 .nested-accordion-button {
-  background-color: #f0f5ff; /* Lighter blue for nested buttons */
-  color: #3730a3; /* Darker text for contrast */
+  background-color: #f0f5ff;
+  color: #3730a3;
   font-weight: 500;
 }
 
 .nested-accordion-button:not(.collapsed) {
-  background-color: #c3d9ff; /* Even lighter when expanded */
+  background-color: #c3d9ff;
   color: #174384;
 }
 
 .nested-accordion-button .nested-accordion-icon {
-  color: #3730a3; /* Icon color for nested buttons */
+  color: #3730a3;
   transition: transform 0.2s ease-in-out;
 }
 
@@ -958,46 +1093,68 @@ const formatDate = (dateString) => {
 }
 
 .nested-accordion-body {
-  background-color: #ffffff; /* White background for nested body */
+  background-color: #ffffff;
 }
 
 /* Styles for Custom Nav Pills */
 .custom-pills .nav-link {
-    border-radius: 0.5rem 0.5rem 0 0; /* Rounded top corners */
-    margin-right: 0.25rem; /* Small space between pills */
+    border-radius: 0.5rem 0.5rem 0 0;
+    margin-right: 0.25rem;
     padding: 0.75rem 1.5rem;
-    background-color: #e0e7ff; /* Light background for inactive tabs */
-    color: #174384; /* Text color for inactive tabs */
+    background-color: #e0e7ff;
+    color: #174384;
     font-weight: 600;
     transition: all 0.3s ease;
     border: 1px solid #c3d9ff;
-    border-bottom: none; /* No bottom border for active tab continuity */
+    border-bottom: none;
 }
 
 .custom-pills .nav-link:hover:not(.active) {
-    background-color: #d0e0ff; /* Slightly darker on hover */
+    background-color: #d0e0ff;
     color: #0d284a;
 }
 
 .custom-pills .nav-link.active {
-    background-color: #174384; /* Dark blue for active tab */
-    color: #ffffff; /* White text for active tab */
+    background-color: #174384;
+    color: #ffffff;
     border-color: #174384;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow for active tab */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .tab-content {
-    background-color: #ffffff; /* White background for tab content */
-    border: 1px solid #e0e7ff; /* Border around the entire tab content area */
-    border-radius: 0 0.5rem 0.5rem 0.5rem; /* Rounded bottom and right corners */
+    background-color: #ffffff;
+    border: 1px solid #e0e7ff;
+    border-radius: 0 0.5rem 0.5rem 0.5rem;
     padding: 1.5rem;
-    min-height: 200px; /* Minimum height for consistency */
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05); /* Subtle shadow for content area */
-    transition: all 0.3s ease; /* Smooth transition for tab content change */
+    min-height: 200px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
 }
 
 .custom-tab-content {
-  border: none !important; /* Remove card border if nested directly */
-  box-shadow: none !important; /* Remove card shadow if nested directly */
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* New styles for status section */
+.status-section {
+  background-color: #f8f9fa;
+  border-color: #e9ecef !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+}
+
+.status-text {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.text-success {
+  color: #28a745 !important;
+}
+
+.text-danger {
+  color: #dc3545 !important;
 }
 </style>

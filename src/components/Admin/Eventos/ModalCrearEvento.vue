@@ -39,7 +39,7 @@ const form = reactive({
   categoria_id: null,
   hayEquipos: 0,
   hayFormulario: false,
-  estado: 'activo',
+  estado: 'Creado',
   inscripcionesAbiertas: true
 });
 
@@ -283,7 +283,7 @@ const resetForm = () => {
     categoria_id: null,
     hayEquipos: 0,
     hayFormulario: false,
-    estado: 'activo',
+    estado: 'Creado',
     inscripcionesAbiertas: true
   });
   Object.assign(cronogramaForm, {
@@ -1437,8 +1437,9 @@ onMounted(async () => {
                 <div class="form-group half">
                   <select v-model="form.estado" required>
                     <option disabled value="">Seleccione un estado</option>
-                    <option value="activo">Activo</option>
-                    <option value="inactivo">Inactivo</option>
+                    <option value="En planeación">Planeación</option>
+                    <option value="En transcurso">Transcurso</option>
+                    <option value="Finalizado">Finalizado</option>
                   </select>
                   <label>Estado del Evento *</label>
                 </div>
