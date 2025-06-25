@@ -8,7 +8,8 @@ import LoaderComponent from '@/components/LoaderComponent.vue'
 import DefaultImage from '@/assets/banners/EventoConstruccion.png'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
-import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue' // Import the creation/edit modal
+import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
+import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'; // Double check this path!
 
 const route = useRoute()
 const router = useRouter()
@@ -16,7 +17,7 @@ const eventId = ref(null)
 const eventDetails = ref(null)
 const eventImages = ref([])
 const loading = ref(true)
-const loadingImages = ref(true)
+const loadingImages = ref(true) // Use this for image-specific operations
 const error = ref(null)
 
 const mainImage = ref('');
@@ -26,9 +27,13 @@ const deleteModalRef = ref(null);
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 
-// State for the edit modal (copied from EventsView logic)
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
+
+// NEW: Image Management Modal State
+const showImageManagementModal = ref(false);
+const imageToDelete = ref(null); // To store the image selected for deletion
+const deleteImageConfirmModalRef = ref(null); // Ref for the delete confirmation modal within image management
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -71,11 +76,11 @@ async function fetchEventDetails() {
 
 async function fetchEventImages() {
   loadingImages.value = true;
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token');
   if (!token) {
     loadingImages.value = false;
     mainImage.value = DEFAULT_IMAGE_URL;
-    return
+    return;
   }
 
   try {
@@ -87,39 +92,21 @@ async function fetchEventImages() {
           Authorization: `Bearer ${token}`,
         },
       }
-    )
+    );
 
-    const archivoLinks = eventArchivosResponse.data
-
-    const imagePromises = archivoLinks.map(async (link) => {
-      try {
-        const archivoResponse = await axios.get(
-          `${import.meta.env.VITE_URL_BACKEND}/api/archivos/${link.archivo_id}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
-        return archivoResponse.data
-      } catch (innerErr) {
-        console.error(`Error fetching archivo ${link.archivo_id}:`, innerErr.response?.data || innerErr.message)
-        return null
-      }
-    })
-
-    const fetchedImages = (await Promise.all(imagePromises)).filter(img => img !== null);
+    const fetchedImages = eventArchivosResponse.data;
     eventImages.value = fetchedImages;
 
     if (eventImages.value.length > 0) {
-      mainImage.value = eventImages.value[0].url;
+      if (!mainImage.value || !fetchedImages.some(img => img.url === mainImage.value)) {
+          mainImage.value = eventImages.value[0].url;
+      }
     } else {
       mainImage.value = DEFAULT_IMAGE_URL;
     }
 
   } catch (err) {
-    console.error('Error fetching event images:', err.response?.data || err.message)
+    console.error('Error fetching event images:', err.response?.data || err.message);
     mainImage.value = DEFAULT_IMAGE_URL;
   } finally {
     loadingImages.value = false;
@@ -172,7 +159,6 @@ const handleOkModalClose = () => {
   showOkModal.value = false;
 };
 
-// --- Edit Event Logic (Adapted from EventsView) ---
 async function fetchEventDetailsForEdit(idToEdit) {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -180,8 +166,6 @@ async function fetchEventDetailsForEdit(idToEdit) {
     return null;
   }
 
-  // Use a separate loading state or manage the main one carefully if it affects rendering
-  // For simplicity, we'll use the main 'loading' here.
   loading.value = true;
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`, {
@@ -204,7 +188,6 @@ async function fetchEventDetailsForEdit(idToEdit) {
 }
 
 const handleEditButtonClick = () => {
-  // Pass the current eventId to the fetch function
   if (eventId.value) {
     fetchEventDetailsForEdit(eventId.value);
   } else {
@@ -214,21 +197,175 @@ const handleEditButtonClick = () => {
 
 const handleModalClose = () => {
   showCreateEditModal.value = false;
-  currentEventToEdit.value = null; // Clear event data when modal closes
+  currentEventToEdit.value = null;
 };
 
 const handleModalSubmit = async (emittedEventData) => {
   showCreateEditModal.value = false;
   currentEventToEdit.value = null;
 
-  // After edit/create, refresh the event details on the page
-  // The eventId is already available from the route params
   if (eventId.value) {
-    await fetchEventDetails(); // Re-fetch the current event's details
-    await fetchEventImages(); // Re-fetch images in case they changed
+    await fetchEventDetails();
+    await fetchEventImages();
   }
 };
-// --- End Edit Event Logic ---
+
+// --- NEW/UPDATED: Image Management Logic ---
+// This function handles the actual file upload to the /api/archivos/upload endpoint
+// It now explicitly expects 'type' argument for consistency with how it was used previously
+async function uploadFileToBackend(file, type = 'general') { // Added default type
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Token de autenticación no encontrado. Por favor, inicie sesión.');
+    return null;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  // Backend's `storeFile` doesn't strictly use 'name' from formData for filename, but keeps it for context
+  formData.append('name', file.name.split('.')[0]);
+  formData.append('tipo', type); // Pass type for consistency, though backend uses file's own extension
+
+  loadingImages.value = true; // Use loadingImages for image upload
+  try {
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    console.log('File uploaded to Archivos:', response.data);
+    return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo };
+  } catch (error) {
+    console.error('Error uploading file to Archivos:', error.response?.data || error.message);
+    alert(`Error al subir la imagen: ${error.response?.data?.message || error.message}`);
+    return null;
+  } finally {
+    loadingImages.value = false;
+  }
+}
+
+
+const openImageManagementModal = () => {
+  showImageManagementModal.value = true;
+};
+
+const closeImageManagementModal = () => {
+  showImageManagementModal.value = false;
+  fetchEventImages(); // Re-fetch images to ensure the main view is updated with any changes
+};
+
+const triggerDeleteImage = (image) => {
+  imageToDelete.value = image;
+  if (deleteImageConfirmModalRef.value) {
+    deleteImageConfirmModalRef.value.show();
+  }
+};
+
+const confirmDeleteImage = async () => {
+  if (!imageToDelete.value) return;
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('Token de autenticación no encontrado para eliminar imagen.');
+    return;
+  }
+
+  loadingImages.value = true;
+  try {
+    // This API call assumes 'imageToDelete.value.id' is the ID of the 'archivos_eventos' pivot record.
+    await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento/${imageToDelete.value.id}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    okModalMessage.value = '¡Imagen eliminada exitosamente!';
+    showOkModal.value = true;
+
+    await fetchEventImages(); // Refresh images after deletion
+
+  } catch (err) {
+    console.error('Error deleting image:', err.response?.data || err.message);
+    error.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
+  } finally {
+    if (deleteImageConfirmModalRef.value) {
+      deleteImageConfirmModalRef.value.hide();
+    }
+    imageToDelete.value = null;
+    loadingImages.value = false;
+  }
+};
+
+const uploadNewImages = async (newFiles) => {
+  if (!newFiles || newFiles.length === 0) {
+    console.warn('No files selected for upload.');
+    return;
+  }
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('Token de autenticación no encontrado para subir imágenes.');
+    return;
+  }
+
+  loadingImages.value = true;
+  const uploadPromises = [];
+
+  for (const file of newFiles) {
+    uploadPromises.push(
+      (async () => {
+        // Upload file to Archivos table first
+        const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general'); // Pass file type
+        if (uploadedArchivo) {
+          // Then link the uploaded archivo to the event
+          try {
+            await axios.post(
+              `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`, // This endpoint is crucial for linking
+              {
+                archivo_id: uploadedArchivo.id,
+                evento_id: eventId.value,
+                url: uploadedArchivo.url, // Send url if the backend requires it for the link table
+                tipo: uploadedArchivo.tipo // Include type if your pivot table needs it
+              },
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+            console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}`);
+            return true; // Indicate success for this file
+          } catch (linkError) {
+            console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
+            error.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
+            return false; // Indicate failure for this file
+          }
+        }
+        return false; // Upload failed
+      })()
+    );
+  }
+
+  const results = await Promise.all(uploadPromises);
+  const allSucceeded = results.every(result => result === true);
+
+  if (allSucceeded) {
+    okModalMessage.value = '¡Imágenes subidas y asociadas al evento exitosamente!';
+  } else {
+    okModalMessage.value = '¡Algunas imágenes no pudieron subirse o asociarse correctamente!';
+  }
+  showOkModal.value = true;
+
+  await fetchEventImages(); // Re-fetch all images to update the display
+
+  loadingImages.value = false;
+};
 
 
 onMounted(async () => {
@@ -329,6 +466,9 @@ const formatDate = (dateString) => {
                   >
                     <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
                   </div>
+                  <button class="btn btn-secondary mt-3 w-100" @click="openImageManagementModal">
+                    Editar Imágenes
+                  </button>
                 </div>
               </div>
               <div class="flex-grow-1 main-image-display">
@@ -425,13 +565,6 @@ const formatDate = (dateString) => {
     </div>
   </div>
 
-  <DeleteModal
-    ref="deleteModalRef"
-    message="¿Estás seguro de que quieres eliminar este evento?"
-    warning="Esta acción es irreversible y eliminará permanentemente el evento y todos sus datos asociados."
-    confirmButtonText="Sí, Eliminar Evento"
-    @confirmed="deleteEvent"
-  />
 
   <OkModal
     :show="showOkModal"
@@ -445,7 +578,24 @@ const formatDate = (dateString) => {
     @close="handleModalClose"
     @submit="handleModalSubmit"
   />
+
+  <ImageManagementModal
+    :show="showImageManagementModal"
+    :currentImages="eventImages"
+    @close="closeImageManagementModal"
+    @delete-image="triggerDeleteImage"
+    @upload-images="uploadNewImages"
+  />
+
+  <DeleteModal
+    ref="deleteImageConfirmModalRef"
+    message="¿Estás seguro de que quieres eliminar esta imagen?"
+    warning="Esta acción es irreversible y eliminará permanentemente la imagen del evento."
+    confirmButtonText="Sí, Eliminar Imagen"
+    @confirmed="confirmDeleteImage"
+  />
 </template>
+
 
 <style scoped>
 /* Your existing styles remain here */
