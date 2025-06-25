@@ -35,6 +35,7 @@ watch(
   <Transition name="fade">
     <div v-if="show" class="mini-modal-overlay">
       <div class="mini-modal-content">
+        <button class="close-button" @click="emit('close')">&times;</button>
         <div class="error-icon-circle">
           <i class="error-icon fas fa-times"></i>
         </div>
@@ -61,6 +62,7 @@ watch(
 }
 
 .mini-modal-content {
+  position: relative;
   background: white;
   padding: 30px;
   border-radius: 10px;
@@ -133,5 +135,21 @@ watch(
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.close-button {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.close-button:hover {
+  color: #dc3545;
 }
 </style>
