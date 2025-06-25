@@ -123,7 +123,7 @@ const closeModal = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1050;
+  z-index: 10;
 }
 
 .modal-dialog {
