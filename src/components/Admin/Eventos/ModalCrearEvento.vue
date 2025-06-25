@@ -24,7 +24,7 @@ const props = defineProps({
   },
 });
 
-const emit = emit => ['close', 'submit']
+const emit = defineEmits(['close', 'submit'])
 
 const form = reactive({
   id: null,

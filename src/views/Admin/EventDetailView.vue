@@ -6,7 +6,7 @@ import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DefaultImage from '@/assets/banners/EventoConstruccion.png'
-import DeleteModal from '@/components/DeleteModal.vue'
+import DeleteModal from '@/components/DeleteModal.vue' // Single DeleteModal import
 import OkModal from '@/components/OkModal.vue'
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
 import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'; // Double check this path!
@@ -17,23 +17,27 @@ const eventId = ref(null)
 const eventDetails = ref(null)
 const eventImages = ref([])
 const loading = ref(true)
-const loadingImages = ref(true) // Use this for image-specific operations
-const error = ref(null)
+const loadingImages = ref(true)
 
 const mainImage = ref('');
 const DEFAULT_IMAGE_URL = DefaultImage;
 
-const deleteModalRef = ref(null);
+// Refs and state for the single reusable DeleteModal
+const universalDeleteModalRef = ref(null);
+const modalTitle = ref('');
+const modalMessage = ref('');
+const modalWarning = ref('');
+const modalConfirmText = ref('');
+const currentDeleteAction = ref(null); // 'deleteEvent' or 'deleteImage'
+
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
-// NEW: Image Management Modal State
 const showImageManagementModal = ref(false);
 const imageToDelete = ref(null); // To store the image selected for deletion
-const deleteImageConfirmModalRef = ref(null); // Ref for the delete confirmation modal within image management
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -113,10 +117,25 @@ async function fetchEventImages() {
   }
 }
 
+// Universal handler for when any DeleteModal confirms
+const handleDeleteConfirmed = async () => {
+    if (currentDeleteAction.value === 'deleteEvent') {
+        await deleteEvent();
+    } else if (currentDeleteAction.value === 'deleteImage') {
+        await confirmDeleteImage();
+    }
+    // Reset action after handling
+    currentDeleteAction.value = null;
+};
+
+// Function to show the main event deletion confirmation modal
 const showDeleteConfirmation = () => {
-  if (deleteModalRef.value) {
-    deleteModalRef.value.show();
-  }
+    modalTitle.value = 'Confirmar Eliminación de Evento';
+    modalMessage.value = '¿Estás seguro de que quieres eliminar este evento?';
+    modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente el evento, incluyendo todos sus cronogramas y actividades.';
+    modalConfirmText.value = 'Sí, Eliminar Evento';
+    currentDeleteAction.value = 'deleteEvent';
+    universalDeleteModalRef.value.show();
 };
 
 const deleteEvent = async () => {
@@ -148,8 +167,8 @@ const deleteEvent = async () => {
     console.error('Error deleting event:', err.response?.data || err.message);
     error.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
   } finally {
-    if (deleteModalRef.value) {
-      deleteModalRef.value.hide();
+    if (universalDeleteModalRef.value) {
+      universalDeleteModalRef.value.hide();
     }
     loading.value = false;
   }
@@ -210,10 +229,7 @@ const handleModalSubmit = async (emittedEventData) => {
   }
 };
 
-// --- NEW/UPDATED: Image Management Logic ---
-// This function handles the actual file upload to the /api/archivos/upload endpoint
-// It now explicitly expects 'type' argument for consistency with how it was used previously
-async function uploadFileToBackend(file, type = 'general') { // Added default type
+async function uploadFileToBackend(file, type = 'general') {
   const token = localStorage.getItem('token');
   if (!token) {
     alert('Token de autenticación no encontrado. Por favor, inicie sesión.');
@@ -222,11 +238,10 @@ async function uploadFileToBackend(file, type = 'general') { // Added default ty
 
   const formData = new FormData();
   formData.append('file', file);
-  // Backend's `storeFile` doesn't strictly use 'name' from formData for filename, but keeps it for context
   formData.append('name', file.name.split('.')[0]);
-  formData.append('tipo', type); // Pass type for consistency, though backend uses file's own extension
+  formData.append('tipo', type);
 
-  loadingImages.value = true; // Use loadingImages for image upload
+  loadingImages.value = true;
   try {
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
       headers: {
@@ -252,14 +267,18 @@ const openImageManagementModal = () => {
 
 const closeImageManagementModal = () => {
   showImageManagementModal.value = false;
-  fetchEventImages(); // Re-fetch images to ensure the main view is updated with any changes
+  fetchEventImages();
 };
 
+// Function to trigger image deletion confirmation modal
 const triggerDeleteImage = (image) => {
-  imageToDelete.value = image;
-  if (deleteImageConfirmModalRef.value) {
-    deleteImageConfirmModalRef.value.show();
-  }
+    imageToDelete.value = image;
+    modalTitle.value = 'Confirmar Eliminación de Imagen';
+    modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?';
+    modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente la imagen del evento.';
+    modalConfirmText.value = 'Sí, Eliminar Imagen';
+    currentDeleteAction.value = 'deleteImage';
+    universalDeleteModalRef.value.show();
 };
 
 const confirmDeleteImage = async () => {
@@ -273,7 +292,6 @@ const confirmDeleteImage = async () => {
 
   loadingImages.value = true;
   try {
-    // This API call assumes 'imageToDelete.value.id' is the ID of the 'archivos_eventos' pivot record.
     await axios.delete(
       `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento/${imageToDelete.value.id}`,
       {
@@ -287,14 +305,14 @@ const confirmDeleteImage = async () => {
     okModalMessage.value = '¡Imagen eliminada exitosamente!';
     showOkModal.value = true;
 
-    await fetchEventImages(); // Refresh images after deletion
+    await fetchEventImages();
 
   } catch (err) {
     console.error('Error deleting image:', err.response?.data || err.message);
     error.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
   } finally {
-    if (deleteImageConfirmModalRef.value) {
-      deleteImageConfirmModalRef.value.hide();
+    if (universalDeleteModalRef.value) {
+      universalDeleteModalRef.value.hide();
     }
     imageToDelete.value = null;
     loadingImages.value = false;
@@ -319,18 +337,16 @@ const uploadNewImages = async (newFiles) => {
   for (const file of newFiles) {
     uploadPromises.push(
       (async () => {
-        // Upload file to Archivos table first
-        const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general'); // Pass file type
+        const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general');
         if (uploadedArchivo) {
-          // Then link the uploaded archivo to the event
           try {
             await axios.post(
-              `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`, // This endpoint is crucial for linking
+              `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
               {
                 archivo_id: uploadedArchivo.id,
                 evento_id: eventId.value,
-                url: uploadedArchivo.url, // Send url if the backend requires it for the link table
-                tipo: uploadedArchivo.tipo // Include type if your pivot table needs it
+                url: uploadedArchivo.url,
+                tipo: uploadedArchivo.tipo
               },
               {
                 headers: {
@@ -340,14 +356,14 @@ const uploadNewImages = async (newFiles) => {
               }
             );
             console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}`);
-            return true; // Indicate success for this file
+            return true;
           } catch (linkError) {
             console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
             error.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
-            return false; // Indicate failure for this file
+            return false;
           }
         }
-        return false; // Upload failed
+        return false;
       })()
     );
   }
@@ -362,7 +378,7 @@ const uploadNewImages = async (newFiles) => {
   }
   showOkModal.value = true;
 
-  await fetchEventImages(); // Re-fetch all images to update the display
+  await fetchEventImages();
 
   loadingImages.value = false;
 };
@@ -587,12 +603,14 @@ const formatDate = (dateString) => {
     @upload-images="uploadNewImages"
   />
 
+  <!-- Single reusable DeleteModal -->
   <DeleteModal
-    ref="deleteImageConfirmModalRef"
-    message="¿Estás seguro de que quieres eliminar esta imagen?"
-    warning="Esta acción es irreversible y eliminará permanentemente la imagen del evento."
-    confirmButtonText="Sí, Eliminar Imagen"
-    @confirmed="confirmDeleteImage"
+    ref="universalDeleteModalRef"
+    :title="modalTitle"
+    :message="modalMessage"
+    :warning="modalWarning"
+    :confirmButtonText="modalConfirmText"
+    @confirmed="handleDeleteConfirmed"
   />
 </template>
 
