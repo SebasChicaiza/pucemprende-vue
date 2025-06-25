@@ -24,7 +24,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['close', 'submit'])
+const emit = emit => ['close', 'submit']
 
 const form = reactive({
   id: null,
@@ -95,10 +95,9 @@ const editingActividadTempId = ref(null);
 const deletedCronogramaIds = ref(new Set());
 const deletedActivityIds = ref(new Set());
 
-// New reactive state for handling dynamic confirmation actions
 const confirmationActionType = ref('');
 const confirmationActionPayload = ref(null);
-let confirmationResolver = null; // To hold the promise resolve function
+let confirmationResolver = null;
 
 
 const isEditing = computed(() => form.id !== null);
@@ -136,7 +135,6 @@ async function showTimedErrorMessage(message, duration = 4000) {
   await new Promise(resolve => setTimeout(resolve, duration + 100));
 }
 
-// Unified function to prompt confirmation
 async function confirmAction(message, actionType, payload = null) {
   ConfModalMessage.value = message;
   confirmationActionType.value = actionType;
@@ -148,14 +146,12 @@ async function confirmAction(message, actionType, payload = null) {
   });
 }
 
-// Stable functions called by the ConfirmationModal
 const handleConfirmationConfirm = async () => {
   showConfirmationModal.value = false;
   if (confirmationResolver) {
     confirmationResolver(true);
-    confirmationResolver = null; // Clear resolver
+    confirmationResolver = null;
   }
-  // Execute logic based on action type
   if (confirmationActionType.value === 'closeModal') {
     clearLocalStorage();
     emit('close');
@@ -167,7 +163,6 @@ const handleConfirmationConfirm = async () => {
   } else if (confirmationActionType.value === 'finalSave') {
     await processFinalSave();
   }
-  // Reset action type and payload after handling
   confirmationActionType.value = '';
   confirmationActionPayload.value = null;
 };
@@ -178,7 +173,6 @@ const handleConfirmationCancel = () => {
     confirmationResolver(false);
     confirmationResolver = null;
   }
-  // Reset action type and payload after handling
   confirmationActionType.value = '';
   confirmationActionPayload.value = null;
 };
@@ -189,11 +183,10 @@ const promptCloseConfirmation = async () => {
     'closeModal'
   );
   if (confirmed) {
-    // Logic already handled by handleConfirmationConfirm for 'closeModal'
   }
 };
 
-const isTabCompleted = (tabName) => {
+const isTabCompleted = tabName => {
   const activeIndex = tabOrder.value.indexOf(activeTab.value);
   const tabIndex = tabOrder.value.indexOf(tabName);
   return tabIndex < activeIndex;
@@ -218,7 +211,6 @@ function testLoading() {
   loading.value = true
   setTimeout(() => {
     loading.value = false
-    console.log('Simulación completada.')
   }, 10000)
 }
 
@@ -328,7 +320,7 @@ watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore
   saveToLocalStorage();
 }, { deep: true });
 
-watch(() => props.show, (newVal) => {
+watch(() => props.show, newVal => {
   if (!newVal) {
     resetForm();
     clearLocalStorage();
@@ -337,12 +329,12 @@ watch(() => props.show, (newVal) => {
   }
 });
 
-watch(() => props.eventData, (newEventData) => {
+watch(() => props.eventData, newEventData => {
   if (newEventData) {
     console.log('newEventData received in ModalCrearEvento:', newEventData);
 
     const foundCategory = categorias.value.find(
-      (cat) => cat.nombre === newEventData.categoria
+      cat => cat.nombre === newEventData.categoria
     );
 
     let categoryIdToAssign = null;
@@ -893,19 +885,17 @@ async function handleCronogramaSubmit() {
   }
 
   if (editingCronogramaTempId.value) {
-    // Editing existing cronograma
     const index = cronogramas.value.findIndex(c => c.tempId === editingCronogramaTempId.value);
     if (index !== -1) {
       Object.assign(cronogramas.value[index], {
         ...JSON.parse(JSON.stringify(cronogramaForm)),
-        tempId: editingCronogramaTempId.value, // Keep the same tempId/id
-        _edited: true, // Mark as edited
+        tempId: editingCronogramaTempId.value,
+        _edited: true,
       });
       await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaForm.titulo}</strong>" actualizado en el borrador.`);
     }
-    editingCronogramaTempId.value = null; // Clear editing state
+    editingCronogramaTempId.value = null;
   } else {
-    // Adding new cronograma
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     cronogramas.value.push({
       ...JSON.parse(JSON.stringify(cronogramaForm)),
@@ -935,19 +925,24 @@ function cancelEditCronograma() {
 function editCronograma(cronograma) {
   Object.assign(cronogramaForm, JSON.parse(JSON.stringify(cronograma)));
   editingCronogramaTempId.value = cronograma.tempId;
-  // Ensure the date inputs are correctly formatted for display
   cronogramaForm.fecha_inicio = new Date(cronograma.fecha_inicio).toISOString().slice(0, 16);
   cronogramaForm.fecha_fin = new Date(cronograma.fecha_fin).toISOString().slice(0, 16);
   saveToLocalStorage();
 }
 
 async function deleteCronograma(tempId) {
+  const cronogramaToDelete = cronogramas.value.find(c => c.tempId === tempId);
+
+  if (cronogramaToDelete && cronogramaToDelete.actividades.length > 0) {
+    await showTimedErrorMessage('Para eliminar este cronograma, primero debes eliminar todas sus actividades asociadas.');
+    return;
+  }
+
   const confirmed = await confirmAction(
     "¿Estás seguro de que quieres eliminar este cronograma? Esta acción es irreversible.",
     'deleteCronograma',
     tempId
   );
-  // Logic executed in handleConfirmationConfirm if confirmed
 }
 
 async function performDeleteCronograma(tempId) {
@@ -959,17 +954,14 @@ async function performDeleteCronograma(tempId) {
       deletedCronogramaIds.value.add(cronogramaToDelete.id);
     }
 
-    // Mark all its activities for deletion if they have real IDs
     cronogramaToDelete.actividades.forEach(activity => {
       if (activity.id) {
         deletedActivityIds.value.add(activity.id);
       }
     });
 
-    // Remove the cronograma from the reactive array immediately
     cronogramas.value.splice(index, 1);
 
-    // Re-order remaining cronogramas (and mark them as edited if they have an ID)
     cronogramas.value.forEach((c, i) => {
         c.orden = i + 1;
         if (c.id) {
@@ -980,7 +972,6 @@ async function performDeleteCronograma(tempId) {
     await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaToDelete.titulo}</strong>" y sus actividades eliminados del borrador.`);
     saveToLocalStorage();
 
-    // Reset the actividadForm's cronograma_id if the selected cronograma was deleted
     if (actividadForm.cronograma_id === tempId) {
         actividadForm.cronograma_id = cronogramas.value.length > 0 ? cronogramas.value[0].tempId : '';
     }
@@ -1054,20 +1045,18 @@ async function handleActividadAdd() {
   }
 
   if (editingActividadTempId.value) {
-    // Editing existing activity
     const index = parentCronograma.actividades.findIndex(a => a.tempId === editingActividadTempId.value);
     if (index !== -1) {
       Object.assign(parentCronograma.actividades[index], {
         ...JSON.parse(JSON.stringify(actividadForm)),
-        tempId: editingActividadTempId.value, // Keep the same tempId/id
-        _edited: true, // Mark as edited
+        tempId: editingActividadTempId.value,
+        _edited: true,
       });
       parentCronograma.actividades.sort((a,b) => a.orden - b.orden);
       await showTimedSuccessMessage(`Actividad "<strong>${actividadForm.titulo}</strong>" actualizada en el borrador.`);
     }
-    editingActividadTempId.value = null; // Clear editing state
+    editingActividadTempId.value = null;
   } else {
-    // Adding new activity
     const newOrder = parentCronograma.actividades.length > 0 ?
       Math.max(...parentCronograma.actividades.map(a => a.orden || 0)) + 1 : 1;
 
@@ -1123,7 +1112,6 @@ async function deleteActividad(cronogramaTempId, actividadTempId) {
     'deleteActividad',
     { cronogramaTempId, actividadTempId }
   );
-  // Logic executed in handleConfirmationConfirm if confirmed
 }
 
 async function performDeleteActividad(cronogramaTempId, actividadTempId) {
@@ -1135,9 +1123,8 @@ async function performDeleteActividad(cronogramaTempId, actividadTempId) {
       if (activityToDelete.id) {
         deletedActivityIds.value.add(activityToDelete.id);
       }
-      parentCronograma.actividades.splice(index, 1); // Remove from array immediately
+      parentCronograma.actividades.splice(index, 1);
 
-      // Re-order remaining activities visually and mark edited if they have an ID
       parentCronograma.actividades.forEach((act, i) => {
         act.orden = i + 1;
         if (act.id) {
@@ -1197,7 +1184,7 @@ function getDependenciaDisplayText(act, cronogramaTempId) {
   }
 }
 
-const formatDisplayDateTime = (isoString) => {
+const formatDisplayDateTime = isoString => {
   if (!isoString) return '';
   const date = new Date(isoString);
   const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
@@ -1211,18 +1198,16 @@ async function handleSaveButtonClick() {
     '¿Deseas guardar la configuración actual de todas las actividades asociadas a tus cronogramas? Esta acción consolidará los cambios.',
     'finalSave'
   );
-  // Logic executed in handleConfirmationConfirm if confirmed
 }
 
 async function processFinalSave() {
   try {
     loading.value = true;
 
-    // --- 1. Validate Dates Before Any API Calls ---
     const eventStartDate = new Date(form.fecha_inicio);
     const eventEndDate = new Date(form.fecha_fin);
 
-    for (const cronograma of cronogramas.value) { // Iterate through all current cronogramas (not deleted locally)
+    for (const cronograma of cronogramas.value) {
       const cronogramaStartDate = new Date(cronograma.fecha_inicio);
       const cronogramaEndDate = new Date(cronograma.fecha_fin);
 
@@ -1232,7 +1217,7 @@ async function processFinalSave() {
         return;
       }
 
-      for (const activity of cronograma.actividades) { // Iterate through all activities in current cronogramas
+      for (const activity of cronograma.actividades) {
         const activityStartDate = new Date(activity.fecha_inicio);
         const activityEndDate = new Date(activity.fecha_fin);
 
@@ -1244,7 +1229,6 @@ async function processFinalSave() {
       }
     }
 
-    // --- 2. Update/Create Main Event Data ---
     const eventPayload = {
       ...JSON.parse(JSON.stringify(form)),
       hayEquipos: Number(form.hayEquipos),
@@ -1258,9 +1242,7 @@ async function processFinalSave() {
     loading.value = false;
     await showTimedSuccessMessage(isEditing.value ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
-    // --- 3. Handle Image Uploads/Linking (Only for new events for now) ---
-    // This logic is simplified; in a full app, you'd also handle deleted images and updates
-    if (!isEditing.value) { // Only upload/link images for new events
+    if (!isEditing.value) {
       const allImagesToLink = [];
 
       if (coverImage.file) {
@@ -1273,8 +1255,6 @@ async function processFinalSave() {
           await showTimedSuccessMessage('Cover del evento cargada');
         }
       } else if (coverImage.id) {
-        // If there's an existing cover image ID but no new file, it's already linked
-        // allImagesToLink.push(coverImage.id); // No need to relink if it's already there
       }
 
       for (const img of additionalImages.value) {
@@ -1288,8 +1268,6 @@ async function processFinalSave() {
             await showTimedSuccessMessage(`Imagen adicional del evento "${img.file.name}" cargada.`);
           }
         } else if (img.id) {
-          // If there's an existing additional image ID but no new file, it's already linked
-          // allImagesToLink.push(img.id); // No need to relink if it's already there
         }
       }
 
@@ -1304,32 +1282,29 @@ async function processFinalSave() {
       }
     }
 
-    // --- 4. Process Deletions (Chronograms and Activities) ---
-    for (const cronoId of deletedCronogramaIds.value) {
-      await deleteCronogramaBackend(cronoId);
-      await showTimedSuccessMessage(`Cronograma (ID: ${cronoId}) eliminado del servidor.`);
-    }
-    deletedCronogramaIds.value.clear();
-
+    // --- Process Deletions: Activities BEFORE Chronograms ---
     for (const actId of deletedActivityIds.value) {
       await deleteActividadBackend(actId);
       await showTimedSuccessMessage(`Actividad (ID: ${actId}) eliminada del servidor.`);
     }
     deletedActivityIds.value.clear();
 
+    for (const cronoId of deletedCronogramaIds.value) {
+      await deleteCronogramaBackend(cronoId);
+      await showTimedSuccessMessage(`Cronograma (ID: ${cronoId}) eliminado del servidor.`);
+    }
+    deletedCronogramaIds.value.clear();
 
-    // --- 5. Process Chronograms (Create or Update) ---
-    for (const cronograma of cronogramas.value) { // Iterate through the current, non-deleted list
+
+    for (const cronograma of cronogramas.value) {
       let createdOrUpdatedCronograma = null;
       if (cronograma.id && cronograma._edited) {
-        // Update existing cronograma if it was edited
         loading.value = true;
         createdOrUpdatedCronograma = await updateCronograma(cronograma);
-        cronograma._edited = false; // Reset edited flag after successful update
+        cronograma._edited = false;
         loading.value = false;
         await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" actualizado con éxito.`);
       } else if (!cronograma.id) {
-        // Create new cronograma
         loading.value = true;
         createdOrUpdatedCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
         cronograma.id = createdOrUpdatedCronograma.id;
@@ -1337,10 +1312,9 @@ async function processFinalSave() {
         loading.value = false;
         await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" creado con éxito.`);
       } else {
-        createdOrUpdatedCronograma = cronograma; // Already exists, not edited, just use its data for children
+        createdOrUpdatedCronograma = cronograma;
       }
 
-      // --- 6. Process Activities within this Chronogram (Create or Update) ---
       if (createdOrUpdatedCronograma && cronograma.actividades && cronograma.actividades.length > 0) {
         const sortedActivities = cronograma.actividades.slice().sort((a, b) => a.orden - b.orden);
 
@@ -1349,25 +1323,22 @@ async function processFinalSave() {
           let dependencyIdToSend = null;
           if (i > 0) {
             const previousActivityInOrder = sortedActivities[i - 1];
-            // Ensure previous activity has a real ID if it was just created/updated
             dependencyIdToSend = previousActivityInOrder.id;
           }
 
           if (activity.id && activity._edited) {
-            // Update existing activity if it was edited
             loading.value = true;
-            activity.cronograma_id = createdOrUpdatedCronograma.id; // Ensure correct parent ID for update
-            activity.dependencia_id = dependencyIdToSend; // Update dependency based on new real IDs
+            activity.cronograma_id = createdOrUpdatedCronograma.id;
+            activity.dependencia_id = dependencyIdToSend;
             await updateActividadBackend(activity);
-            activity._edited = false; // Reset edited flag
+            activity._edited = false;
             loading.value = false;
             await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" actualizada con éxito.`);
           } else if (!activity.id) {
-            // Create new activity
             const activityPayload = {
               ...JSON.parse(JSON.stringify(activity)),
               cronograma_id: createdOrUpdatedCronograma.id,
-              dependencia_id: dependencyIdToSend, // Set dependency for new activity
+              dependencia_id: dependencyIdToSend,
             };
             loading.value = true;
             const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
@@ -1403,7 +1374,6 @@ onMounted(async () => {
   }
 });
 </script>
-
 
 <template>
   <div v-if="show" class="modal-overlay" @click.self="promptCloseConfirmation">
