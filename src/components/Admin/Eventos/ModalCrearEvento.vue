@@ -4,7 +4,7 @@ import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
 import ScrollBar from '@/components/ScrollBar.vue'
 import OkModal from '@/components/OkModal.vue'
-import ErrorModal from '@/components/ErrorModal.vue'; // New import
+import ErrorModal from '@/components/ErrorModal.vue';
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import axios from 'axios';
 
@@ -74,8 +74,8 @@ const ConfModalMessage = ref('');
 const showSuccessModal = ref(false);
 const successMessage = ref('');
 
-const showErrorModal = ref(false); // New reactive variable
-const errorMessage = ref(''); // New reactive variable
+const showErrorModal = ref(false);
+const errorMessage = ref('');
 
 const coverInput = ref(null);
 const additionalInput = ref(null);
@@ -87,8 +87,16 @@ const additionalImages = ref([]);
 const addingActividad = ref(false);
 const reorderingActividades = ref(false);
 
-
 const isClosingModal = ref(false);
+
+// New state for editing
+const editingCronogramaTempId = ref(null);
+const editingActividadTempId = ref(null);
+
+// New sets for tracking deleted items with actual backend IDs
+const deletedCronogramaIds = ref(new Set());
+const deletedActivityIds = ref(new Set());
+
 
 const isEditing = computed(() => form.id !== null);
 
@@ -108,7 +116,7 @@ const handleModalClose = () => {
   successMessage.value = '';
 };
 
-const handleErrorModalClose = () => { // New function
+const handleErrorModalClose = () => {
   showErrorModal.value = false;
   errorMessage.value = '';
 };
@@ -119,7 +127,7 @@ async function showTimedSuccessMessage(message, duration = 1000) {
   await new Promise(resolve => setTimeout(resolve, duration + 100));
 }
 
-async function showTimedErrorMessage(message, duration = 4000) { // New function
+async function showTimedErrorMessage(message, duration = 4000) {
   errorMessage.value = message;
   showErrorModal.value = true;
   await new Promise(resolve => setTimeout(resolve, duration + 100));
@@ -156,7 +164,7 @@ function testLoading() {
   loading.value = true
   setTimeout(() => {
     loading.value = false
-    console.log('✅ Simulación completada.')
+    console.log('Simulación completada.')
   }, 10000)
 }
 
@@ -165,12 +173,15 @@ const saveToLocalStorage = () => {
     form: form,
     cronogramaForm: cronogramaForm,
     actividadForm: actividadForm,
-    cronogramas: cronogramas.value,
+    // Deep copy cronogramas to store flags like _deleted, _edited
+    cronogramas: JSON.parse(JSON.stringify(cronogramas.value)),
     activeTab: activeTab.value,
     eventIdStore: eventIdStore.value,
     cronogramaIdStore: cronogramaIdStore.value,
     coverImage: { id: coverImage.id, url: coverImage.url },
     additionalImages: additionalImages.value.map(img => ({ id: img.id, url: img.url })),
+    deletedCronogramaIds: Array.from(deletedCronogramaIds.value), // Store as array
+    deletedActivityIds: Array.from(deletedActivityIds.value), // Store as array
   };
   localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
 };
@@ -203,6 +214,10 @@ const loadFromLocalStorage = () => {
     } else {
       additionalImages.value = [];
     }
+
+    // Load deleted IDs from local storage
+    deletedCronogramaIds.value = new Set(parsedData.deletedCronogramaIds || []);
+    deletedActivityIds.value = new Set(parsedData.deletedActivityIds || []);
   }
 };
 
@@ -250,10 +265,15 @@ const resetForm = () => {
   coverImage.url = imageHolder;
   coverImage.file = null;
   additionalImages.value = [];
-  // Removed: error.value = '';
+
+  // Clear editing state and deleted IDs on reset
+  editingCronogramaTempId.value = null;
+  editingActividadTempId.value = null;
+  deletedCronogramaIds.value.clear();
+  deletedActivityIds.value.clear();
 };
 
-watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverImage, additionalImages], () => {
+watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverImage, additionalImages, deletedCronogramaIds, deletedActivityIds], () => {
   saveToLocalStorage();
 }, { deep: true });
 
@@ -320,10 +340,9 @@ watch(() => props.eventData, (newEventData) => {
       additionalImages.value = [];
     }
 
-
     if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
       cronogramas.value = newEventData.cronogramas.map(c => {
-        const tempCronogramaId = c.id;
+        const tempCronogramaId = c.id; // Use real ID as tempId for existing items
         return {
           id: c.id,
           tempId: tempCronogramaId,
@@ -334,7 +353,7 @@ watch(() => props.eventData, (newEventData) => {
           fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
           actividades: c.actividades_cronogramas ? c.actividades_cronogramas.map(a => ({
             id: a.id,
-            tempId: `temp_act_${a.id}`,
+            tempId: a.id, // Use real ID as tempId for existing activities
             cronograma_id: tempCronogramaId,
             titulo: a.titulo,
             descripcion: a.descripcion,
@@ -351,6 +370,9 @@ watch(() => props.eventData, (newEventData) => {
     } else {
       cronogramas.value = [];
     }
+    // Clear deleted IDs when loading new event data
+    deletedCronogramaIds.value.clear();
+    deletedActivityIds.value.clear();
 
   } else {
     console.log('newEventData is null, resetting form for new event creation.');
@@ -511,11 +533,14 @@ async function updateCronograma(cronogramaData) {
   loading.value = true;
   try {
     const payload = {
-      ...JSON.parse(JSON.stringify(cronogramaData)),
+      // Ensure we only send necessary fields, not internal flags like _edited, _deleted
+      evento_id: cronogramaData.evento_id,
+      titulo: cronogramaData.titulo,
+      descripcion: cronogramaData.descripcion,
       fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
       fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
     };
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${payload.id}`, payload, {
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaData.id}`, payload, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
@@ -531,18 +556,91 @@ async function updateCronograma(cronogramaData) {
   }
 }
 
+async function updateActividadBackend(activityData) { // New function for updating activities
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const payload = {
+      // Ensure we only send necessary fields, not internal flags like _edited, _deleted
+      cronograma_id: activityData.cronograma_id,
+      titulo: activityData.titulo,
+      descripcion: activityData.descripcion,
+      fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
+      fecha_fin: new Date(activityData.fecha_fin).toISOString(),
+      orden: activityData.orden,
+      dependencia_id: activityData.dependencia_id,
+    };
+    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityData.id}`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('Actividad actualizada con éxito:', response.data);
+    return response.data;
+  } catch (err) {
+    console.error('Error del servidor al actualizar actividad:', err.response?.data || err.message);
+    throw new Error(err.response?.data?.message || 'Error al actualizar la actividad.');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function deleteCronogramaBackend(id) { // New function for deleting cronogramas
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const response = await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log(`Cronograma ID ${id} eliminado con éxito:`, response.data);
+    return true;
+  } catch (err) {
+    console.error(`Error al eliminar cronograma ID ${id}:`, err.response?.data || err.message);
+    throw new Error(err.response?.data?.message || `Fallo al eliminar el cronograma ID ${id}.`);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function deleteActividadBackend(id) { // New function for deleting activities
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.');
+  }
+  loading.value = true;
+  try {
+    const response = await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log(`Actividad ID ${id} eliminada con éxito:`, response.data);
+    return true;
+  } catch (err) {
+    console.error(`Error al eliminar actividad ID ${id}:`, err.response?.data || err.message);
+    throw new Error(err.response?.data?.message || `Fallo al eliminar la actividad ID ${id}.`);
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function updateActivityOrderAndDependency(activityId, cronogramaBackendId, orden, dependenciaId) {
   const token = localStorage.getItem('token');
   if (!token) {
     throw new Error('Token de autenticación no encontrado.');
   }
   loading.value = true;
-  const payload = {
-    cronograma_id: cronogramaBackendId,
-    orden: orden,
-    dependencia_id: dependenciaId,
-  };
   try {
+    const payload = {
+      cronograma_id: cronogramaBackendId,
+      orden: orden,
+      dependencia_id: dependenciaId,
+    };
     const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityId}`, payload, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -588,9 +686,7 @@ async function linkArchivoToEvento(archivoId, eventoId) {
 }
 
 
-async function handleSubmit() { // Added async for showTimedErrorMessage
-  // Removed: error.value = '';
-
+async function handleSubmit() {
   if (
     !form.nombre ||
     !form.descripcion ||
@@ -632,7 +728,7 @@ async function handleSubmit() { // Added async for showTimedErrorMessage
 async function uploadFileToBackend(file, type) {
   const token = localStorage.getItem('token');
   if (!token) {
-    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.'); // Replaced alert
+    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.');
     return null;
   }
 
@@ -653,7 +749,7 @@ async function uploadFileToBackend(file, type) {
     return { id: response.data.file.id, url: response.data.file.url };
   } catch (error) {
     console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
-    await showTimedErrorMessage(`Error al subir la imagen (${type}).`); // Replaced alert
+    await showTimedErrorMessage(`Error al subir la imagen (${type}).`);
     return null;
   } finally {
     loading.value = false;
@@ -673,7 +769,7 @@ async function handleCoverChange(event) {
     coverImage.url = imageHolder;
     coverImage.file = null;
     coverImage.id = null;
-    await showTimedErrorMessage('La imagen de portada debe pesar menos de 10 MB.'); // Replaced alert
+    await showTimedErrorMessage('La imagen de portada debe pesar menos de 10 MB.');
   }
   saveToLocalStorage();
 }
@@ -690,7 +786,7 @@ async function handleAdditionalChange(event) {
         file: file,
       });
     } else {
-      await showTimedErrorMessage(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`); // Replaced alert
+      await showTimedErrorMessage(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`);
     }
   }
   additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
@@ -698,7 +794,7 @@ async function handleAdditionalChange(event) {
   saveToLocalStorage();
 }
 
-async function handleDrop(event) { // Added async
+async function handleDrop(event) {
   const files = Array.from(event.dataTransfer.files);
   const newAdditionalImages = [];
 
@@ -710,16 +806,14 @@ async function handleDrop(event) { // Added async
         file: file,
       });
     } else {
-      await showTimedErrorMessage(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`); // Replaced alert
+      await showTimedErrorMessage(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`);
     }
   }
   additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
   saveToLocalStorage();
 }
 
-async function handleCronogramaSubmit() { // Added async for showTimedErrorMessage
-  // Removed: error.value = '';
-
+async function handleCronogramaSubmit() {
   if (
     !cronogramaForm.titulo ||
     !cronogramaForm.descripcion ||
@@ -751,29 +845,96 @@ async function handleCronogramaSubmit() { // Added async for showTimedErrorMessa
     return;
   }
 
-
-  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  cronogramas.value.push({
-    ...JSON.parse(JSON.stringify(cronogramaForm)),
-    tempId: tempId,
-    actividades: [],
-    orden: cronogramas.value.length + 1,
-  });
+  if (editingCronogramaTempId.value) {
+    // Editing existing cronograma
+    const index = cronogramas.value.findIndex(c => c.tempId === editingCronogramaTempId.value);
+    if (index !== -1) {
+      Object.assign(cronogramas.value[index], {
+        ...JSON.parse(JSON.stringify(cronogramaForm)),
+        tempId: editingCronogramaTempId.value, // Keep the same tempId/id
+        _edited: true, // Mark as edited
+      });
+      await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaForm.titulo}</strong>" actualizado en el borrador.`);
+    }
+    editingCronogramaTempId.value = null; // Clear editing state
+  } else {
+    // Adding new cronograma
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    cronogramas.value.push({
+      ...JSON.parse(JSON.stringify(cronogramaForm)),
+      tempId: tempId,
+      actividades: [],
+      orden: cronogramas.value.length + 1,
+    });
+    await showTimedSuccessMessage(`El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`);
+  }
 
   cronogramaForm.titulo = '';
   cronogramaForm.descripcion = '';
   cronogramaForm.fecha_inicio = '';
   cronogramaForm.fecha_fin = '';
-  // Removed: error.value = '';
-
-  successMessage.value = `El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`;
-  showSuccessModal.value = true;
   saveToLocalStorage();
 }
 
+function cancelEditCronograma() {
+  editingCronogramaTempId.value = null;
+  cronogramaForm.titulo = '';
+  cronogramaForm.descripcion = '';
+  cronogramaForm.fecha_inicio = '';
+  cronogramaForm.fecha_fin = '';
+  saveToLocalStorage();
+}
+
+function editCronograma(cronograma) {
+  Object.assign(cronogramaForm, JSON.parse(JSON.stringify(cronograma)));
+  editingCronogramaTempId.value = cronograma.tempId;
+  // Ensure the date inputs are correctly formatted for display
+  cronogramaForm.fecha_inicio = new Date(cronograma.fecha_inicio).toISOString().slice(0, 16);
+  cronogramaForm.fecha_fin = new Date(cronograma.fecha_fin).toISOString().slice(0, 16);
+  saveToLocalStorage();
+}
+
+async function deleteCronograma(tempId) {
+  ConfModalMessage.value = "¿Estás seguro de que quieres eliminar este cronograma? Esta acción es irreversible.";
+  showConfirmationModal.value = true;
+
+  const confirmed = await new Promise(resolve => {
+    const confirmHandler = () => { showConfirmationModal.value = false; resolve(true); };
+    const cancelHandler = () => { showConfirmationModal.value = false; resolve(false); };
+    const unwatchConfirm = watch(showConfirmationModal, (newVal) => {
+      if (!newVal) { // Modal closed
+        if (ConfModalMessage.value === "¿Estás seguro de que quieres eliminar este cronograma? Esta acción es irreversible.") { // Check if it's the specific modal
+            unwatchConfirm();
+            resolve(false); // Assume cancelled if modal closed without confirm
+        }
+      }
+    });
+    // Override the general handleConfirmationConfirm/Cancel for this specific case
+    const originalHandleConfirmationConfirm = handleConfirmationConfirm;
+    const originalHandleConfirmationCancel = handleConfirmationCancel;
+    handleConfirmationConfirm = () => { unwatchConfirm(); confirmHandler(); handleConfirmationConfirm = originalHandleConfirmationConfirm; handleConfirmationCancel = originalHandleConfirmationCancel; };
+    handleConfirmationCancel = () => { unwatchConfirm(); cancelHandler(); handleConfirmationConfirm = originalHandleConfirmationConfirm; handleConfirmationCancel = originalHandleConfirmationCancel; };
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  const index = cronogramas.value.findIndex(c => c.tempId === tempId);
+  if (index !== -1) {
+    const cronogramaToDelete = cronogramas.value[index];
+    if (cronogramaToDelete.id) {
+      deletedCronogramaIds.value.add(cronogramaToDelete.id);
+    }
+    cronogramaToDelete._deleted = true; // Mark for deletion
+    await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaToDelete.titulo}</strong>" marcado para eliminación.`);
+    saveToLocalStorage();
+  }
+}
+
 function proceedToActivities() {
-  if (cronogramas.value.length === 0) {
+  const nonDeletedCronogramas = cronogramas.value.filter(c => !c._deleted);
+  if (nonDeletedCronogramas.length === 0) {
     showTimedErrorMessage('Debes añadir al menos un cronograma antes de pasar a las actividades.');
     return;
   }
@@ -782,7 +943,9 @@ function proceedToActivities() {
 }
 
 const cronogramasOptions = computed(() => {
-  return cronogramas.value.map(c => ({ id: c.tempId, titulo: c.titulo }));
+  return cronogramas.value
+    .filter(c => !c._deleted) // Filter out deleted cronogramas
+    .map(c => ({ id: c.tempId, titulo: c.titulo }));
 });
 
 const activitiesForSelectedCronograma = computed(() => {
@@ -790,11 +953,11 @@ const activitiesForSelectedCronograma = computed(() => {
     return [];
   }
   const selectedCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
-  return selectedCronograma ? selectedCronograma.actividades.sort((a, b) => a.orden - b.orden) : [];
+  // Filter out deleted activities and sort by order
+  return selectedCronograma ? selectedCronograma.actividades.filter(a => !a._deleted).sort((a, b) => a.orden - b.orden) : [];
 });
 
 async function handleActividadAdd() {
-  // Removed: actividadError.value = null;
   addingActividad.value = true;
 
   if (
@@ -837,23 +1000,39 @@ async function handleActividadAdd() {
   if (!parentCronograma.actividades) {
     parentCronograma.actividades = [];
   }
-  const newOrder = parentCronograma.actividades.length > 0 ?
-    Math.max(...parentCronograma.actividades.map(a => a.orden)) + 1 : 1;
 
-  const tempActivityId = `temp_act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  if (editingActividadTempId.value) {
+    // Editing existing activity
+    const index = parentCronograma.actividades.findIndex(a => a.tempId === editingActividadTempId.value);
+    if (index !== -1) {
+      Object.assign(parentCronograma.actividades[index], {
+        ...JSON.parse(JSON.stringify(actividadForm)),
+        tempId: editingActividadTempId.value, // Keep the same tempId/id
+        _edited: true, // Mark as edited
+      });
+      await showTimedSuccessMessage(`Actividad "<strong>${actividadForm.titulo}</strong>" actualizada en el borrador.`);
+    }
+    editingActividadTempId.value = null; // Clear editing state
+  } else {
+    // Adding new activity
+    const newOrder = parentCronograma.actividades.length > 0 ?
+      Math.max(...parentCronograma.actividades.map(a => a.orden || 0)) + 1 : 1; // Ensure default for order if missing
 
-  const newActivity = {
-    tempId: tempActivityId,
-    cronograma_id: actividadForm.cronograma_id,
-    titulo: actividadForm.titulo,
-    descripcion: actividadForm.descripcion,
-    fecha_inicio: actividadForm.fecha_inicio,
-    fecha_fin: actividadForm.fecha_fin,
-    orden: newOrder,
-    dependencia_id: null,
-  };
+    const tempActivityId = `temp_act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  parentCronograma.actividades.push(newActivity);
+    const newActivity = {
+      tempId: tempActivityId,
+      cronograma_id: actividadForm.cronograma_id,
+      titulo: actividadForm.titulo,
+      descripcion: actividadForm.descripcion,
+      fecha_inicio: actividadForm.fecha_inicio,
+      fecha_fin: actividadForm.fecha_fin,
+      orden: newOrder,
+      dependencia_id: null,
+    };
+    parentCronograma.actividades.push(newActivity);
+    await showTimedSuccessMessage(`La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`);
+  }
 
   actividadForm.titulo = '';
   actividadForm.descripcion = '';
@@ -861,36 +1040,113 @@ async function handleActividadAdd() {
   actividadForm.fecha_fin = '';
   actividadForm.dependencia_id = null;
 
-  successMessage.value = `La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`;
-  showSuccessModal.value = true;
   addingActividad.value = false;
   saveToLocalStorage();
 }
+
+function cancelEditActividad() {
+  editingActividadTempId.value = null;
+  actividadForm.titulo = '';
+  actividadForm.descripcion = '';
+  actividadForm.fecha_inicio = '';
+  actividadForm.fecha_fin = '';
+  actividadForm.dependencia_id = null;
+  saveToLocalStorage();
+}
+
+function editActividad(cronogramaTempId, actividad) {
+  // Set the cronograma dropdown to the parent cronograma
+  actividadForm.cronograma_id = cronogramaTempId;
+  // Populate the activity form
+  Object.assign(actividadForm, JSON.parse(JSON.stringify(actividad)));
+  editingActividadTempId.value = actividad.tempId;
+  // Ensure date inputs are correctly formatted
+  actividadForm.fecha_inicio = new Date(actividad.fecha_inicio).toISOString().slice(0, 16);
+  actividadForm.fecha_fin = new Date(actividad.fecha_fin).toISOString().slice(0, 16);
+  saveToLocalStorage();
+}
+
+async function deleteActividad(cronogramaTempId, actividadTempId) {
+  ConfModalMessage.value = "¿Estás seguro de que quieres eliminar esta actividad? Esta acción es irreversible.";
+  showConfirmationModal.value = true;
+
+  const confirmed = await new Promise(resolve => {
+    const confirmHandler = () => { showConfirmationModal.value = false; resolve(true); };
+    const cancelHandler = () => { showConfirmationModal.value = false; resolve(false); };
+    const unwatchConfirm = watch(showConfirmationModal, (newVal) => {
+      if (!newVal) { // Modal closed
+        if (ConfModalMessage.value === "¿Estás seguro de que quieres eliminar esta actividad? Esta acción es irreversible.") { // Check for specific message
+            unwatchConfirm();
+            resolve(false); // Assume cancelled if modal closed without confirm
+        }
+      }
+    });
+    // Override the general handleConfirmationConfirm/Cancel for this specific case
+    const originalHandleConfirmationConfirm = handleConfirmationConfirm;
+    const originalHandleConfirmationCancel = handleConfirmationCancel;
+    handleConfirmationConfirm = () => { unwatchConfirm(); confirmHandler(); handleConfirmationConfirm = originalHandleConfirmationConfirm; handleConfirmationCancel = originalHandleConfirmationCancel; };
+    handleConfirmationCancel = () => { unwatchConfirm(); cancelHandler(); handleConfirmationConfirm = originalHandleConfirmationConfirm; handleConfirmationCancel = originalHandleConfirmationCancel; };
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  if (parentCronograma) {
+    const index = parentCronograma.actividades.findIndex(a => a.tempId === actividadTempId);
+    if (index !== -1) {
+      const activityToDelete = parentCronograma.actividades[index];
+      if (activityToDelete.id) {
+        deletedActivityIds.value.add(activityToDelete.id);
+      }
+      activityToDelete._deleted = true; // Mark for deletion
+      // Re-order remaining activities visually (optional, but good practice for consistency)
+      parentCronograma.actividades = parentCronograma.actividades.filter(a => !a._deleted).map((a, i) => ({ ...a, orden: i + 1 }));
+
+      await showTimedSuccessMessage(`Actividad "<strong>${activityToDelete.titulo}</strong>" marcada para eliminación.`);
+      saveToLocalStorage();
+    }
+  }
+}
+
 
 function swapActivities(cronogramaTempId, idx1, idx2) {
   const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
   if (!parentCronograma || !parentCronograma.actividades) return;
 
-  const activitiesArray = parentCronograma.actividades;
+  const activitiesArray = parentCronograma.actividades.filter(a => !a._deleted); // Only swap non-deleted
   const temp = activitiesArray[idx1];
   activitiesArray[idx1] = activitiesArray[idx2];
   activitiesArray[idx2] = temp;
 
   activitiesArray.forEach((act, index) => {
     act.orden = index + 1;
+    if (act.id) { // Mark existing activities as edited if their order changes
+      act._edited = true;
+    }
   });
+
+  // Reassign the filtered and sorted array back to the parentCronograma.actividades,
+  // ensuring to retain any _deleted items if they exist (though they won't be in the `activitiesArray` for swapping)
+  parentCronograma.actividades = parentCronograma.actividades
+    .filter(a => a._deleted)
+    .concat(activitiesArray);
+
   saveToLocalStorage();
 }
 
 function moverArriba(cronogramaTempId, idx) {
   const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || !parentCronograma.actividades || idx === 0) return;
+  const activities = parentCronograma.actividades.filter(a => !a._deleted);
+  if (!parentCronograma || activities.length === 0 || idx === 0) return;
   swapActivities(cronogramaTempId, idx, idx - 1);
 }
 
 function moverAbajo(cronogramaTempId, idx) {
   const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || !parentCronograma.actividades || idx === parentCronograma.actividades.length - 1) return;
+  const activities = parentCronograma.actividades.filter(a => !a._deleted);
+  if (!parentCronograma || activities.length === 0 || idx === activities.length - 1) return;
   swapActivities(cronogramaTempId, idx, idx + 1);
 }
 
@@ -898,12 +1154,13 @@ function getDependenciaDisplayText(act, cronogramaTempId) {
   const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
   if (!parentCronograma || !parentCronograma.actividades) return 'N/A';
 
-  const idx = parentCronograma.actividades.findIndex(a => a.tempId === act.tempId);
+  const activities = parentCronograma.actividades.filter(a => !a._deleted).sort((a, b) => a.orden - b.orden);
+  const idx = activities.findIndex(a => a.tempId === act.tempId);
 
   if (idx === 0) {
     return '------';
   } else {
-    const previousActivity = parentCronograma.actividades[idx - 1];
+    const previousActivity = activities[idx - 1];
     return previousActivity ? previousActivity.titulo : 'N/A';
   }
 }
@@ -942,34 +1199,36 @@ function handleConfirmationCancel() {
 }
 
 async function processFinalSave() {
-  // Removed: error.value = null;
-
   try {
+    loading.value = true;
+
+    // --- 1. Validate Dates Before Any API Calls ---
     const eventStartDate = new Date(form.fecha_inicio);
     const eventEndDate = new Date(form.fecha_fin);
 
-    for (const cronograma of cronogramas.value) {
+    for (const cronograma of cronogramas.value.filter(c => !c._deleted)) { // Only validate non-deleted
       const cronogramaStartDate = new Date(cronograma.fecha_inicio);
       const cronogramaEndDate = new Date(cronograma.fecha_fin);
 
       if (cronogramaStartDate < eventStartDate || cronogramaEndDate > eventEndDate) {
         await showTimedErrorMessage(`El cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango del evento principal. Por favor, ajusta las fechas.`, 3000);
+        loading.value = false;
         return;
       }
 
-      for (const activity of cronograma.actividades) {
+      for (const activity of cronograma.actividades.filter(a => !a._deleted)) { // Only validate non-deleted
         const activityStartDate = new Date(activity.fecha_inicio);
         const activityEndDate = new Date(activity.fecha_fin);
 
         if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
           await showTimedErrorMessage(`La actividad "<strong>${activity.titulo}</strong>" del cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango de su cronograma. Por favor, ajusta las fechas.`, 3000);
+          loading.value = false;
           return;
         }
       }
     }
 
-
-    loading.value = true;
+    // --- 2. Update/Create Main Event Data ---
     const eventPayload = {
       ...JSON.parse(JSON.stringify(form)),
       hayEquipos: Number(form.hayEquipos),
@@ -983,6 +1242,7 @@ async function processFinalSave() {
     loading.value = false;
     await showTimedSuccessMessage(isEditing.value ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
+    // --- 3. Handle Image Uploads/Linking (Only for new events for now) ---
     if (!isEditing.value) {
       const allImagesToLink = [];
 
@@ -1025,54 +1285,76 @@ async function processFinalSave() {
       }
     }
 
-    for (const cronograma of cronogramas.value) {
+    // --- 4. Process Deletions (Chronograms and Activities) ---
+    for (const cronoId of deletedCronogramaIds.value) {
+      await deleteCronogramaBackend(cronoId);
+      await showTimedSuccessMessage(`Cronograma (ID: ${cronoId}) eliminado del servidor.`);
+    }
+    deletedCronogramaIds.value.clear(); // Clear the set after processing
+
+    for (const actId of deletedActivityIds.value) {
+      await deleteActividadBackend(actId);
+      await showTimedSuccessMessage(`Actividad (ID: ${actId}) eliminada del servidor.`);
+    }
+    deletedActivityIds.value.clear(); // Clear the set after processing
+
+
+    // --- 5. Process Chronograms (Create or Update) ---
+    for (const cronograma of cronogramas.value.filter(c => !c._deleted)) { // Process only non-deleted
       let createdOrUpdatedCronograma = null;
-      if (cronograma.id) {
+      if (cronograma.id && cronograma._edited) {
+        // Update existing cronograma if it was edited
         loading.value = true;
         createdOrUpdatedCronograma = await updateCronograma(cronograma);
         loading.value = false;
         await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" actualizado con éxito.`);
-      } else {
+      } else if (!cronograma.id) {
+        // Create new cronograma
         loading.value = true;
         createdOrUpdatedCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
-        cronograma.id = createdOrUpdatedCronograma.id;
-        cronograma.tempId = createdOrUpdatedCronograma.id;
+        cronograma.id = createdOrUpdatedCronograma.id; // Assign real ID
+        cronograma.tempId = createdOrUpdatedCronograma.id; // Update tempId to real ID
         loading.value = false;
         await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" creado con éxito.`);
+      } else {
+        // No action needed if not new and not edited
+        createdOrUpdatedCronograma = cronograma; // Use current cronograma for its activities
       }
 
-      if (cronograma.actividades && cronograma.actividades.length > 0) {
-        let previousActivityBackendId = null;
-        const sortedActivities = cronograma.actividades.sort((a, b) => a.orden - b.orden);
+      // --- 6. Process Activities within this Chronogram (Create or Update) ---
+      if (createdOrUpdatedCronograma && cronograma.actividades && cronograma.actividades.length > 0) {
+        const sortedActivities = cronograma.actividades.filter(a => !a._deleted).sort((a, b) => a.orden - b.orden);
 
         for (let i = 0; i < sortedActivities.length; i++) {
           const activity = sortedActivities[i];
           let dependencyIdToSend = null;
           if (i > 0) {
+            // Get the ID of the *previously saved/updated* activity in the sorted list
             const previousActivityInOrder = sortedActivities[i - 1];
-            dependencyIdToSend = previousActivityInOrder.id || previousActivityBackendId;
+            dependencyIdToSend = previousActivityInOrder.id; // This should now be the real ID
           }
 
-          if (activity.id) {
+          if (activity.id && activity._edited) {
+            // Update existing activity if it was edited
             loading.value = true;
-            await updateActivityOrderAndDependency(activity.id, createdOrUpdatedCronograma.id, activity.orden, dependencyIdToSend);
-            previousActivityBackendId = activity.id;
+            await updateActividadBackend(activity); // Use the new updateActividadBackend
             loading.value = false;
             await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" actualizada con éxito.`);
-          } else {
+          } else if (!activity.id) {
+            // Create new activity
             const activityPayload = {
               ...JSON.parse(JSON.stringify(activity)),
-              cronograma_id: createdOrUpdatedCronograma.id,
+              cronograma_id: createdOrUpdatedCronograma.id, // Use the real ID of the parent cronograma
             };
             loading.value = true;
             const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
-            activity.id = createdOrUpdatedActivity.id;
-            activity.tempId = createdOrUpdatedActivity.id;
-
-            previousActivityBackendId = activity.id;
+            activity.id = createdOrUpdatedActivity.id; // Assign real ID
+            activity.tempId = createdOrUpdatedActivity.id; // Update tempId to real ID
             loading.value = false;
             await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" creada con éxito.`);
-
+          }
+          // Always update order and dependency after creation/update, as order might have changed locally
+          if (activity.id) { // Ensure activity has a real ID before sending update for order/dependency
             loading.value = true;
             await updateActivityOrderAndDependency(activity.id, createdOrUpdatedCronograma.id, activity.orden, dependencyIdToSend);
             loading.value = false;
@@ -1088,7 +1370,7 @@ async function processFinalSave() {
     emit('close');
   } catch (err) {
     console.error('Error during final save process:', err);
-    await showTimedErrorMessage(err.message || 'Error desconocido durante el proceso de guardado final.'); // Display error with modal
+    await showTimedErrorMessage(err.message || 'Error desconocido durante el proceso de guardado final.');
   } finally {
     loading.value = false;
   }
@@ -1098,8 +1380,11 @@ onMounted(async () => {
   await fetchCategorias();
   await fetchSede();
 
-  if (cronogramas.value.length > 0 && !actividadForm.cronograma_id) {
-    actividadForm.cronograma_id = cronogramas.value[0].tempId;
+  // If a cronograma_id is not set in actividadForm, and there are non-deleted cronogramas,
+  // set the first non-deleted one as default for activity creation.
+  const firstNonDeletedCronograma = cronogramas.value.find(c => !c._deleted);
+  if (firstNonDeletedCronograma && !actividadForm.cronograma_id) {
+    actividadForm.cronograma_id = firstNonDeletedCronograma.tempId;
   }
 });
 </script>
@@ -1344,13 +1629,16 @@ onMounted(async () => {
               </div>
             </div>
             <div class="form-group span-3">
-              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 200px;">
-                Crear cronograma <i class="fas fa-plus"></i>
+              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 240px;">
+                {{ editingCronogramaTempId ? 'Actualizar Cronograma' : 'Crear cronograma' }} <i class="fas fa-plus"></i>
+              </button>
+              <button v-if="editingCronogramaTempId" type="button" class="btn btn-secondary mt-2" @click="cancelEditCronograma" style="display: block; margin: 0 auto; max-width: 200px;">
+                Cancelar Edición
               </button>
             </div>
           </form>
 
-          <div class="tabla-cronogramas" v-if="cronogramas.length">
+          <div class="tabla-cronogramas" v-if="cronogramas.filter(c => !c._deleted).length">
             <h4>Cronogramas Creados:</h4>
             <table>
               <thead>
@@ -1360,15 +1648,24 @@ onMounted(async () => {
                   <th>Descripción</th>
                   <th>Inicia</th>
                   <th>Finaliza</th>
+                  <th>Acciones</th> <!-- New Actions Column -->
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(cronograma, idx) in cronogramas" :key="cronograma.tempId">
+                <tr v-for="(cronograma, idx) in cronogramas.filter(c => !c._deleted)" :key="cronograma.tempId">
                   <td>{{ cronograma.orden }}</td>
                   <td>{{ cronograma.titulo }}</td>
                   <td>{{ cronograma.descripcion }}</td>
                   <td>{{ formatDisplayDateTime(cronograma.fecha_inicio) }}</td>
                   <td>{{ formatDisplayDateTime(cronograma.fecha_fin) }}</td>
+                  <td>
+                    <button @click="editCronograma(cronograma)" class="btn btn-action-edit">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button @click="deleteCronograma(cronograma.tempId)" class="btn btn-action-delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -1421,11 +1718,15 @@ onMounted(async () => {
 
             <div class="button-row" style="justify-content: center; margin-top: 0rem;">
               <button type="submit" class="btn btn-primary" :disabled="addingActividad">
-                {{ addingActividad ? 'Añadiendo...' : 'Añadir Actividad' }}
+                {{ editingActividadTempId ? 'Actualizar Actividad' : 'Añadir Actividad' }}
+              </button>
+              <button v-if="editingActividadTempId" type="button" class="btn btn-secondary mt-2" @click="cancelEditActividad" style="display: block; margin: 0 auto; max-width: 200px;">
+                Cancelar Edición
               </button>
             </div>
 
           </form>
+
           <div class="tabla-actividades">
             <div v-if="reorderingActividades" class="overlay-loader">
               <div class="spinner"></div> Actualizando orden...
@@ -1439,28 +1740,45 @@ onMounted(async () => {
                   <th>Inicia</th>
                   <th>Finaliza</th>
                   <th>Depende de</th>
+                  <th>Acciones</th> <!-- New Actions Column -->
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(act, idx) in activitiesForSelectedCronograma" :key="act.tempId">
-                  <td>
-                    <div class="order-controls-horizontal">
-                      <button @click="moverArriba(actividadForm.cronograma_id, idx)"
-                        :disabled="idx === 0 || reorderingActividades" class="order-btn">
-                        <i class="fas fa-caret-up"></i>
+                <template v-for="(cronograma) in cronogramas.filter(c => !c._deleted)" :key="cronograma.tempId">
+                  <tr class="cronograma-header-row">
+                    <td colspan="7"><strong>Cronograma: {{ cronograma.titulo }}</strong></td>
+                  </tr>
+                  <tr v-for="(act, idx) in activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId)" :key="act.tempId">
+                    <td>
+                      <div class="order-controls-horizontal">
+                        <button @click="moverArriba(act.cronograma_id, activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId).indexOf(act))"
+                          :disabled="activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId).indexOf(act) === 0 || reorderingActividades" class="order-btn">
+                          <i class="fas fa-caret-up"></i>
+                        </button>
+                        <span class="order-number">{{ act.orden }}</span>
+                        <button @click="moverAbajo(act.cronograma_id, activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId).indexOf(act))"
+                          :disabled="activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId).indexOf(act) === activitiesForSelectedCronograma.filter(a => a.cronograma_id === cronograma.tempId).length - 1 || reorderingActividades" class="order-btn">
+                          <i class="fas fa-caret-down"></i>
+                        </button>
+                      </div>
+                    </td>
+                    <td>{{ act.titulo }}</td>
+                    <td>{{ act.descripcion }}</td>
+                    <td>{{ formatDisplayDateTime(act.fecha_inicio) }}</td>
+                    <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
+                    <td>{{ getDependenciaDisplayText(act, act.cronograma_id) }}</td>
+                    <td>
+                      <button @click="editActividad(act.cronograma_id, act)" class="btn btn-action-edit">
+                          <i class="fas fa-pencil-alt"></i>
                       </button>
-                      <span class="order-number">{{ act.orden }}</span>
-                      <button @click="moverAbajo(actividadForm.cronograma_id, idx)"
-                        :disabled="idx === activitiesForSelectedCronograma.length - 1 || reorderingActividades" class="order-btn">
-                        <i class="fas fa-caret-down"></i>
+                      <button @click="deleteActividad(act.cronograma_id, act.tempId)" class="btn btn-action-delete">
+                          <i class="fas fa-trash"></i>
                       </button>
-                    </div>
-                  </td>
-                  <td>{{ act.titulo }}</td>
-                  <td>{{ act.descripcion }}</td>
-                  <td>{{ formatDisplayDateTime(act.fecha_inicio) }}</td>
-                  <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
-                  <td>{{ getDependenciaDisplayText(act, actividadForm.cronograma_id) }}</td>
+                    </td>
+                  </tr>
+                </template>
+                <tr v-if="cronogramas.filter(c => !c._deleted).length === 0 || activitiesForSelectedCronograma.length === 0">
+                    <td colspan="7" class="no-activities-message">No hay actividades para el cronograma seleccionado o no hay cronogramas.</td>
                 </tr>
               </tbody>
             </table>
@@ -1500,6 +1818,7 @@ onMounted(async () => {
 
       <ErrorModal
         :show="showErrorModal"
+        title="Error"
         :message="errorMessage"
         @close="handleErrorModalClose"
         :duration="4000"
@@ -1641,7 +1960,7 @@ onMounted(async () => {
   border-radius: 16px;
   max-height: 95vh;
   padding: 2rem;
-  max-width: 600px;
+  max-width: 750px;
   width: 95%;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   animation: fadeSlideIn 0.4s ease;
@@ -1717,7 +2036,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   text-align: left;
-  padding: 10px 20px 10px 10px;
+  padding: 10px 70px 10px 10px;
   font-size: 0.7em;
   color: #6c757d;
   cursor: pointer;
@@ -2249,5 +2568,50 @@ onMounted(async () => {
     flex-direction: column;
     gap: 0.5rem;
   }
+}
+
+.btn-action-edit, .btn-action-delete {
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    margin: 0 5px;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 7px; /* hace que el más corto iguale al largo */
+    text-align: center;
+}
+
+.btn-action-edit {
+    background-color: #174384; /* Yellowish for edit */
+    color: #ffffff;
+}
+
+.btn-action-edit:hover {
+    background-color: #174384;
+    transform: translateY(-1px);
+}
+
+.btn-action-delete {
+    background-color: #dc3545; /* Red for delete */
+    color: white;
+}
+
+.btn-action-delete:hover {
+    background-color: #c82333;
+    transform: translateY(-1px);
+}
+
+.btn-action-edit i, .btn-action-delete i {
+    margin: 0; /* Remove extra margin from existing i styles */
+}
+
+.cronograma-header-row td {
+  background-color: #e0f2f7; /* Light blue background for cronograma headers */
+  font-weight: bold;
+  color: #0056b3;
+  padding: 10px 15px;
+  border-bottom: 2px solid #a7d9ed;
 }
 </style>
