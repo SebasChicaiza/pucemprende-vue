@@ -1,15 +1,16 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DefaultImage from '@/assets/banners/EventoConstruccion.png'
-import DeleteModal from '@/components/DeleteModal.vue' // Single DeleteModal import
+import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
-import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'; // Double check this path!
+import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue';
+import ScrollBar from '@/components/ScrollBar.vue'; // Import ScrollBar Component
 
 const route = useRoute()
 const router = useRouter()
@@ -17,18 +18,18 @@ const eventId = ref(null)
 const eventDetails = ref(null)
 const eventImages = ref([])
 const loading = ref(true)
-const loadingImages = ref(true)
+const loadingImages = ref(false)
+const isLoadingImagesInModal = ref(false);
 
 const mainImage = ref('');
 const DEFAULT_IMAGE_URL = DefaultImage;
 
-// Refs and state for the single reusable DeleteModal
 const universalDeleteModalRef = ref(null);
 const modalTitle = ref('');
 const modalMessage = ref('');
 const modalWarning = ref('');
 const modalConfirmText = ref('');
-const currentDeleteAction = ref(null); // 'deleteEvent' or 'deleteImage'
+const currentDeleteAction = ref(null);
 
 const showOkModal = ref(false);
 const okModalMessage = ref('');
@@ -37,7 +38,7 @@ const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
 const showImageManagementModal = ref(false);
-const imageToDelete = ref(null); // To store the image selected for deletion
+const imageToDelete = ref(null);
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -117,18 +118,15 @@ async function fetchEventImages() {
   }
 }
 
-// Universal handler for when any DeleteModal confirms
 const handleDeleteConfirmed = async () => {
     if (currentDeleteAction.value === 'deleteEvent') {
         await deleteEvent();
     } else if (currentDeleteAction.value === 'deleteImage') {
         await confirmDeleteImage();
     }
-    // Reset action after handling
     currentDeleteAction.value = null;
 };
 
-// Function to show the main event deletion confirmation modal
 const showDeleteConfirmation = () => {
     modalTitle.value = 'Confirmar Eliminación de Evento';
     modalMessage.value = '¿Estás seguro de que quieres eliminar este evento?';
@@ -161,7 +159,7 @@ const deleteEvent = async () => {
 
     setTimeout(() => {
       router.push("/admin/eventos/");
-    }, 2000);
+    }, 1000);
 
   } catch (err) {
     console.error('Error deleting event:', err.response?.data || err.message);
@@ -241,7 +239,7 @@ async function uploadFileToBackend(file, type = 'general') {
   formData.append('name', file.name.split('.')[0]);
   formData.append('tipo', type);
 
-  loadingImages.value = true;
+  isLoadingImagesInModal.value = true;
   try {
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
       headers: {
@@ -256,10 +254,8 @@ async function uploadFileToBackend(file, type = 'general') {
     alert(`Error al subir la imagen: ${error.response?.data?.message || error.message}`);
     return null;
   } finally {
-    loadingImages.value = false;
   }
 }
-
 
 const openImageManagementModal = () => {
   showImageManagementModal.value = true;
@@ -270,7 +266,6 @@ const closeImageManagementModal = () => {
   fetchEventImages();
 };
 
-// Function to trigger image deletion confirmation modal
 const triggerDeleteImage = (image) => {
     imageToDelete.value = image;
     modalTitle.value = 'Confirmar Eliminación de Imagen';
@@ -290,7 +285,7 @@ const confirmDeleteImage = async () => {
     return;
   }
 
-  loadingImages.value = true;
+  isLoadingImagesInModal.value = true;
   try {
     await axios.delete(
       `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento/${imageToDelete.value.id}`,
@@ -305,7 +300,10 @@ const confirmDeleteImage = async () => {
     okModalMessage.value = '¡Imagen eliminada exitosamente!';
     showOkModal.value = true;
 
-    await fetchEventImages();
+    eventImages.value = eventImages.value.filter(img => img.id !== imageToDelete.value.id);
+    if (mainImage.value === imageToDelete.value.url) {
+      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
+    }
 
   } catch (err) {
     console.error('Error deleting image:', err.response?.data || err.message);
@@ -315,7 +313,7 @@ const confirmDeleteImage = async () => {
       universalDeleteModalRef.value.hide();
     }
     imageToDelete.value = null;
-    loadingImages.value = false;
+    isLoadingImagesInModal.value = false;
   }
 };
 
@@ -331,8 +329,9 @@ const uploadNewImages = async (newFiles) => {
     return;
   }
 
-  loadingImages.value = true;
+  isLoadingImagesInModal.value = true;
   const uploadPromises = [];
+  const newlyUploadedImages = [];
 
   for (const file of newFiles) {
     uploadPromises.push(
@@ -340,7 +339,7 @@ const uploadNewImages = async (newFiles) => {
         const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general');
         if (uploadedArchivo) {
           try {
-            await axios.post(
+            const linkResponse = await axios.post(
               `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
               {
                 archivo_id: uploadedArchivo.id,
@@ -356,6 +355,7 @@ const uploadNewImages = async (newFiles) => {
               }
             );
             console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}`);
+            newlyUploadedImages.push(linkResponse.data); // Push the linked image object from the backend
             return true;
           } catch (linkError) {
             console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
@@ -373,16 +373,14 @@ const uploadNewImages = async (newFiles) => {
 
   if (allSucceeded) {
     okModalMessage.value = '¡Imágenes subidas y asociadas al evento exitosamente!';
+    eventImages.value = [...eventImages.value, ...newlyUploadedImages];
   } else {
     okModalMessage.value = '¡Algunas imágenes no pudieron subirse o asociarse correctamente!';
   }
   showOkModal.value = true;
 
-  await fetchEventImages();
-
-  loadingImages.value = false;
+  isLoadingImagesInModal.value = false;
 };
-
 
 onMounted(async () => {
   try {
@@ -465,27 +463,29 @@ const formatDate = (dateString) => {
             </div>
           </div>
           <div class="row align-items-stretch mb-5">
-            <div class="col-md-7 d-flex">
+            <div class="col-md-8 d-flex">
               <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
-                <div v-if="loadingImages" class="text-center my-3">
-                  <div class="spinner-border spinner-border-sm text-primary" role="status">
-                    <span class="visually-hidden">Cargando miniaturas...</span>
+                <ScrollBar :maxHeight="'calc(100% - 60px)'" class="image-list-scroll-area">
+                  <div v-if="loadingImages" class="text-center my-3">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                      <span class="visually-hidden">Cargando miniaturas...</span>
+                    </div>
                   </div>
-                </div>
-                <div v-else class="flex-grow-1 d-flex flex-column justify-content-start align-items-center">
-                  <div
-                    v-for="image in imagesToDisplay"
-                    :key="image.id"
-                    class="thumbnail-container mb-2"
-                    :class="{ 'active-thumbnail': mainImage === image.url }"
-                    @click="selectImage(image)"
-                  >
-                    <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
+                  <div v-else class="flex-grow-1 d-flex flex-column justify-content-start align-items-center">
+                    <div
+                      v-for="image in imagesToDisplay"
+                      :key="image.id"
+                      class="thumbnail-container mb-2"
+                      :class="{ 'active-thumbnail': mainImage === image.url }"
+                      @click="selectImage(image)"
+                    >
+                      <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
+                    </div>
                   </div>
-                  <button class="btn btn-secondary mt-3 w-100" @click="openImageManagementModal">
-                    Editar Imágenes
-                  </button>
-                </div>
+                </ScrollBar>
+                <button class="btn btn-primary add-image-plus-btn" @click="openImageManagementModal" title="Editar Imágenes">
+                    <i class="fas fa-plus"></i>
+                </button>
               </div>
               <div class="flex-grow-1 main-image-display">
                 <div v-if="loadingImages" class="d-flex justify-content-center align-items-center h-100">
@@ -497,7 +497,7 @@ const formatDate = (dateString) => {
               </div>
             </div>
 
-            <div class="col-md-5 event-info-section">
+            <div class="col-md-4 event-info-section">
 
               <div class="info-group">
                 <p class="info-label">Descripción</p>
@@ -551,23 +551,38 @@ const formatDate = (dateString) => {
           </div>
 
 
-          <div class="card mb-4" v-if="eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
-            <div class="card-header">
-              Cronogramas
-            </div>
-            <div class="card-body">
-              <div v-for="cronograma in eventDetails.cronogramas" :key="cronograma.id" class="mb-3 border p-3 rounded">
-                <h5>{{ cronograma.titulo }}</h5>
-                <p>Descripción: {{ cronograma.descripcion }}</p>
-                <p>Inicio: {{ new Date(cronograma.fecha_inicio).toLocaleDateString() }}</p>
-                <p>Fin: {{ new Date(cronograma.fecha_fin).toLocaleDateString() }}</p>
-                <h6>Actividades:</h6>
-                <ul v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0">
-                  <li v-for="actividad in cronograma.actividades_cronogramas" :key="actividad.id">
-                    {{ actividad.titulo }} ({{ new Date(actividad.fecha_inicio).toLocaleDateString() }} - {{ new Date(actividad.fecha_fin).toLocaleDateString() }})
-                  </li>
-                </ul>
-                <p v-else class="text-muted">No hay actividades para este cronograma.</p>
+          <div class="mt-4" v-if="eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
+            <h4 class="mb-3">Cronogramas</h4>
+            <div class="accordion" id="accordionCronogramas">
+              <div class="accordion-item" v-for="(cronograma, index) in eventDetails.cronogramas" :key="cronograma.id">
+                <h2 class="accordion-header" :id="`heading${cronograma.id}`">
+                  <button
+                    class="accordion-button"
+                    :class="{ 'collapsed': index !== 0 }"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    :data-bs-target="`#collapse${cronograma.id}`"
+                    :aria-expanded="index === 0 ? 'true' : 'false'"
+                    :aria-controls="`collapse${cronograma.id}`"
+                  >
+                    {{ cronograma.titulo }}
+                  </button>
+                </h2>
+                <div :id="`collapse${cronograma.id}`" class="accordion-collapse collapse" :class="{ 'show': index === 0 }" :aria-labelledby="`heading${cronograma.id}`" data-bs-parent="#accordionCronogramas">
+                  <div class="accordion-body">
+                    <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
+                    <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
+                    <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
+                    <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
+                    <ul v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0" class="list-group list-group-flush">
+                      <li v-for="actividad in cronograma.actividades_cronogramas" :key="actividad.id" class="list-group-item">
+                        <i class="fas fa-check-circle activity-icon me-2"></i>
+                        {{ actividad.titulo }} ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
+                      </li>
+                    </ul>
+                    <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -585,6 +600,7 @@ const formatDate = (dateString) => {
   <OkModal
     :show="showOkModal"
     :message="okModalMessage"
+    :duration = 1000
     @close="handleOkModalClose"
   />
 
@@ -598,12 +614,12 @@ const formatDate = (dateString) => {
   <ImageManagementModal
     :show="showImageManagementModal"
     :currentImages="eventImages"
+    :isLoading="isLoadingImagesInModal"
     @close="closeImageManagementModal"
     @delete-image="triggerDeleteImage"
     @upload-images="uploadNewImages"
   />
 
-  <!-- Single reusable DeleteModal -->
   <DeleteModal
     ref="universalDeleteModalRef"
     :title="modalTitle"
@@ -614,22 +630,22 @@ const formatDate = (dateString) => {
   />
 </template>
 
-
 <style scoped>
-/* Your existing styles remain here */
-
 .image-thumbnail-sidebar {
   width: 120px;
   flex-shrink: 0;
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 10px;
-  padding-left: 10px;
+  max-height: 60vh;
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.image-list-scroll-area {
+    flex-grow: 1;
 }
 
 .thumbnail-container {
   width: 100px;
-  height: 60px;
+  height: 50px;
   border: 2px solid transparent;
   overflow: hidden;
   cursor: pointer;
@@ -657,9 +673,8 @@ const formatDate = (dateString) => {
   border-color: #174384;
 }
 .btn-primary:hover {
-  background-color: #ffffff;
-  border-color: #174384;
-  color: #174384;
+  background-color: #14386b;
+  border-color: #14386b;
 }
 
 .btn-danger {
@@ -667,9 +682,8 @@ const formatDate = (dateString) => {
   border-color: #dc3545;
 }
 .btn-danger:hover {
-  background-color: #ffffff;
-  border-color: #dc3545;
-  color: #dc3545;
+  background-color: #c82333;
+  border-color: #bd2130;
 }
 
 .main-image-display {
@@ -741,5 +755,95 @@ const formatDate = (dateString) => {
 
 .card.mb-4:not(.main-event-details) {
   margin-top: 20px;
+}
+
+/* Styles for the new Plus button */
+.add-image-plus-btn {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 10;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.add-image-plus-btn:hover {
+    background-color: #0d284a; /* Darker blue on hover */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.error-text {
+    color: red;
+    font-weight: bold;
+}
+
+/* Custom styles for the accordion */
+.accordion-button {
+  background-color: #e0e7ff; /* Light blue background for buttons */
+  color: #174384; /* Dark blue text */
+  font-weight: 600;
+  border-bottom: 1px solid #c3d9ff;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.accordion-button:not(.collapsed) {
+  color: #ffffff; /* White text when expanded */
+  background-color: #174384; /* Darker blue when expanded */
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.125);
+}
+
+.accordion-button:focus {
+  box-shadow: 0 0 0 0.25rem rgba(23, 67, 132, 0.25); /* Custom focus ring */
+}
+
+.accordion-body {
+  padding: 1.5rem;
+  background-color: #fdfdff; /* Very light background for body */
+  border-top: 1px dashed #e0e0e0;
+}
+
+.accordion-item {
+  margin-bottom: 10px; /* Space between accordion items */
+  border: 1px solid #dcdcdc; /* Lighter border for overall item */
+  border-radius: 0.5rem; /* Rounded corners for accordion item */
+  overflow: hidden; /* Ensures rounded corners are visible */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Subtle shadow */
+}
+
+.accordion-item:first-of-type {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
+
+.accordion-item:last-of-type {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.cronograma-activities-title {
+    color: #174384; /* Match primary brand color */
+    font-weight: 700;
+    border-bottom: 2px solid #e0e7ff;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.list-group-item {
+    border-color: #f0f0f0; /* Lighter borders for list items */
+    padding-left: 0.5rem; /* Adjust padding for list items */
+    font-size: 0.95rem;
+    color: #495057;
+}
+
+.activity-icon {
+    color: #28a745; /* Green check icon */
 }
 </style>

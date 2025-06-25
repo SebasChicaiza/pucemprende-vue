@@ -78,7 +78,6 @@ async function fetchEvents() {
     }
 }
 
-// ⭐⭐⭐ Debounce and Enter key search implementation ⭐⭐⭐
 const handleSearchInput = () => {
     // Clear any existing timeout to reset the debounce timer
     clearTimeout(searchTimeout);
@@ -100,7 +99,6 @@ const handleSearchEnter = () => {
     currentPage.value = 1;
     fetchEvents();
 };
-// ⭐⭐⭐ END Debounce and Enter key search implementation ⭐⭐⭐
 
 
 watch(currentPage, () => {

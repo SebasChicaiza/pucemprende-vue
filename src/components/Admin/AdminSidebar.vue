@@ -1,11 +1,21 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 
 const collapsed = ref(false)
 
+// Function to toggle sidebar and save state to localStorage
 function toggleSidebar() {
   collapsed.value = !collapsed.value
+  localStorage.setItem('sidebarCollapsed', collapsed.value.toString())
 }
+
+// Load collapsed state from localStorage when the component is mounted
+onMounted(() => {
+  const savedState = localStorage.getItem('sidebarCollapsed')
+  if (savedState !== null) {
+    collapsed.value = savedState === 'true' // Convert string "true" or "false" to boolean
+  }
+})
 
 const userJsonString = localStorage.getItem('user');
 let usernow = null;
@@ -17,7 +27,6 @@ if (userJsonString) {
   }
 }
 </script>
-
 
 <template>
   <aside class="vh-100" z-index="1000">
