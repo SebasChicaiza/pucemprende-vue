@@ -120,9 +120,7 @@ async function fetchEventImages() {
     }
 
   } catch (err) {
-    console.error('Error fetching event images:', err.response?.data || err.message);
-    errorMessage.value = `Error al cargar las imágenes del evento: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
+    console.error(' Errorfetching event images, no image found:', err.response?.data || err.message);
     mainImage.value = DEFAULT_IMAGE_URL;
   } finally {
     loadingImages.value = false;
@@ -140,9 +138,9 @@ const handleDeleteConfirmed = async () => {
 
 const showDeleteConfirmation = () => {
     modalTitle.value = 'Confirmar Eliminación de Evento';
-    modalMessage.value = '¿Estás seguro de que quieres eliminar este evento?';
-    modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente el evento, incluyendo todos sus cronogramas y actividades.';
-    modalConfirmText.value = 'Sí, Eliminar Evento';
+    modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?';
+    modalWarning.value = 'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento';
+    modalConfirmText.value = 'Sí, Deshabilitar Evento';
     currentDeleteAction.value = 'deleteEvent';
     universalDeleteModalRef.value.show();
 };
@@ -166,7 +164,7 @@ const deleteEvent = async () => {
         },
       }
     );
-    okModalMessage.value = '¡El evento ha sido eliminado exitosamente!';
+    okModalMessage.value = '¡El evento ha deshabilitado exitosamente!';
     showOkModal.value = true;
 
     setTimeout(() => {
@@ -533,10 +531,14 @@ const formatDate = (dateString) => {
               <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
             </div>
             <div class="d-flex">
-                <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">Editar</button>
-                <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
-                    <i class="fas fa-trash-alt me-2"></i>Eliminar
+                <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">
+                  <i class="fa-solid fa-pencil me-2"></i>Editar
                 </button>
+                <div v-if="!eventDetails.estado_borrado">
+                  <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
+                  </button>
+                </div>
             </div>
           </div>
           <div class="row align-items-stretch mb-5">
@@ -567,7 +569,6 @@ const formatDate = (dateString) => {
               <div class="flex-grow-1 main-image-display">
                 <div v-if="loadingImages" class="d-flex justify-content-center align-items-center h-100">
                   <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                    <span class="visually-hidden">Cargando imagen principal...</span>
                   </div>
                 </div>
                 <img v-else :src="mainImage" class="img-fluid rounded main-event-image" :alt="eventDetails.nombre || 'Event Image'" />
@@ -643,7 +644,7 @@ const formatDate = (dateString) => {
               class="btn btn-success animated-btn"
               @click="triggerReactivateEvent"
             >
-              Reactivar evento
+              <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
             </button>
           </div>
 
@@ -904,7 +905,7 @@ const formatDate = (dateString) => {
   overflow: hidden;
   position: relative;
   width: 100%;
-  aspect-ratio: 21 / 9;
+  aspect-ratio: 16 / 9;
 }
 
 .main-event-image {

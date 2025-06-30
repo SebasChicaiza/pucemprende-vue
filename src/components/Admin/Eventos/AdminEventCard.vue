@@ -56,9 +56,6 @@ const emitViewEvent = () => {
         <!-- Attach the new emitViewEvent function to the button -->
         <button class="btn btn-outline-primary btn-sm" @click="emitViewEvent">Ver evento</button>
         <button v-if="event.inscripcionesAbiertas" class="btn btn-primary btn-sm">Inscribirse</button>
-        <p v-else class="text-muted mb-0 d-flex align-items-center justify-content-center" style="font-size: 0.85rem;">
-          Inscripciones aún no abiertas
-        </p>
       </div>
     </div>
   </div>
