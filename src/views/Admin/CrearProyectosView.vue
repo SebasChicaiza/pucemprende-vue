@@ -6,13 +6,13 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import CrearEquipoModal from '@/components/Admin/Proyectos/CrearEquipoModal.vue'
 
+import { useRoute } from 'vue-router'
+
 const showModal = ref(false)
 
-function handleGuardarEquipo(equipoData) {
-  // Lógica para guardar equipo (puedes llamar a tu backend aquí)
-  console.log('Equipo recibido:', equipoData)
-  showModal.value = false
-}
+const route = useRoute()
+
+const eventoId = route.params.eventoId
 
 // Form state
 const logoImage = ref({ file: null, id: null, url: '' })
@@ -83,7 +83,7 @@ async function fetchEquipos() {
   const token = localStorage.getItem('token')
   if (!token) return
   try {
-    const { data } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipo`, {
+    const { data } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     equipos.value = data
@@ -225,6 +225,7 @@ onMounted(fetchEquipos)
               <!-- Modal -->
               <CrearEquipoModal
                 :visible="showModal"
+                :evento-id="eventoId"
                 @close="showModal = false"
                 @guardar="handleGuardarEquipo"
               />

@@ -91,9 +91,10 @@ const router = createRouter({
       },
     },
     {
-      path: '/admin/crearProyecto',
+      path: '/admin/crearProyecto/:eventoId',
       name: 'crearProyecto',
       component: CrearProyectosView,
+      props: true,
     },
     /* EJEMPLO LAZY LOADING
     {

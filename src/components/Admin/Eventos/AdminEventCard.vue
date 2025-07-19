@@ -1,24 +1,28 @@
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const props = defineProps({
   event: {
     type: Object,
     required: true,
   },
-});
+})
+const id = props.event.id
 
 // Add 'view-event' to the emitted events
-const emit = defineEmits(['edit-event', 'view-event']);
+const emit = defineEmits(['edit-event', 'view-event'])
 
 const emitEditEvent = () => {
-  emit('edit-event', props.event);
-};
+  emit('edit-event', props.event)
+}
 
 // New function to emit the event for viewing
 const emitViewEvent = () => {
-  emit('view-event', props.event.id); // Emit just the ID for viewing
-};
+  emit('view-event', props.event.id) // Emit just the ID for viewing
+}
 </script>
 
 <template>
@@ -33,7 +37,11 @@ const emitViewEvent = () => {
         {{ event.nombre.length > 30 ? event.nombre.slice(0, 30) + '...' : event.nombre }}
       </h5>
       <p class="card-text mb-3">
-        {{ event.descripcion.length > 120 ? event.descripcion.slice(0, 120) + '...' : event.descripcion }}
+        {{
+          event.descripcion.length > 120
+            ? event.descripcion.slice(0, 120) + '...'
+            : event.descripcion
+        }}
       </p>
 
       <p class="card-text mb-1">
@@ -41,21 +49,37 @@ const emitViewEvent = () => {
         <strong>Finaliza:</strong> {{ new Date(event.fecha_fin).toLocaleDateString() }}
       </p>
 
-      <p class="card-text mb-2"><strong>Categoría: </strong>
+      <p class="card-text mb-2">
+        <strong>Categoría: </strong>
         <span>{{ event.categoria }}</span>
       </p>
 
       <div class="card-text d-flex align-items-center mb-3">
-        <i :class="event.estado_borrado ? 'fas fa-times-circle text-danger me-1' : 'fas fa-check-circle text-success me-1'"></i>
-        <span :class="event.estado_borrado ? 'text-danger fw-semibold' : 'text-success fw-semibold'">Estado:</span>
-        <span :class="event.estado_borrado ? 'text-danger ms-1' : 'text-muted ms-1'">{{ event.estado_borrado ? 'Inactivo' : 'Activo' }}</span>
+        <i
+          :class="
+            event.estado_borrado
+              ? 'fas fa-times-circle text-danger me-1'
+              : 'fas fa-check-circle text-success me-1'
+          "
+        ></i>
+        <span :class="event.estado_borrado ? 'text-danger fw-semibold' : 'text-success fw-semibold'"
+          >Estado:</span
+        >
+        <span :class="event.estado_borrado ? 'text-danger ms-1' : 'text-muted ms-1'">{{
+          event.estado_borrado ? 'Inactivo' : 'Activo'
+        }}</span>
       </div>
 
-
-      <div class="d-flex gap-2 ">
+      <div class="d-flex gap-2">
         <!-- Attach the new emitViewEvent function to the button -->
         <button class="btn btn-outline-primary btn-sm" @click="emitViewEvent">Ver evento</button>
-        <button v-if="event.inscripcionesAbiertas" class="btn btn-primary btn-sm">Inscribirse</button>
+        <button
+          v-if="event.inscripcionesAbiertas"
+          class="btn btn-primary btn-sm"
+          @click="router.push({ name: 'crearProyecto', params: { eventoId: id } })"
+        >
+          Inscribirse
+        </button>
       </div>
     </div>
   </div>
@@ -68,7 +92,9 @@ const emitViewEvent = () => {
   border-radius: 12px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
   border: none;
-  transition: max-width 0.3s, height 0.3s;
+  transition:
+    max-width 0.3s,
+    height 0.3s;
   box-sizing: border-box;
 }
 .event-card .card-body {
@@ -102,7 +128,10 @@ const emitViewEvent = () => {
   font-size: 0.8rem;
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
-  transition: background-color 0.5s, color 0.5s, border-color 0.5s;
+  transition:
+    background-color 0.5s,
+    color 0.5s,
+    border-color 0.5s;
 }
 
 .event-card .btn-outline-primary {
@@ -154,8 +183,8 @@ const emitViewEvent = () => {
     font-size: 0.8rem;
   }
   .event-card .btn-outline-primary {
-  color: #174384;
-  border-color: #174384;
+    color: #174384;
+    border-color: #174384;
   }
 }
 
@@ -188,7 +217,7 @@ const emitViewEvent = () => {
     height: auto;
     margin: 0 0 16px 0;
     border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   }
   .event-card .card-body {
     padding: 0.7rem 0.4rem;

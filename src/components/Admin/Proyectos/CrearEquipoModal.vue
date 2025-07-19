@@ -55,10 +55,14 @@
 
 <script setup>
 import { ref } from 'vue'
+import axios from 'axios'
 
-defineProps({
+const props = defineProps({
   visible: Boolean,
+  eventoId: Number,
 })
+
+console.log('Evento ID en CrearEquipoModal:', props.eventoId)
 const emit = defineEmits(['close', 'guardar'])
 
 const nombreEquipo = ref('')
@@ -85,6 +89,42 @@ function guardarEquipo() {
   // Emitir datos al padre
   emit('guardar', equipo)
   emit('close')
+}
+async function crearCabeceraEquipo() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.'
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
+      {
+        nombre: nombreEquipo.value,
+        evento_id: props.eventoId, // 👈 asegúrate de pasarlo como prop
+        ranking: null,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    const equipoId = response.data.id
+    console.log('ID del equipo creado:', equipoId)
+
+    return equipoId // 👈 retornamos el ID por si se necesita después
+  } catch (e) {
+    console.error(e)
+    error.value = 'Error al crear el equipo. Intente más tarde.'
+    return null
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
