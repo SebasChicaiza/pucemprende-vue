@@ -403,7 +403,7 @@ watch(() => props.eventData, newEventData => {
             fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
             orden: a.orden,
             dependencia_id: a.dependencia_id,
-          })).sort((a,b) => a.orden - b.orden) : [],
+          })).sort((a, b) => a.orden - b.orden) : [],
         };
       });
       if (cronogramas.value.length > 0) {
@@ -863,23 +863,24 @@ async function handleCronogramaSubmit() {
     return;
   }
 
-  const fechaInicio = new Date(cronogramaForm.fecha_inicio);
-  const fechaFin = new Date(cronogramaForm.fecha_fin);
+  // Convert all dates to UTC timestamps for consistent comparison
+  const fechaInicioUTC = new Date(cronogramaForm.fecha_inicio).getTime();
+  const fechaFinUTC = new Date(cronogramaForm.fecha_fin).getTime();
 
-  if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+  if (isNaN(fechaInicioUTC) || isNaN(fechaFinUTC)) {
     await showTimedErrorMessage('Las fechas y horas ingresadas para el cronograma no son válidas.');
     return;
   }
 
-  if (fechaInicio >= fechaFin) {
+  if (fechaInicioUTC >= fechaFinUTC) {
     await showTimedErrorMessage('La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.');
     return;
   }
 
-  const eventStartDate = new Date(form.fecha_inicio);
-  const eventEndDate = new Date(form.fecha_fin);
+  const eventStartDateUTC = new Date(form.fecha_inicio).getTime();
+  const eventEndDateUTC = new Date(form.fecha_fin).getTime();
 
-  if (fechaInicio < eventStartDate || fechaFin > eventEndDate) {
+  if (fechaInicioUTC < eventStartDateUTC || fechaFinUTC > eventEndDateUTC) {
     await showTimedErrorMessage('Las fechas del cronograma deben estar dentro del rango de fechas del evento.');
     return;
   }
@@ -925,8 +926,21 @@ function cancelEditCronograma() {
 function editCronograma(cronograma) {
   Object.assign(cronogramaForm, JSON.parse(JSON.stringify(cronograma)));
   editingCronogramaTempId.value = cronograma.tempId;
-  cronogramaForm.fecha_inicio = new Date(cronograma.fecha_inicio).toISOString().slice(0, 16);
-  cronogramaForm.fecha_fin = new Date(cronograma.fecha_fin).toISOString().slice(0, 16);
+
+  // Function to format a Date object into 'YYYY-MM-DDTHH:mm' local format
+  const formatLocalDateTime = (dateString) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  cronogramaForm.fecha_inicio = formatLocalDateTime(cronograma.fecha_inicio);
+  cronogramaForm.fecha_fin = formatLocalDateTime(cronograma.fecha_fin);
+
   saveToLocalStorage();
 }
 
@@ -963,17 +977,17 @@ async function performDeleteCronograma(tempId) {
     cronogramas.value.splice(index, 1);
 
     cronogramas.value.forEach((c, i) => {
-        c.orden = i + 1;
-        if (c.id) {
-          c._edited = true;
-        }
+      c.orden = i + 1;
+      if (c.id) {
+        c._edited = true;
+      }
     });
 
     await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaToDelete.titulo}</strong>" y sus actividades eliminados del borrador.`);
     saveToLocalStorage();
 
     if (actividadForm.cronograma_id === tempId) {
-        actividadForm.cronograma_id = cronogramas.value.length > 0 ? cronogramas.value[0].tempId : '';
+      actividadForm.cronograma_id = cronogramas.value.length > 0 ? cronogramas.value[0].tempId : '';
     }
   }
 }
@@ -1023,18 +1037,20 @@ async function handleActividadAdd() {
     return;
   }
 
-  const activityStartDate = new Date(actividadForm.fecha_inicio);
-  const activityEndDate = new Date(actividadForm.fecha_fin);
-  const cronogramaStartDate = new Date(parentCronograma.fecha_inicio);
-  const cronogramaEndDate = new Date(parentCronograma.fecha_fin);
+  // Convert all dates to UTC timestamps for consistent comparison
+  const activityStartDateUTC = new Date(actividadForm.fecha_inicio).getTime();
+  const activityEndDateUTC = new Date(actividadForm.fecha_fin).getTime();
+  const cronogramaStartDateUTC = new Date(parentCronograma.fecha_inicio).getTime();
+  const cronogramaEndDateUTC = new Date(parentCronograma.fecha_fin).getTime();
 
-  if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
+  // Now compare the UTC timestamps
+  if (activityStartDateUTC < cronogramaStartDateUTC || activityEndDateUTC > cronogramaEndDateUTC) {
     await showTimedErrorMessage(`Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`);
     addingActividad.value = false;
     return;
   }
 
-  if (activityStartDate >= activityEndDate) {
+  if (activityStartDateUTC >= activityEndDateUTC) { // Use UTC timestamps for this comparison too
     await showTimedErrorMessage('La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.');
     addingActividad.value = false;
     return;
@@ -1052,7 +1068,7 @@ async function handleActividadAdd() {
         tempId: editingActividadTempId.value,
         _edited: true,
       });
-      parentCronograma.actividades.sort((a,b) => a.orden - b.orden);
+      parentCronograma.actividades.sort((a, b) => a.orden - b.orden);
       await showTimedSuccessMessage(`Actividad "<strong>${actividadForm.titulo}</strong>" actualizada en el borrador.`);
     }
     editingActividadTempId.value = null;
@@ -1073,7 +1089,7 @@ async function handleActividadAdd() {
       dependencia_id: null,
     };
     parentCronograma.actividades.push(newActivity);
-    parentCronograma.actividades.sort((a,b) => a.orden - b.orden);
+    parentCronograma.actividades.sort((a, b) => a.orden - b.orden);
     await showTimedSuccessMessage(`La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`);
   }
 
@@ -1101,8 +1117,21 @@ function editActividad(cronogramaTempId, actividad) {
   actividadForm.cronograma_id = cronogramaTempId;
   Object.assign(actividadForm, JSON.parse(JSON.stringify(actividad)));
   editingActividadTempId.value = actividad.tempId;
-  actividadForm.fecha_inicio = new Date(actividad.fecha_inicio).toISOString().slice(0, 16);
-  actividadForm.fecha_fin = new Date(actividad.fecha_fin).toISOString().slice(0, 16);
+
+  // Function to format a Date object into 'YYYY-MM-DDTHH:mm' local format
+  const formatLocalDateTime = (dateString) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  actividadForm.fecha_inicio = formatLocalDateTime(actividad.fecha_inicio);
+  actividadForm.fecha_fin = formatLocalDateTime(actividad.fecha_fin);
+
   saveToLocalStorage();
 }
 
@@ -1279,13 +1308,11 @@ async function processFinalSave() {
     // --- Process Deletions: Activities BEFORE Chronograms ---
     for (const actId of deletedActivityIds.value) {
       await deleteActividadBackend(actId);
-      await showTimedSuccessMessage(`Actividad (ID: ${actId}) eliminada del servidor.`);
     }
     deletedActivityIds.value.clear();
 
     for (const cronoId of deletedCronogramaIds.value) {
       await deleteCronogramaBackend(cronoId);
-      await showTimedSuccessMessage(`Cronograma (ID: ${cronoId}) eliminado del servidor.`);
     }
     deletedCronogramaIds.value.clear();
 
@@ -1365,16 +1392,11 @@ onMounted(async () => {
       </h2>
 
       <div class="modal-tabs">
-        <button
-          v-for="tab in tabOrder"
-          :key="tab"
-          :class="[
-            'tab',
-            activeTab === tab ? 'active' : '',
-            isTabCompleted(tab) ? 'completed' : ''
-          ]"
-          @click="activeTab = tab"
-        >
+        <button v-for="tab in tabOrder" :key="tab" :class="[
+          'tab',
+          activeTab === tab ? 'active' : '',
+          isTabCompleted(tab) ? 'completed' : ''
+        ]" @click="activeTab = tab">
           {{ tabTitleMap[tab] }}
         </button>
       </div>
@@ -1456,12 +1478,7 @@ onMounted(async () => {
 
 
               <div class="form-group span-1">
-                <input
-                  v-model.number="form.capacidad"
-                  type="number"
-                  min="0"
-                  required
-                />
+                <input v-model.number="form.capacidad" type="number" min="0" required />
                 <label>Capacidad *</label>
               </div>
 
@@ -1469,13 +1486,8 @@ onMounted(async () => {
 
             <div class="switch-group">
               <div class="form-check form-switch">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  v-model="form.hayEquipos"
-                  :true-value="1"
-                  :false-value="0"
-                />
+                <input class="form-check-input" type="checkbox" v-model="form.hayEquipos" :true-value="1"
+                  :false-value="0" />
                 <label class="form-check-label">Ingresos de Proyectos</label>
               </div>
 
@@ -1508,22 +1520,12 @@ onMounted(async () => {
               <label class="imagenes-label">Cover del Evento *</label>
               <div class="imagenes-cover-row">
                 <div class="cover-preview-box">
-                  <img
-                    v-if="coverImage.url"
-                    :src="coverImage.url"
-                    class="cover-preview-img"
-                    alt="Cover Preview"
-                  />
+                  <img v-if="coverImage.url" :src="coverImage.url" class="cover-preview-img" alt="Cover Preview" />
                   <div v-else class="cover-preview-empty">Sin imagen</div>
                 </div>
                 <div class="imagenes-upload-box">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    @change="handleCoverChange"
-                    class="imagenes-file-input"
-                    ref="coverInput"
-                  />
+                  <input type="file" accept="image/*" @change="handleCoverChange" class="imagenes-file-input"
+                    ref="coverInput" />
                   <button type="button" @click="coverInput.click()" class="imagenes-btn">
                     Elegir archivo...
                   </button>
@@ -1535,14 +1537,8 @@ onMounted(async () => {
             <div>
               <label class="imagenes-label">Imágenes adicionales *</label>
               <div class="imagenes-dropzone" @dragover.prevent @drop.prevent="handleDrop">
-                <input
-                  type="file"
-                  multiple
-                  accept=".jpg, .png, .webp"
-                  @change="handleAdditionalChange"
-                  class="imagenes-file-input"
-                  ref="additionalInput"
-                />
+                <input type="file" multiple accept=".jpg, .png, .webp" @change="handleAdditionalChange"
+                  class="imagenes-file-input" ref="additionalInput" />
                 <div class="imagenes-dropzone-content">
                   <i class="fa-solid fa-folder imagenes-svg"></i>
                   <p>Puedes arrastrar y soltar archivos aquí para añadirlos</p>
@@ -1553,13 +1549,8 @@ onMounted(async () => {
                   <p class="imagenes-help-text">Solo se aceptan archivos .jpg, .png o .webp</p>
                 </div>
                 <div v-if="additionalImages.length" class="imagenes-grid">
-                  <img
-                    v-for="(img, idx) in additionalImages"
-                    :key="idx"
-                    :src="img.url"
-                    class="imagenes-thumb"
-                    alt="Imagen adicional"
-                  />
+                  <img v-for="(img, idx) in additionalImages" :key="idx" :src="img.url" class="imagenes-thumb"
+                    alt="Imagen adicional" />
                 </div>
               </div>
             </div>
@@ -1591,17 +1582,24 @@ onMounted(async () => {
               <div class="form-group">
                 <input v-model="cronogramaForm.fecha_inicio" type="datetime-local" placeholder=" " required />
                 <label>Fecha y Hora de Inicio *</label>
+                <small class="text-muted">
+                  <i class="fas fa-info-circle"></i> Evento Inicia: {{ formatDisplayDateTime(form.fecha_inicio) }}
+                </small>
               </div>
               <div class="form-group">
                 <input v-model="cronogramaForm.fecha_fin" type="datetime-local" placeholder=" " required />
                 <label>Fecha y Hora de Fin *</label>
+                <small class="text-muted">
+                  <i class="fas fa-info-circle"></i> Evento Finaliza: {{ formatDisplayDateTime(form.fecha_fin) }}
+                </small>
               </div>
             </div>
             <div class="form-group span-3">
-              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 200px;">
+              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 230px;">
                 {{ editingCronogramaTempId ? 'Actualizar Cronograma' : 'Crear cronograma' }} <i class="fas fa-plus"></i>
               </button>
-              <button v-if="editingCronogramaTempId" type="button" class="btn btn-secondary mt-2" @click="cancelEditCronograma" style="display: block; margin: 0 auto; max-width: 200px;">
+              <button v-if="editingCronogramaTempId" type="button" class="btn btn-secondary mt-2"
+                @click="cancelEditCronograma" style="display: block; margin: 0 auto; max-width: 200px;">
                 Cancelar Edición
               </button>
             </div>
@@ -1629,10 +1627,10 @@ onMounted(async () => {
                   <td>{{ formatDisplayDateTime(cronograma.fecha_fin) }}</td>
                   <td>
                     <button @click="editCronograma(cronograma)" class="btn btn-action-edit">
-                        <i class="fas fa-pencil-alt"></i>
+                      <i class="fas fa-pencil-alt"></i>
                     </button>
                     <button @click="deleteCronograma(cronograma.tempId)" class="btn btn-action-delete">
-                        <i class="fas fa-trash"></i>
+                      <i class="fas fa-trash"></i>
                     </button>
                   </td>
                 </tr>
@@ -1685,15 +1683,15 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="button-row" style="justify-content: center; margin-top: 0rem;">
-              <button type="submit" class="btn btn-primary" :disabled="addingActividad">
-                {{ editingActividadTempId ? 'Actualizar Actividad' : 'Añadir Actividad' }}
+            <div class="form-group span-3">
+              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 230px;">
+                {{ editingActividadTempId ? 'Actualizar Actividad' : 'Añadir Actividad' }} <i class="fas fa-plus"></i>
               </button>
-              <button v-if="editingActividadTempId" type="button" class="btn btn-secondary mt-2" @click="cancelEditActividad" style="display: block; margin: 0 auto; max-width: 200px;">
+              <button v-if="editingActividadTempId" type="button" class="btn btn-secondary mt-2"
+                @click="cancelEditActividad" style="display: block; margin: 0 auto; max-width: 200px;">
                 Cancelar Edición
               </button>
             </div>
-
           </form>
 
           <div class="tabla-actividades">
@@ -1715,7 +1713,9 @@ onMounted(async () => {
               <tbody>
                 <template v-for="(cronograma) in cronogramas" :key="cronograma.tempId">
                   <tr class="cronograma-header-row">
-                    <td colspan="7"><strong>Cronograma: {{ cronograma.titulo }} <br> Inicia: {{ formatDisplayDateTime(cronograma.fecha_inicio) }} <br> Termina: {{ formatDisplayDateTime(cronograma.fecha_fin) }} </strong></td>
+                    <td colspan="7"><strong>Cronograma: {{ cronograma.titulo }} <br> Inicia: {{
+                      formatDisplayDateTime(cronograma.fecha_inicio) }} <br> Termina: {{
+                          formatDisplayDateTime(cronograma.fecha_fin) }} </strong></td>
                   </tr>
                   <tr v-for="(act, idx) in cronograma.actividades" :key="act.tempId">
                     <td>
@@ -1726,7 +1726,8 @@ onMounted(async () => {
                         </button>
                         <span class="order-number">{{ act.orden }}</span>
                         <button @click="moverAbajo(act.cronograma_id, idx)"
-                          :disabled="idx === cronograma.actividades.length - 1 || reorderingActividades" class="order-btn">
+                          :disabled="idx === cronograma.actividades.length - 1 || reorderingActividades"
+                          class="order-btn">
                           <i class="fas fa-caret-down"></i>
                         </button>
                       </div>
@@ -1738,23 +1739,25 @@ onMounted(async () => {
                     <td>{{ getDependenciaDisplayText(act, act.cronograma_id) }}</td>
                     <td>
                       <button @click="editActividad(act.cronograma_id, act)" class="btn btn-action-edit">
-                          <i class="fas fa-pencil-alt"></i>
+                        <i class="fas fa-pencil-alt"></i>
                       </button>
                       <button @click="deleteActividad(act.cronograma_id, act.tempId)" class="btn btn-action-delete">
-                          <i class="fas fa-trash"></i>
+                        <i class="fas fa-trash"></i>
                       </button>
                     </td>
                   </tr>
                 </template>
                 <tr v-if="cronogramas.length === 0 || cronogramas.every(c => c.actividades.length === 0)">
-                    <td colspan="7" class="no-activities-message">No hay actividades para mostrar. Añade cronogramas y luego actividades.</td>
+                  <td colspan="7" class="no-activities-message">No hay actividades para mostrar. Añade cronogramas y
+                    luego actividades.
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <div class="button-row">
-            <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'" >
+            <button type="button" class="btn btn-cancel" @click="activeTab = 'cronograma'">
               <i class="fas fa-angle-left"></i> Volver
             </button>
             <button type="button" class="btn btn-primary" @click="handleSaveButtonClick">
@@ -1767,47 +1770,32 @@ onMounted(async () => {
       <Loader v-if="loading" />
 
     </div>
-      <ConfirmationModal
-        :show="showConfirmationModal"
-        title="Confirmar"
-        :message="ConfModalMessage"
-        confirm-text="Sí, continuar"
-        cancel-text="No, quedarme"
-        @confirm="handleConfirmationConfirm"
-        @cancel="handleConfirmationCancel"
-      />
+    <ConfirmationModal :show="showConfirmationModal" title="Confirmar" :message="ConfModalMessage"
+      confirm-text="Sí, continuar" cancel-text="No, quedarme" @confirm="handleConfirmationConfirm"
+      @cancel="handleConfirmationCancel" />
 
-      <OkModal
-        :show="showSuccessModal"
-        title="Información"
-        :message="successMessage"
-        @close="handleModalClose"
-        :duration="1000"
-      />
+    <OkModal :show="showSuccessModal" title="Información" :message="successMessage" @close="handleModalClose"
+      :duration="1000" />
 
-      <ErrorModal
-        :show="showErrorModal"
-        title="Error"
-        :message="errorMessage"
-        @close="handleErrorModalClose"
-        :duration="4000"
-      />
+    <ErrorModal :show="showErrorModal" title="Error" :message="errorMessage" @close="handleErrorModalClose"
+      :duration="4000" />
   </div>
 </template>
 
 
 <style scoped>
-
 /* Styles for the Cronogramas Table */
 .tabla-cronogramas {
   margin-top: 1rem;
   margin-bottom: 1.5rem;
-  overflow-x: auto; /* Ensures table is scrollable on small screens */
+  overflow-x: auto;
+  /* Ensures table is scrollable on small screens */
 }
 
 .tabla-cronogramas h4 {
   font-size: 0.9rem;
-  color: #333; /* Consistent dark text */
+  color: #333;
+  /* Consistent dark text */
   margin-top: 0.7rem;
   margin-bottom: 0.7rem;
   text-align: center;
@@ -1819,7 +1807,8 @@ onMounted(async () => {
 }
 
 .tabla-cronogramas thead {
-  background-color: #174384; /* Using the deep blue from .btn-primary and .tab.active */
+  background-color: #174384;
+  /* Using the deep blue from .btn-primary and .tab.active */
   color: white;
 }
 
@@ -1833,33 +1822,41 @@ onMounted(async () => {
 }
 
 .tabla-cronogramas tbody tr:nth-child(even) {
-  background-color: #f8f9fa; /* Keeping a light background for even rows */
+  background-color: #f8f9fa;
+  /* Keeping a light background for even rows */
 }
 
 .tabla-cronogramas tbody tr:hover {
-  background-color: #e5eef8; /* Lighter blue on hover, consistent with previous suggestion */
+  background-color: #e5eef8;
+  /* Lighter blue on hover, consistent with previous suggestion */
 }
 
 .tabla-cronogramas td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #dee2e6; /* Light border between rows */
+  border-bottom: 1px solid #dee2e6;
+  /* Light border between rows */
   font-size: 0.8rem;
-  color: #495057; /* Consistent with other neutral text */
+  color: #495057;
+  /* Consistent with other neutral text */
 }
 
 .tabla-cronogramas tbody tr:last-child td {
-  border-bottom: none; /* No border for the last row */
+  border-bottom: none;
+  /* No border for the last row */
 }
 
 /* Message when no cronogramas are added */
 .no-cronogramas-message {
   text-align: center;
-  color: #6c757d; /* Consistent gray text */
+  color: #6c757d;
+  /* Consistent gray text */
   font-style: italic;
   padding: 1.5rem 0;
-  border: 1px dashed #ced4da; /* Light gray dashed border */
+  border: 1px dashed #ced4da;
+  /* Light gray dashed border */
   border-radius: 5px;
-  background-color: #fefefe; /* Very light background */
+  background-color: #fefefe;
+  /* Very light background */
   margin-top: 1.5rem;
 }
 
@@ -1889,8 +1886,13 @@ onMounted(async () => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 
@@ -1908,6 +1910,7 @@ onMounted(async () => {
   color: #721c24;
   border: 1px solid #f5c6cb;
 }
+
 /* Overlay del fondo */
 .modal-overlay {
   position: fixed;
@@ -1919,6 +1922,7 @@ onMounted(async () => {
   align-items: center;
   z-index: 100;
 }
+
 .modal-imagenes {
   max-width: 900px;
   width: 95vw;
@@ -1957,6 +1961,7 @@ onMounted(async () => {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2106,12 +2111,12 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.form-group input:focus + label,
-.form-group textarea:focus + label,
-.form-group select:focus + label,
-.form-group input:not(:placeholder-shown) + label,
-.form-group textarea:not(:placeholder-shown) + label,
-.form-group select:not(:placeholder-shown) + label {
+.form-group input:focus+label,
+.form-group textarea:focus+label,
+.form-group select:focus+label,
+.form-group input:not(:placeholder-shown)+label,
+.form-group textarea:not(:placeholder-shown)+label,
+.form-group select:not(:placeholder-shown)+label {
   top: -0.5rem;
   left: 0.5rem;
   background: white;
@@ -2220,6 +2225,7 @@ onMounted(async () => {
     flex-direction: column;
   }
 }
+
 .imagenes-section {
   display: flex;
   flex-direction: column;
@@ -2241,8 +2247,10 @@ onMounted(async () => {
 }
 
 .cover-preview-box {
-  width: 250px; /* 125px * 2 */
-  height: 144px; /* 72px * 2 */
+  width: 250px;
+  /* 125px * 2 */
+  height: 144px;
+  /* 72px * 2 */
   background: #f3f3f3;
   display: flex;
   align-items: center;
@@ -2253,8 +2261,10 @@ onMounted(async () => {
 }
 
 .cover-preview-img {
-  width: 250px; /* 125px * 2 */
-  height: 144px; /* 72px * 2 */
+  width: 250px;
+  /* 125px * 2 */
+  height: 144px;
+  /* 72px * 2 */
   object-fit: contain;
   display: block;
 }
@@ -2348,10 +2358,12 @@ onMounted(async () => {
     align-items: flex-start;
     gap: 1rem;
   }
+
   .imagenes-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
 .cronograma-form {
   padding-top: 0.3em;
   max-width: 700px;
@@ -2400,6 +2412,7 @@ onMounted(async () => {
     gap: 0.5rem;
   }
 }
+
 .actividad-form {
   padding-top: 0.3em;
   padding-left: 0.1em;
@@ -2422,21 +2435,28 @@ onMounted(async () => {
 
 .tabla-actividades {
   position: relative;
-  margin-top: 2rem; /* As per your request */
-  margin-bottom: 1rem; /* As per your request */
-  overflow-x: auto; /* Ensures table is scrollable on small screens */
-  border: 1px solid #dee2e6; /* Consistent with cronogramas for overall table border */
-  border-radius: 8px; /* Match other rounded elements */
+  margin-top: 2rem;
+  /* As per your request */
+  margin-bottom: 1rem;
+  /* As per your request */
+  overflow-x: auto;
+  /* Ensures table is scrollable on small screens */
+  border: 1px solid #dee2e6;
+  /* Consistent with cronogramas for overall table border */
+  border-radius: 8px;
+  /* Match other rounded elements */
 }
 
-.tabla-actividades h5 { /* Changed from h4 as per template structure */
+.tabla-actividades h5 {
+  /* Changed from h4 as per template structure */
   font-size: 0.9rem;
   color: #333;
   margin-top: 0.7rem;
   margin-bottom: 0.7rem;
   text-align: center;
   padding: 0.5rem 1rem;
-  background-color: #f0f0f0; /* Light background for consistency */
+  background-color: #f0f0f0;
+  /* Light background for consistency */
   border-bottom: 1px solid #dee2e6;
   border-radius: 8px 8px 0 0;
 }
@@ -2444,57 +2464,76 @@ onMounted(async () => {
 .tabla-actividades table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.70rem; /* As per your request, keeps it small */
+  font-size: 0.70rem;
+  /* As per your request, keeps it small */
   background: #fff;
 }
 
 .tabla-actividades thead {
-  background-color: #174384; /* Deep blue, consistent with cronogramas */
+  background-color: #174384;
+  /* Deep blue, consistent with cronogramas */
   color: white;
 }
 
 .tabla-actividades th {
-  padding: 0.6rem 0.8rem; /* Slightly reduced padding for compactness */
+  padding: 0.6rem 0.8rem;
+  /* Slightly reduced padding for compactness */
   text-align: left;
   font-weight: 600;
-  font-size: 0.7rem; /* Keeping header font small */
-  white-space: nowrap; /* Prevent text wrapping in headers */
-  border: none; /* Remove individual cell borders in thead, border is on tbody td */
+  font-size: 0.7rem;
+  /* Keeping header font small */
+  white-space: nowrap;
+  /* Prevent text wrapping in headers */
+  border: none;
+  /* Remove individual cell borders in thead, border is on tbody td */
 }
 
 .tabla-actividades tbody tr:nth-child(even) {
-  background-color: #f8f9fa; /* Consistent alternating row background */
+  background-color: #f8f9fa;
+  /* Consistent alternating row background */
 }
 
 .tabla-actividades tbody tr:hover {
-  background-color: #e5eef8; /* Consistent hover effect */
+  background-color: #e5eef8;
+  /* Consistent hover effect */
 }
 
 .tabla-actividades td {
-  border: 1px solid #ddd; /* As per your request for cell borders */
-  padding: 0.5rem 0.7rem; /* As per your request, compact padding */
+  border: 1px solid #ddd;
+  /* As per your request for cell borders */
+  padding: 0.5rem 0.7rem;
+  /* As per your request, compact padding */
   text-align: left;
-  font-size: 0.75rem; /* Slightly larger than table font, but still small for readability */
+  font-size: 0.75rem;
+  /* Slightly larger than table font, but still small for readability */
   color: #495057;
-  vertical-align: middle; /* Aligns content, especially buttons, nicely */
+  vertical-align: middle;
+  /* Aligns content, especially buttons, nicely */
 }
 
 .tabla-actividades tbody tr:last-child td {
-  border-bottom: 1px solid #ddd; /* Keep bottom border for all rows as per your border-1px-solid-#ddd request */
+  border-bottom: 1px solid #ddd;
+  /* Keep bottom border for all rows as per your border-1px-solid-#ddd request */
 }
 
 .order-controls-horizontal {
-  display: flex; /* Arrange children in a row */
-  align-items: center; /* Vertically center items in the row */
-  justify-content: center; /* Horizontally center the group within the cell */
-  gap: 1px; /* Space between buttons and the number */
-  min-width: 60px; /* Ensure enough space for the horizontal layout */
+  display: flex;
+  /* Arrange children in a row */
+  align-items: center;
+  /* Vertically center items in the row */
+  justify-content: center;
+  /* Horizontally center the group within the cell */
+  gap: 1px;
+  /* Space between buttons and the number */
+  min-width: 60px;
+  /* Ensure enough space for the horizontal layout */
 }
 
 .order-btn {
   background: none;
   border: none;
-  font-size: 1rem; /* Adjust icon size */
+  font-size: 1rem;
+  /* Adjust icon size */
   cursor: pointer;
   color: #174384;
   padding: 0;
@@ -2524,7 +2563,8 @@ onMounted(async () => {
   color: #333;
   margin: 0;
   text-align: center;
-  min-width: 15px; /* Give the number a small fixed width to prevent jumpiness */
+  min-width: 15px;
+  /* Give the number a small fixed width to prevent jumpiness */
 }
 
 .tabla-paginacion {
@@ -2540,45 +2580,52 @@ onMounted(async () => {
   }
 }
 
-.btn-action-edit, .btn-action-delete {
-    padding: 8px 10px;
-    border-radius: 5px;
-    font-size: 0.9rem;
-    margin: 0 5px;
-    transition: background-color 0.2s ease, transform 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 7px; /* hace que el más corto iguale al largo */
-    text-align: center;
+.btn-action-edit,
+.btn-action-delete {
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  margin: 0 5px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 7px;
+  /* hace que el más corto iguale al largo */
+  text-align: center;
 }
 
 .btn-action-edit {
-    background-color: #174384; /* Yellowish for edit */
-    color: #ffffff;
+  background-color: #174384;
+  /* Yellowish for edit */
+  color: #ffffff;
 }
 
 .btn-action-edit:hover {
-    background-color: #174384;
-    transform: translateY(-1px);
+  background-color: #174384;
+  transform: translateY(-1px);
 }
 
 .btn-action-delete {
-    background-color: #dc3545; /* Red for delete */
-    color: white;
+  background-color: #dc3545;
+  /* Red for delete */
+  color: white;
 }
 
 .btn-action-delete:hover {
-    background-color: #c82333;
-    transform: translateY(-1px);
+  background-color: #c82333;
+  transform: translateY(-1px);
 }
 
-.btn-action-edit i, .btn-action-delete i {
-    margin: 0; /* Remove extra margin from existing i styles */
+.btn-action-edit i,
+.btn-action-delete i {
+  margin: 0;
+  /* Remove extra margin from existing i styles */
 }
 
 .cronograma-header-row td {
-  background-color: #e0f2f7; /* Light blue background for cronograma headers */
+  background-color: #e0f2f7;
+  /* Light blue background for cronograma headers */
   font-weight: bold;
   color: #0056b3;
   padding: 10px 15px;
