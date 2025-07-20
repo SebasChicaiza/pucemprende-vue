@@ -1,148 +1,77 @@
 <script setup>
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
-import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios';
-import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
-import AdminEventCard from '@/components/Admin/Eventos/AdminEventCard.vue'
+import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue'
+import { useRouter } from 'vue-router'
+import { useEventosStore } from '@/stores/eventos' // Importa tu store
+import { storeToRefs } from 'pinia' // Necesario para desestructurar propiedades reactivas del store
+
+// Carga asíncrona de componentes grandes o usados con menos frecuencia
+const ModalCrearEvento = defineAsyncComponent(() =>
+  import('@/components/Admin/Eventos/ModalCrearEvento.vue')
+);
+const AdminEventCard = defineAsyncComponent(() =>
+  import('@/components/Admin/Eventos/AdminEventCard.vue')
+);
+// LoaderComponent es pequeño, no suele necesitar carga asíncrona
 import LoaderComponent from '@/components/LoaderComponent.vue'
-import { useRouter } from 'vue-router';
+
 
 const router = useRouter();
+const eventosStore = useEventosStore(); // Instancia el store
 
 const showCreateEditModal = ref(false)
-const currentEventToEdit = ref(null)
+let searchTimeout = null;
 
-const events = ref([])
-const error = ref('')
-const loading = ref(false)
-const searchQuery = ref('')
-let searchTimeout = null; // To hold our debounce timeout
+// Desestructura las propiedades reactivas del store usando storeToRefs
+const { events, loading, error, currentPage, totalEvents, totalPages, searchQuery, currentEventToEdit } = storeToRefs(eventosStore);
 
-const currentPage = ref(1)
-const itemsPerPage = ref(12)
-const totalEvents = ref(0) // This is where the total count from the backend will go
-
-const totalPages = computed(() => Math.ceil(totalEvents.value / itemsPerPage.value))
-
-async function fetchEvents() {
-    const token = localStorage.getItem('token');
-
-    if (!token) {
-        error.value = 'Token de autenticación no encontrado.';
-        loading.value = false;
-        events.value = [];
-        totalEvents.value = 0;
-        return;
-    }
-
-    loading.value = true;
-    error.value = '';
-
-    const offset = (currentPage.value - 1) * itemsPerPage.value;
-    let url = `${import.meta.env.VITE_URL_BACKEND}/api/eventos/limit-offset?limit=${itemsPerPage.value}&offset=${offset}`;
-
-    if (searchQuery.value) {
-        url += `&search=${searchQuery.value}`;
-    }
-
-    try {
-        const response = await axios.get(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-
-        events.value = Array.isArray(response.data.data) ? response.data.data : [];
-        totalEvents.value = typeof response.data.total === 'number' ? response.data.total : 0;
-
-        error.value = null;
-
-    } catch (err) {
-        if (err.response) {
-            console.error('Error del servidor (Axios):', err.response.data);
-            const errorMessage = err.response.data?.message || err.response.statusText || `HTTP Error ${err.response.status}`;
-            error.value = `Error al cargar los eventos: ${errorMessage}`;
-        } else if (err.request) {
-            console.error('No se recibió respuesta del servidor (Axios):', err.request);
-            error.value = 'No se pudo conectar con el servidor. Verifique su conexión de red.';
-        } else {
-            console.error('Error al configurar la solicitud (Axios):', err.message);
-            error.value = `Fallo en la solicitud: ${err.message}`;
-        }
-        events.value = [];
-        totalEvents.value = 0;
-    } finally {
-        loading.value = false;
-    }
-}
 
 const handleSearchInput = () => {
-    // Clear any existing timeout to reset the debounce timer
     clearTimeout(searchTimeout);
-    // Set a new timeout
     searchTimeout = setTimeout(() => {
-        // Only trigger search if current page is 1, otherwise reset to 1
-        if (currentPage.value !== 1) {
-            currentPage.value = 1;
+        // Al cambiar el query de búsqueda, siempre vamos a la primera página
+        if (eventosStore.currentPage !== 1) {
+            eventosStore.setCurrentPage(1); // Esto disparará el watcher de currentPage
         } else {
-            fetchEvents();
+            eventosStore.fetchEvents(); // Si ya estamos en la primera página, simplemente busca
         }
-    }, 500); // Wait 500ms (0.5 seconds) after typing stops
+    }, 500);
 };
 
 const handleSearchEnter = () => {
-    // Clear the debounce timeout immediately if Enter is pressed
     clearTimeout(searchTimeout);
-    // Always go to the first page when a new search is initiated by Enter
-    currentPage.value = 1;
-    fetchEvents();
+    eventosStore.setCurrentPage(1); // Siempre ir a la primera página con Enter
+    eventosStore.fetchEvents();
 };
 
-
+// Observar cambios en currentPage del store para recargar eventos
 watch(currentPage, () => {
-    fetchEvents();
+    eventosStore.fetchEvents();
 });
 
-onMounted(fetchEvents)
+// Observar cambios en searchQuery del store (opcional, si lo modificas fuera del v-model)
+// watch(searchQuery, (newVal, oldVal) => {
+//     // Puedes agregar lógica aquí si la query cambia de forma externa y necesitas una acción inmediata
+//     if (newVal === '' && oldVal !== '' && !loading.value) {
+//         eventosStore.fetchEvents();
+//     }
+// });
+
+
+onMounted(() => {
+    eventosStore.fetchEvents(); // Carga inicial de eventos al montar el componente
+});
 
 const openCreateModal = () => {
-    currentEventToEdit.value = null;
+    eventosStore.clearCurrentEventToEdit(); // Asegúrate de limpiar el evento a editar antes de abrir el modal para crear
     showCreateEditModal.value = true;
 };
 
-async function fetchEventDetailsForEdit(eventId) {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        error.value = 'Token de autenticación no encontrado.';
-        return null;
-    }
-
-    loading.value = true;
-    try {
-        const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${eventId}`, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-        console.log('Detailed Event Data for Edit:', response.data);
-        currentEventToEdit.value = response.data;
-        showCreateEditModal.value = true;
-        return response.data;
-    } catch (err) {
-        console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
-        error.value = `Error al cargar detalles del evento: ${err.response?.data?.message || err.message}`;
-        return null;
-    } finally {
-        loading.value = false;
-    }
-}
-
-const handleEditEvent = (eventData) => {
+const handleEditEvent = async (eventData) => {
     if (eventData && eventData.id) {
-        fetchEventDetailsForEdit(eventData.id);
+        await eventosStore.fetchEventDetailsForEdit(eventData.id);
+        showCreateEditModal.value = true;
     } else {
         console.error('No event ID found for editing.');
     }
@@ -150,14 +79,14 @@ const handleEditEvent = (eventData) => {
 
 const handleModalClose = () => {
     showCreateEditModal.value = false;
-    currentEventToEdit.value = null;
+    eventosStore.clearCurrentEventToEdit(); // Limpia el evento editado al cerrar el modal
 };
 
 const handleModalSubmit = async (emittedEventData) => {
     showCreateEditModal.value = false;
-    currentEventToEdit.value = null;
+    eventosStore.clearCurrentEventToEdit();
 
-    await fetchEvents();
+    await eventosStore.fetchEvents(); // Recargar la lista de eventos después de crear/editar
     console.log('Event list refreshed after modal submission.');
 };
 
@@ -167,19 +96,19 @@ const handleViewEvent = (eventId) => {
 
 const goToPage = (page) => {
     if (page >= 1 && page <= totalPages.value) {
-        currentPage.value = page;
+        eventosStore.setCurrentPage(page);
     }
 };
 
 const nextPage = () => {
     if (currentPage.value < totalPages.value) {
-        currentPage.value++;
+        eventosStore.setCurrentPage(currentPage.value + 1);
     }
 };
 
 const prevPage = () => {
     if (currentPage.value > 1) {
-        currentPage.value--;
+        eventosStore.setCurrentPage(currentPage.value - 1);
     }
 };
 </script>
@@ -195,7 +124,7 @@ const prevPage = () => {
             <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
                 <div class="d-flex align-items-center mb-3 gap-2">
                     <input
-                        v-model="searchQuery"
+                        v-model="eventosStore.searchQuery"
                         type="text"
                         placeholder="Buscar por nombre"
                         class="form-control"

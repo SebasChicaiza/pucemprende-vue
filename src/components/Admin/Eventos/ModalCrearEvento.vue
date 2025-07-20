@@ -1239,8 +1239,6 @@ async function processFinalSave() {
 
     const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id);
     eventIdStore.value = createdOrUpdatedEvent.id;
-    loading.value = false;
-    await showTimedSuccessMessage(isEditing.value ? 'Evento actualizado con éxito.' : 'Evento creado con éxito.');
 
     if (!isEditing.value) {
       const allImagesToLink = [];
@@ -1252,10 +1250,9 @@ async function processFinalSave() {
           coverImage.id = uploadedCover.id;
           coverImage.url = uploadedCover.url;
           allImagesToLink.push(uploadedCover.id);
-          await showTimedSuccessMessage('Cover del evento cargada');
         }
-      } else if (coverImage.id) {
       }
+
 
       for (const img of additionalImages.value) {
         if (img.file) {
@@ -1265,9 +1262,7 @@ async function processFinalSave() {
             img.id = uploadedImg.id;
             img.url = uploadedImg.url;
             allImagesToLink.push(uploadedImg.id);
-            await showTimedSuccessMessage(`Imagen adicional del evento "${img.file.name}" cargada.`);
           }
-        } else if (img.id) {
         }
       }
 
@@ -1278,7 +1273,6 @@ async function processFinalSave() {
             await linkArchivoToEvento(archivoId, eventIdStore.value);
           }
         }
-        await showTimedSuccessMessage('Todas las imagenes han sido guardadas con el evento');
       }
     }
 
@@ -1299,18 +1293,12 @@ async function processFinalSave() {
     for (const cronograma of cronogramas.value) {
       let createdOrUpdatedCronograma = null;
       if (cronograma.id && cronograma._edited) {
-        loading.value = true;
         createdOrUpdatedCronograma = await updateCronograma(cronograma);
         cronograma._edited = false;
-        loading.value = false;
-        await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" actualizado con éxito.`);
       } else if (!cronograma.id) {
-        loading.value = true;
         createdOrUpdatedCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
         cronograma.id = createdOrUpdatedCronograma.id;
         cronograma.tempId = createdOrUpdatedCronograma.id;
-        loading.value = false;
-        await showTimedSuccessMessage(`Cronograma "<strong>${cronograma.titulo}</strong>" creado con éxito.`);
       } else {
         createdOrUpdatedCronograma = cronograma;
       }
@@ -1327,25 +1315,19 @@ async function processFinalSave() {
           }
 
           if (activity.id && activity._edited) {
-            loading.value = true;
             activity.cronograma_id = createdOrUpdatedCronograma.id;
             activity.dependencia_id = dependencyIdToSend;
             await updateActividadBackend(activity);
             activity._edited = false;
-            loading.value = false;
-            await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" actualizada con éxito.`);
           } else if (!activity.id) {
             const activityPayload = {
               ...JSON.parse(JSON.stringify(activity)),
               cronograma_id: createdOrUpdatedCronograma.id,
               dependencia_id: dependencyIdToSend,
             };
-            loading.value = true;
             const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
             activity.id = createdOrUpdatedActivity.id;
             activity.tempId = createdOrUpdatedActivity.id;
-            loading.value = false;
-            await showTimedSuccessMessage(`Actividad "<strong>${activity.titulo}</strong>" creada con éxito.`);
           }
         }
       }

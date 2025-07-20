@@ -6,7 +6,6 @@
           <h5 class="modal-title">Administrar Imágenes del Evento</h5>
           <button type="button" class="btn-close" aria-label="Cerrar" @click="closeModal"></button>
         </div>
-        <!-- Wrap modal-body content with ScrollBar -->
         <ScrollBar :maxHeight="'60vh'">
           <div class="modal-body-content">
             <section class="mb-4">
@@ -17,7 +16,7 @@
                   :key="image.id"
                   class="image-thumbnail-wrapper"
                 >
-                  <img :src="image.url" class="img-fluid rounded thumbnail-manage-img" :alt="'Imagen del evento'" />
+                  <img :src="image.url" class="img-fluid rounded thumbnail-manage-img" :alt="image.name || 'Imagen del evento'" />
                   <button
                     class="btn btn-danger btn-sm delete-image-btn"
                     @click="confirmDelete(image)"
@@ -87,7 +86,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import LoaderComponent from '@/components/LoaderComponent.vue';
-import ScrollBar from '@/components/ScrollBar.vue'; // Import ScrollBar Component
+import ScrollBar from '@/components/ScrollBar.vue';
 
 const props = defineProps({
   show: {
@@ -104,21 +103,26 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'delete-image', 'upload-images']);
+const emit = defineEmits(['close', 'delete-image', 'upload-images', 'images-uploaded-success']); // Added new event
 
 const selectedFiles = ref([]);
 const newImagePreviews = ref([]);
 
 watch(() => props.show, (newVal) => {
   if (!newVal) {
+    // Revoke all object URLs when the modal closes to prevent memory leaks
+    newImagePreviews.value.forEach(preview => URL.revokeObjectURL(preview.url));
     selectedFiles.value = [];
     newImagePreviews.value = [];
   }
-});
+}, { immediate: true });
 
 const handleFileChange = (event) => {
+  // Revoke previous object URLs before creating new ones for selected files
+  newImagePreviews.value.forEach(preview => URL.revokeObjectURL(preview.url));
+
   selectedFiles.value = Array.from(event.target.files);
-  newImagePreviews.value = [];
+  newImagePreviews.value = []; // Clear previous previews
 
   selectedFiles.value.forEach(file => {
     if (file.type.startsWith('image/')) {
@@ -128,33 +132,48 @@ const handleFileChange = (event) => {
       });
     }
   });
+  // Clear the input file element's value to allow re-selecting the same file(s)
+  event.target.value = '';
 };
 
 const removeNewImage = (index) => {
-    URL.revokeObjectURL(newImagePreviews.value[index].url);
+    URL.revokeObjectURL(newImagePreviews.value[index].url); // Revoke URL for the removed preview
     newImagePreviews.value.splice(index, 1);
     selectedFiles.value.splice(index, 1);
 };
 
-
 const uploadFiles = () => {
   if (selectedFiles.value.length > 0) {
     emit('upload-images', selectedFiles.value);
-    selectedFiles.value = [];
-    newImagePreviews.value = [];
+    // DO NOT CLEAR selectedFiles and newImagePreviews here.
+    // The parent component will handle the actual upload and then trigger a refresh.
+    // The preview should remain until the upload is confirmed.
   }
 };
+
+// This function will be called by the parent after a successful upload
+const clearUploadState = () => {
+  selectedFiles.value = [];
+  newImagePreviews.value.forEach(preview => URL.revokeObjectURL(preview.url));
+  newImagePreviews.value = [];
+};
+defineExpose({ clearUploadState }); // Expose the function to the parent
 
 const confirmDelete = (image) => {
   emit('delete-image', image);
 };
 
 const closeModal = () => {
+  // Ensure cleanup happens when the modal is closed via the close button
+  newImagePreviews.value.forEach(preview => URL.revokeObjectURL(preview.url));
+  selectedFiles.value = [];
+  newImagePreviews.value = [];
   emit('close');
 };
 </script>
 
 <style scoped>
+/* Your styles are unchanged */
 .modal-backdrop {
   position: fixed;
   top: 0;
@@ -211,16 +230,8 @@ const closeModal = () => {
   opacity: 1;
 }
 
-/* No longer needed here as ScrollBar handles the overflow */
-/* .modal-body {
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  background-color: #fdfdfd;
-} */
-
 .modal-body-content {
-  padding: 1.5rem; /* Apply padding directly to the content inside ScrollBar */
+  padding: 1.5rem;
   background-color: #fdfdfd;
 }
 
@@ -374,7 +385,6 @@ const closeModal = () => {
   justify-content: flex-end;
 }
 
-/* Loader Overlay for Modal */
 .modal-loader-overlay {
   position: absolute;
   top: 0;

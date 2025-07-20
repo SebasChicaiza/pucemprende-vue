@@ -12,7 +12,7 @@ import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
 import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue';
 import ScrollBar from '@/components/ScrollBar.vue';
 import ConfirmationModal from '@/components/ConfirmationModal.vue';
-import ErrorModal from '@/components/ErrorModal.vue'; // Import ErrorModal
+import ErrorModal from '@/components/ErrorModal.vue';
 
 const route = useRoute()
 const router = useRouter()
@@ -36,22 +36,23 @@ const currentDeleteAction = ref(null);
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 
-const showErrorModal = ref(false); // State for Error Modal
-const errorMessage = ref(''); // Message for Error Modal
+const showErrorModal = ref(false);
+const errorMessage = ref('');
 
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
 const showImageManagementModal = ref(false);
 const imageToDelete = ref(null);
+const imageManagementModalRef = ref(null); // Ref to access modal component's methods
 
-const showReactivateConfirmModal = ref(false); // State for Reactivate Confirmation Modal
+const showReactivateConfirmModal = ref(false);
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
     return eventImages.value;
   }
-  return [{ id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image' }];
+  return [{ id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' }];
 });
 
 const selectImage = (image) => {
@@ -112,6 +113,7 @@ async function fetchEventImages() {
     eventImages.value = fetchedImages;
 
     if (eventImages.value.length > 0) {
+      // Ensure the mainImage is one of the fetched images, or set the first one
       if (!mainImage.value || !fetchedImages.some(img => img.url === mainImage.value)) {
           mainImage.value = eventImages.value[0].url;
       }
@@ -120,8 +122,9 @@ async function fetchEventImages() {
     }
 
   } catch (err) {
-    console.error(' Errorfetching event images, no image found:', err.response?.data || err.message);
+    console.error('Error fetching event images, no image found:', err.response?.data || err.message);
     mainImage.value = DEFAULT_IMAGE_URL;
+    eventImages.value = []; // Ensure it's an empty array if there's an error or no images
   } finally {
     loadingImages.value = false;
   }
@@ -260,7 +263,7 @@ async function uploadFileToBackend(file, type = 'general') {
   formData.append('name', file.name.split('.')[0]);
   formData.append('tipo', type);
 
-  isLoadingImagesInModal.value = true;
+  // isLoadingImagesInModal.value = true; // This is set in the calling function
   try {
     const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
       headers: {
@@ -269,13 +272,13 @@ async function uploadFileToBackend(file, type = 'general') {
       },
     });
     console.log('File uploaded to Archivos:', response.data);
-    return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo };
+    // Assuming backend returns { id, url, tipo } or similar direct file info
+    return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo, name: file.name };
   } catch (error) {
     console.error('Error uploading file to Archivos:', error.response?.data || error.message);
     errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`;
     showErrorModal.value = true;
     return null;
-  } finally {
   }
 }
 
@@ -285,7 +288,6 @@ const openImageManagementModal = () => {
 
 const closeImageManagementModal = () => {
   showImageManagementModal.value = false;
-  fetchEventImages();
 };
 
 const triggerDeleteImage = (image) => {
@@ -323,9 +325,12 @@ const confirmDeleteImage = async () => {
     okModalMessage.value = '¡Imagen eliminada exitosamente!';
     showOkModal.value = true;
 
-    eventImages.value = eventImages.value.filter(img => img.id !== imageToDelete.value.id);
+    // After successful deletion, re-fetch all images to update the list
+    await fetchEventImages();
+
+    // If the main image was deleted, reset it
     if (mainImage.value === imageToDelete.value.url) {
-      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
+        mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
     }
 
   } catch (err) {
@@ -368,7 +373,7 @@ const handleReactivateConfirm = async () => {
     );
     okModalMessage.value = '¡El evento ha sido reactivado exitosamente!';
     showOkModal.value = true;
-    await fetchEventDetails(); // Re-fetch details to update estado_borrado
+    await fetchEventDetails();
 
   } catch (err) {
     console.error('Error reactivating event:', err.response?.data || err.message);
@@ -398,7 +403,6 @@ const uploadNewImages = async (newFiles) => {
 
   isLoadingImagesInModal.value = true;
   const uploadPromises = [];
-  const newlyUploadedImages = [];
 
   for (const file of newFiles) {
     uploadPromises.push(
@@ -406,13 +410,18 @@ const uploadNewImages = async (newFiles) => {
         const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general');
         if (uploadedArchivo) {
           try {
+            // Your backend should return the full image object including its URL and ID
+            // after linking. The `linkResponse.data` should be the actual image object
+            // that you want to add to `eventImages.value`.
             const linkResponse = await axios.post(
               `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
               {
-                archivo_id: uploadedArchivo.id,
+                archivo_id: uploadedArchivo.id, // ID from the initial upload
                 evento_id: eventId.value,
-                url: uploadedArchivo.url,
-                tipo: uploadedArchivo.tipo
+                url: uploadedArchivo.url, // URL from the initial upload
+                tipo: uploadedArchivo.tipo, // Type from the initial upload
+                // Make sure your backend saves the 'name' and returns it here too
+                name: uploadedArchivo.name // Pass the file name to be saved in backend
               },
               {
                 headers: {
@@ -421,35 +430,41 @@ const uploadNewImages = async (newFiles) => {
                 },
               }
             );
-            console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}`);
-            newlyUploadedImages.push(linkResponse.data); // Push the linked image object from the backend
-            return true;
+            console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}:`, linkResponse.data);
+            return linkResponse.data; // Return the fully linked image object
           } catch (linkError) {
             console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
             errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
             showErrorModal.value = true;
-            return false;
+            return null; // Return null if linking fails
           }
         }
-        return false;
+        return null; // Return null if initial upload fails
       })()
     );
   }
 
   const results = await Promise.all(uploadPromises);
-  const allSucceeded = results.every(result => result === true);
+  const successfulUploads = results.filter(result => result !== null); // Filter out failed uploads
 
-  if (!allSucceeded) { // If any upload failed, show error
-    errorMessage.value = '¡Algunas imágenes no pudieron subirse o asociarse correctamente!';
-    showErrorModal.value = true;
-  } else {
-    okModalMessage.value = '¡Imágenes subidas y asociadas al evento exitosamente!';
-    eventImages.value = [...eventImages.value, ...newlyUploadedImages];
+  if (successfulUploads.length > 0) {
+    okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`;
     showOkModal.value = true;
+    // CRUCIAL: Re-fetch all images from the backend to ensure a fresh, consistent list
+    await fetchEventImages();
+    // Clear the files from the modal's internal state after successful upload and re-fetch
+    if (imageManagementModalRef.value) {
+      imageManagementModalRef.value.clearUploadState();
+    }
+  } else {
+    // If some failed, or all failed
+    errorMessage.value = '¡No se pudieron subir o asociar todas las imágenes correctamente!';
+    showErrorModal.value = true;
   }
 
   isLoadingImagesInModal.value = false;
 };
+
 
 onMounted(async () => {
   try {
@@ -511,7 +526,6 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('es-ES', options);
 };
 </script>
-
 <template>
   <LoaderComponent v-if="loading"/>
   <div class="d-flex" style="height: 100vh; overflow: hidden">
@@ -784,6 +798,7 @@ const formatDate = (dateString) => {
     @close="closeImageManagementModal"
     @delete-image="triggerDeleteImage"
     @upload-images="uploadNewImages"
+    ref="imageManagementModalRef"
   />
 
   <ConfirmationModal
