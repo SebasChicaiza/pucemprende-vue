@@ -115,7 +115,7 @@ async function fetchEventImages() {
     if (eventImages.value.length > 0) {
       // Ensure the mainImage is one of the fetched images, or set the first one
       if (!mainImage.value || !fetchedImages.some(img => img.url === mainImage.value)) {
-          mainImage.value = eventImages.value[0].url;
+        mainImage.value = eventImages.value[0].url;
       }
     } else {
       mainImage.value = DEFAULT_IMAGE_URL;
@@ -131,21 +131,21 @@ async function fetchEventImages() {
 }
 
 const handleDeleteConfirmed = async () => {
-    if (currentDeleteAction.value === 'deleteEvent') {
-        await deleteEvent();
-    } else if (currentDeleteAction.value === 'deleteImage') {
-        await confirmDeleteImage();
-    }
-    currentDeleteAction.value = null;
+  if (currentDeleteAction.value === 'deleteEvent') {
+    await deleteEvent();
+  } else if (currentDeleteAction.value === 'deleteImage') {
+    await confirmDeleteImage();
+  }
+  currentDeleteAction.value = null;
 };
 
 const showDeleteConfirmation = () => {
-    modalTitle.value = 'Confirmar Eliminación de Evento';
-    modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?';
-    modalWarning.value = 'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento';
-    modalConfirmText.value = 'Sí, Deshabilitar Evento';
-    currentDeleteAction.value = 'deleteEvent';
-    universalDeleteModalRef.value.show();
+  modalTitle.value = 'Confirmar Eliminación de Evento';
+  modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?';
+  modalWarning.value = 'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento';
+  modalConfirmText.value = 'Sí, Deshabilitar Evento';
+  currentDeleteAction.value = 'deleteEvent';
+  universalDeleteModalRef.value.show();
 };
 
 const deleteEvent = async () => {
@@ -291,13 +291,13 @@ const closeImageManagementModal = () => {
 };
 
 const triggerDeleteImage = (image) => {
-    imageToDelete.value = image;
-    modalTitle.value = 'Confirmar Eliminación de Imagen';
-    modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?';
-    modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente la imagen del evento.';
-    modalConfirmText.value = 'Sí, Eliminar Imagen';
-    currentDeleteAction.value = 'deleteImage';
-    universalDeleteModalRef.value.show();
+  imageToDelete.value = image;
+  modalTitle.value = 'Confirmar Eliminación de Imagen';
+  modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?';
+  modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente la imagen del evento.';
+  modalConfirmText.value = 'Sí, Eliminar Imagen';
+  currentDeleteAction.value = 'deleteImage';
+  universalDeleteModalRef.value.show();
 };
 
 const confirmDeleteImage = async () => {
@@ -330,7 +330,7 @@ const confirmDeleteImage = async () => {
 
     // If the main image was deleted, reset it
     if (mainImage.value === imageToDelete.value.url) {
-        mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
+      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
     }
 
   } catch (err) {
@@ -347,7 +347,7 @@ const confirmDeleteImage = async () => {
 };
 
 const triggerReactivateEvent = () => {
-    showReactivateConfirmModal.value = true;
+  showReactivateConfirmModal.value = true;
 };
 
 const handleReactivateConfirm = async () => {
@@ -527,12 +527,13 @@ const formatDate = (dateString) => {
 };
 </script>
 <template>
-  <LoaderComponent v-if="loading"/>
+  <LoaderComponent v-if="loading" />
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
 
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute :currentRouteName="route.name" :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'" />
+      <PageHeaderRoute :currentRouteName="route.name"
+        :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'" />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <!-- Removed old error display -->
@@ -545,14 +546,14 @@ const formatDate = (dateString) => {
               <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
             </div>
             <div class="d-flex">
-                <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">
-                  <i class="fa-solid fa-pencil me-2"></i>Editar
+              <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">
+                <i class="fa-solid fa-pencil me-2"></i>Editar
+              </button>
+              <div v-if="!eventDetails.estado_borrado">
+                <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
+                  <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
                 </button>
-                <div v-if="!eventDetails.estado_borrado">
-                  <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
-                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
-                  </button>
-                </div>
+              </div>
             </div>
           </div>
           <div class="row align-items-stretch mb-5">
@@ -565,19 +566,15 @@ const formatDate = (dateString) => {
                     </div>
                   </div>
                   <div v-else class="flex-grow-1 d-flex flex-column justify-content-start align-items-center">
-                    <div
-                      v-for="image in imagesToDisplay"
-                      :key="image.id"
-                      class="thumbnail-container mb-2"
-                      :class="{ 'active-thumbnail': mainImage === image.url }"
-                      @click="selectImage(image)"
-                    >
+                    <div v-for="image in imagesToDisplay" :key="image.id" class="thumbnail-container mb-2"
+                      :class="{ 'active-thumbnail': mainImage === image.url }" @click="selectImage(image)">
                       <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
                     </div>
                   </div>
                 </ScrollBar>
-                <button class="btn btn-primary add-image-plus-btn animated-btn" @click="openImageManagementModal" title="Editar Imágenes">
-                    <i class="fas fa-plus"></i>
+                <button class="btn btn-primary add-image-plus-btn animated-btn" @click="openImageManagementModal"
+                  title="Editar Imágenes">
+                  <i class="fas fa-plus"></i>
                 </button>
               </div>
               <div class="flex-grow-1 main-image-display">
@@ -585,7 +582,8 @@ const formatDate = (dateString) => {
                   <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                   </div>
                 </div>
-                <img v-else :src="mainImage" class="img-fluid rounded main-event-image" :alt="eventDetails.nombre || 'Event Image'" />
+                <img v-else :src="mainImage" class="img-fluid rounded main-event-image"
+                  :alt="eventDetails.nombre || 'Event Image'" />
               </div>
             </div>
 
@@ -617,30 +615,31 @@ const formatDate = (dateString) => {
                 </div>
               </div>
 
-              <button v-if="eventDetails.inscripcionesAbiertas" class="btn btn-success mb-4 animated-btn">Inscribirse</button>
+              <button v-if="eventDetails.inscripcionesAbiertas"
+                class="btn btn-success mb-4 animated-btn">Inscribirse</button>
               <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
             </div>
 
             <hr class="my-3">
 
-              <div class="d-flex justify-content-between flex-wrap event-attributes">
-                <div class="attribute-item">
-                  <p class="info-label">Estado:</p>
-                  <p class="info-content">{{ eventDetails.estado }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Modalidad:</p>
-                  <p class="info-content">{{ eventDetails.modalidad }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Capacidad:</p>
-                  <p class="info-content">{{ eventDetails.capacidad }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Inscripciones Abiertas:</p>
-                  <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
-                </div>
+            <div class="d-flex justify-content-between flex-wrap event-attributes">
+              <div class="attribute-item">
+                <p class="info-label">Estado:</p>
+                <p class="info-content">{{ eventDetails.estado }}</p>
               </div>
+              <div class="attribute-item">
+                <p class="info-label">Modalidad:</p>
+                <p class="info-content">{{ eventDetails.modalidad }}</p>
+              </div>
+              <div class="attribute-item">
+                <p class="info-label">Capacidad:</p>
+                <p class="info-content">{{ eventDetails.capacidad }}</p>
+              </div>
+              <div class="attribute-item">
+                <p class="info-label">Inscripciones Abiertas:</p>
+                <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
+              </div>
+            </div>
           </div>
 
           <!-- New Section for Event Status and Reactivate Button -->
@@ -653,92 +652,83 @@ const formatDate = (dateString) => {
                 <i class="fas fa-times-circle me-2"></i> El evento está desactivado
               </span>
             </div>
-            <button
-              v-if="eventDetails.estado_borrado"
-              class="btn btn-success animated-btn"
-              @click="triggerReactivateEvent"
-            >
+            <button v-if="eventDetails.estado_borrado" class="btn btn-success animated-btn"
+              @click="triggerReactivateEvent">
               <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
             </button>
           </div>
 
           <div class="mt-4">
-            <!-- Horizontal Tabs for Cronogramas, Equipos, Formularios -->
             <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
               <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link active"
-                  id="pills-cronogramas-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-cronogramas"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-cronogramas"
-                  aria-selected="true"
-                >
+                <button class="nav-link active" id="pills-cronogramas-tab" data-bs-toggle="pill"
+                  data-bs-target="#pills-cronogramas" type="button" role="tab" aria-controls="pills-cronogramas"
+                  aria-selected="true">
                   Cronogramas
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link"
-                  id="pills-equipos-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-equipos"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-equipos"
-                  aria-selected="false"
-                >
+                <button class="nav-link" id="pills-equipos-tab" data-bs-toggle="pill" data-bs-target="#pills-equipos"
+                  type="button" role="tab" aria-controls="pills-equipos" aria-selected="false">
                   Equipos
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link"
-                  id="pills-formularios-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-formularios"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-formularios"
-                  aria-selected="false"
-                >
+                <button class="nav-link" id="pills-formularios-tab" data-bs-toggle="pill"
+                  data-bs-target="#pills-formularios" type="button" role="tab" aria-controls="pills-formularios"
+                  aria-selected="false">
                   Formularios
                 </button>
               </li>
             </ul>
             <div class="tab-content" id="pills-tabContent">
-              <!-- Cronogramas Tab Content -->
-              <div class="tab-pane fade show active" id="pills-cronogramas" role="tabpanel" aria-labelledby="pills-cronogramas-tab">
-                <div v-if="eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
+              <div class="tab-pane fade show active" id="pills-cronogramas" role="tabpanel"
+                aria-labelledby="pills-cronogramas-tab">
+                <div v-if="eventDetails && eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
                   <div class="accordion" id="nestedAccordionCronogramas">
                     <div class="accordion-item" v-for="(cronograma) in eventDetails.cronogramas" :key="cronograma.id">
-                      <h2 class="accordion-header" :id="`nestedHeading${cronograma.id}`">
-                        <button
-                          class="accordion-button nested-accordion-button collapsed"
-                          type="button"
-                          data-bs-toggle="collapse"
-                          :data-bs-target="`#nestedCollapse${cronograma.id}`"
-                          aria-expanded="false"
-                          :aria-controls="`nestedCollapse${cronograma.id}`"
-                        >
+                      <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
+                        <button class="accordion-button nested-accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
+                          aria-expanded="false" :aria-controls="`cronogramaCollapse${cronograma.id}`">
                           <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
                           {{ cronograma.titulo }}
                         </button>
                       </h2>
-                      <div :id="`nestedCollapse${cronograma.id}`" class="accordion-collapse collapse" :aria-labelledby="`nestedHeading${cronograma.id}`" data-bs-parent="#nestedAccordionCronogramas">
+                      <div :id="`cronogramaCollapse${cronograma.id}`" class="accordion-collapse collapse"
+                        :aria-labelledby="`cronogramaHeading${cronograma.id}`"
+                        data-bs-parent="#nestedAccordionCronogramas">
                         <div class="accordion-body nested-accordion-body">
                           <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
                           <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
                           <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
                           <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
-                          <ul v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0" class="list-group list-group-flush">
-                            <li v-for="actividad in cronograma.actividades_cronogramas" :key="actividad.id" class="list-group-item">
-                              <i class="fas fa-check-circle activity-icon me-2"></i>
-                              {{ actividad.titulo }} ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
-                            </li>
-                          </ul>
+                          <div
+                            v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0">
+                            <div class="accordion accordion-flush" :id="`activitiesAccordion${cronograma.id}`">
+                              <div class="accordion-item" v-for="actividad in cronograma.actividades_cronogramas"
+                                :key="actividad.id">
+                                <h2 class="accordion-header" :id="`activityHeading${actividad.id}`">
+                                  <button class="accordion-button activity-accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" :data-bs-target="`#activityCollapse${actividad.id}`"
+                                    aria-expanded="false" :aria-controls="`activityCollapse${actividad.id}`">
+
+                                    {{ actividad.titulo }}
+                                    <span class="activity-dates ms-auto">
+                                      ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
+                                    </span>
+                                  </button>
+                                </h2>
+                                <div :id="`activityCollapse${actividad.id}`" class="accordion-collapse collapse"
+                                  :aria-labelledby="`activityHeading${actividad.id}`"
+                                  :data-bs-parent="`#activitiesAccordion${cronograma.id}`">
+                                  <div class="accordion-body activity-accordion-body">
+                                    <p class="mb-2"><strong>Descripción:</strong> {{ actividad.descripcion || 'Sin descripción.' }}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                           <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
                         </div>
                       </div>
@@ -748,21 +738,20 @@ const formatDate = (dateString) => {
                 <p v-else class="text-muted mt-3">No hay cronogramas disponibles para este evento.</p>
               </div>
 
-              <!-- Equipos Tab Content -->
               <div class="tab-pane fade" id="pills-equipos" role="tabpanel" aria-labelledby="pills-equipos-tab">
                 <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
                   <h5 class="mb-3">Información de Equipos</h5>
-                  <p class="mb-0">Equipos del evento: <strong>{{ eventDetails.nombre }}</strong></p>
+                  <p class="mb-0">Equipos del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
                   <p class="text-muted mt-2">Aquí se mostrará la información de los equipos asociados a este evento.</p>
                 </div>
               </div>
 
-              <!-- Formularios Tab Content -->
               <div class="tab-pane fade" id="pills-formularios" role="tabpanel" aria-labelledby="pills-formularios-tab">
                 <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
                   <h5 class="mb-3">Información de Formularios</h5>
-                  <p class="mb-0">Formularios del evento: <strong>{{ eventDetails.nombre }}</strong></p>
-                  <p class="text-muted mt-2">Aquí se mostrará la información de los formularios asociados a este evento.</p>
+                  <p class="mb-0">Formularios del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
+                  <p class="text-muted mt-2">Aquí se mostrará la información de los formularios asociados a este evento.
+                  </p>
                 </div>
               </div>
             </div>
@@ -777,54 +766,24 @@ const formatDate = (dateString) => {
   </div>
 
 
-  <OkModal
-    :show="showOkModal"
-    :message="okModalMessage"
-    :duration = 1000
-    @close="handleOkModalClose"
-  />
+  <OkModal :show="showOkModal" :message="okModalMessage" :duration=1000 @close="handleOkModalClose" />
 
-  <ModalCrearEvento
-    :show="showCreateEditModal"
-    :eventData="currentEventToEdit"
-    @close="handleModalClose"
-    @submit="handleModalSubmit"
-  />
+  <ModalCrearEvento :show="showCreateEditModal" :eventData="currentEventToEdit" @close="handleModalClose"
+    @submit="handleModalSubmit" />
 
-  <ImageManagementModal
-    :show="showImageManagementModal"
-    :currentImages="eventImages"
-    :isLoading="isLoadingImagesInModal"
-    @close="closeImageManagementModal"
-    @delete-image="triggerDeleteImage"
-    @upload-images="uploadNewImages"
-    ref="imageManagementModalRef"
-  />
+  <ImageManagementModal :show="showImageManagementModal" :currentImages="eventImages"
+    :isLoading="isLoadingImagesInModal" @close="closeImageManagementModal" @delete-image="triggerDeleteImage"
+    @upload-images="uploadNewImages" ref="imageManagementModalRef" />
 
-  <ConfirmationModal
-    :show="showReactivateConfirmModal"
-    title="Reactivar Evento"
+  <ConfirmationModal :show="showReactivateConfirmModal" title="Reactivar Evento"
     message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
-    confirmText="Sí, Reactivar"
-    cancelText="Cancelar"
-    @confirm="handleReactivateConfirm"
-    @cancel="handleReactivateCancel"
-  />
+    confirmText="Sí, Reactivar" cancelText="Cancelar" @confirm="handleReactivateConfirm"
+    @cancel="handleReactivateCancel" />
 
-  <DeleteModal
-    ref="universalDeleteModalRef"
-    :title="modalTitle"
-    :message="modalMessage"
-    :warning="modalWarning"
-    :confirmButtonText="modalConfirmText"
-    @confirmed="handleDeleteConfirmed"
-  />
+  <DeleteModal ref="universalDeleteModalRef" :title="modalTitle" :message="modalMessage" :warning="modalWarning"
+    :confirmButtonText="modalConfirmText" @confirmed="handleDeleteConfirmed" />
 
-  <ErrorModal
-    :show="showErrorModal"
-    :message="errorMessage"
-    @close="handleErrorModalClose"
-  />
+  <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 </template>
 
 <style scoped>
@@ -837,7 +796,7 @@ const formatDate = (dateString) => {
 }
 
 .image-list-scroll-area {
-    flex-grow: 1;
+  flex-grow: 1;
 }
 
 .thumbnail-container {
@@ -867,9 +826,9 @@ const formatDate = (dateString) => {
 
 /* Base styles for all animated buttons */
 .animated-btn {
-    transition: all 0.2s ease-in-out;
-    position: relative;
-    overflow: hidden;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
 }
 
 
@@ -877,6 +836,7 @@ const formatDate = (dateString) => {
   background-color: #174384;
   border-color: #174384;
 }
+
 .btn-primary:hover {
   background-color: #14386b;
   border-color: #14386b;
@@ -886,25 +846,27 @@ const formatDate = (dateString) => {
   background-color: #dc3545;
   border-color: #dc3545;
 }
+
 .btn-danger:hover {
   background-color: #c82333;
   border-color: #bd2130;
 }
 
 .btn-success {
-    background-color: #28a745;
-    border-color: #28a745;
+  background-color: #28a745;
+  border-color: #28a745;
 }
 
 .btn-success:hover {
-    background-color: #218838;
-    border-color: #1e7e34;
+  background-color: #218838;
+  border-color: #1e7e34;
 }
 
 .btn-secondary {
   background-color: #6c757d;
   border-color: #6c757d;
 }
+
 .btn-secondary:hover {
   background-color: #5a6268;
   border-color: #545b62;
@@ -973,7 +935,7 @@ const formatDate = (dateString) => {
 }
 
 .card {
-  border: 1px solid rgba(0,0,0,.125);
+  border: 1px solid rgba(0, 0, 0, .125);
   border-radius: .25rem;
 }
 
@@ -983,29 +945,29 @@ const formatDate = (dateString) => {
 
 /* Styles for the new Plus button */
 .add-image-plus-btn {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.2rem;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    z-index: 10;
-    transition: background-color 0.2s;
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  transition: background-color 0.2s;
 }
 
 .add-image-plus-btn:hover {
-    background-color: #0d284a;
+  background-color: #0d284a;
 }
 
 .error-text {
-    color: red;
-    font-weight: bold;
+  color: red;
+  font-weight: bold;
 }
 
 /* Custom styles for the accordion */
@@ -1039,7 +1001,7 @@ const formatDate = (dateString) => {
 }
 
 .accordion-button::after {
-    display: none;
+  display: none;
 }
 
 
@@ -1054,7 +1016,7 @@ const formatDate = (dateString) => {
   border: 1px solid #dcdcdc;
   border-radius: 0.5rem;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .accordion-item:first-of-type {
@@ -1068,22 +1030,22 @@ const formatDate = (dateString) => {
 }
 
 .cronograma-activities-title {
-    color: #174384;
-    font-weight: 700;
-    border-bottom: 2px solid #e0e7ff;
-    padding-bottom: 5px;
-    margin-bottom: 10px;
+  color: #174384;
+  font-weight: 700;
+  border-bottom: 2px solid #e0e7ff;
+  padding-bottom: 5px;
+  margin-bottom: 10px;
 }
 
 .list-group-item {
-    border-color: #f0f0f0;
-    padding-left: 0.5rem;
-    font-size: 0.95rem;
-    color: #495057;
+  border-color: #f0f0f0;
+  padding-left: 0.5rem;
+  font-size: 0.95rem;
+  color: #495057;
 }
 
 .activity-icon {
-    color: #28a745;
+  color: #28a745;
 }
 
 /* Specific styles for nested accordion buttons */
@@ -1114,37 +1076,37 @@ const formatDate = (dateString) => {
 
 /* Styles for Custom Nav Pills */
 .custom-pills .nav-link {
-    border-radius: 0.5rem 0.5rem 0 0;
-    margin-right: 0.25rem;
-    padding: 0.75rem 1.5rem;
-    background-color: #e0e7ff;
-    color: #174384;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    border: 1px solid #c3d9ff;
-    border-bottom: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  margin-right: 0.25rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #e0e7ff;
+  color: #174384;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 1px solid #c3d9ff;
+  border-bottom: none;
 }
 
 .custom-pills .nav-link:hover:not(.active) {
-    background-color: #d0e0ff;
-    color: #0d284a;
+  background-color: #d0e0ff;
+  color: #0d284a;
 }
 
 .custom-pills .nav-link.active {
-    background-color: #174384;
-    color: #ffffff;
-    border-color: #174384;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  background-color: #174384;
+  color: #ffffff;
+  border-color: #174384;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .tab-content {
-    background-color: #ffffff;
-    border: 1px solid #e0e7ff;
-    border-radius: 0 0.5rem 0.5rem 0.5rem;
-    padding: 1.5rem;
-    min-height: 200px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    transition: all 0.3s ease;
+  background-color: #ffffff;
+  border: 1px solid #e0e7ff;
+  border-radius: 0 0.5rem 0.5rem 0.5rem;
+  padding: 1.5rem;
+  min-height: 200px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
 .custom-tab-content {
@@ -1156,7 +1118,7 @@ const formatDate = (dateString) => {
 .status-section {
   background-color: #f8f9fa;
   border-color: #e9ecef !important;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
   margin-top: 1rem;
   margin-bottom: 2rem;
 }
