@@ -38,8 +38,8 @@ const emitViewEvent = () => {
       </h5>
       <p class="card-text mb-3">
         {{
-          event.descripcion.length > 120
-            ? event.descripcion.slice(0, 120) + '...'
+          event.descripcion.length > 100
+            ? event.descripcion.slice(0, 100) + '...'
             : event.descripcion
         }}
       </p>

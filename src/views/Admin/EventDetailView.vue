@@ -465,6 +465,21 @@ const uploadNewImages = async (newFiles) => {
   isLoadingImagesInModal.value = false;
 };
 
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Hora inválida';
+  const options = { hour: '2-digit', minute: '2-digit', hour12: true };
+  return date.toLocaleTimeString('es-ES', options);
+};
+
+const formatShortDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Fecha inválida';
+  const options = { month: 'short', day: 'numeric' }; // e.g., "Jul. 20"
+  return date.toLocaleDateString('es-ES', options);
+};
 
 onMounted(async () => {
   try {
@@ -712,18 +727,25 @@ const formatDate = (dateString) => {
                                   <button class="accordion-button activity-accordion-button collapsed" type="button"
                                     data-bs-toggle="collapse" :data-bs-target="`#activityCollapse${actividad.id}`"
                                     aria-expanded="false" :aria-controls="`activityCollapse${actividad.id}`">
-
+                                    <i class="fas fa-check-circle activity-icon me-2"></i>
                                     {{ actividad.titulo }}
-                                    <span class="activity-dates ms-auto">
-                                      ({{ formatDate(actividad.fecha_inicio) }} - {{ formatDate(actividad.fecha_fin) }})
-                                    </span>
+                                    <div class="activity-date-display ms-auto">
+                                      <i class="fas fa-clock activity-date-icon me-1" title="Inicio de Actividad"></i>
+                                      <span class="activity-start-date">{{ formatTime(actividad.fecha_inicio) }}</span>
+                                      <span class="mx-1">-</span>
+                                      <span class="activity-end-date">{{ formatTime(actividad.fecha_fin) }}</span>
+                                      <i class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
+                                        title="Fecha de Actividad"></i>
+                                      <span class="activity-full-date">{{ formatShortDate(actividad.fecha_inicio)
+                                        }}</span>
+                                    </div>
                                   </button>
                                 </h2>
                                 <div :id="`activityCollapse${actividad.id}`" class="accordion-collapse collapse"
                                   :aria-labelledby="`activityHeading${actividad.id}`"
                                   :data-bs-parent="`#activitiesAccordion${cronograma.id}`">
                                   <div class="accordion-body activity-accordion-body">
-                                    <p class="mb-2"><strong>Descripción:</strong> {{ actividad.descripcion || 'Sin descripción.' }}</p>
+                                    <p class="mb-2"><strong>Descripción:</strong> {{ actividad.descripcion || 'Sindescripción.' }}</p>
                                   </div>
                                 </div>
                               </div>
@@ -1134,5 +1156,53 @@ const formatDate = (dateString) => {
 
 .text-danger {
   color: #dc3545 !important;
+}
+
+.activity-accordion-button {
+  display: flex; /* Make it a flex container */
+  align-items: center; /* Vertically align items */
+  justify-content: space-between; /* Push date display to the right */
+  padding: 0.75rem 1rem;
+  background-color: #f8f9fa;
+  color: #343a40;
+  font-weight: 500;
+  font-size: 0.95rem;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.activity-date-display {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem; /* Slightly smaller font for dates */
+  color: #5a6268; /* A bit darker than previous to stand out */
+  font-weight: normal;
+}
+
+.activity-date-icon {
+  color: #007bff; /* A nice blue for calendar/clock icons */
+  font-size: 0.9rem;
+}
+
+.activity-start-date,
+.activity-end-date,
+.activity-full-date {
+    white-space: nowrap; /* Prevent dates from wrapping */
+}
+
+/* Ensure the full date is displayed on smaller screens if necessary, or adjust layout */
+@media (max-width: 576px) {
+    .activity-date-display {
+        flex-wrap: wrap; /* Allow dates to wrap on very small screens */
+        justify-content: flex-end; /* Keep them to the right */
+        text-align: right;
+    }
+    .activity-date-icon {
+        margin-left: 0.5rem !important; /* Adjust icon spacing */
+        margin-right: 0.25rem !important;
+    }
+    .activity-full-date {
+        flex-basis: 100%; /* Make full date take full line if it wraps */
+        margin-top: 0.2rem;
+    }
 }
 </style>
