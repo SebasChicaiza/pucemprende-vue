@@ -7,29 +7,31 @@ import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
-import ScrollBar from '@/components/ScrollBar.vue';
-import ConfirmationModal from '@/components/ConfirmationModal.vue';
-import ErrorModal from '@/components/ErrorModal.vue';
-import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue';
-import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue';
-import { defineStore } from 'pinia';
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import ErrorModal from '@/components/ErrorModal.vue'
+import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'
+import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
+import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue'
+import { defineStore } from 'pinia'
 
-// Define a Pinia store for event users (inline as requested)
 const useEventUsersStore = defineStore('eventUsers', {
   state: () => ({
     users: [],
     loading: false,
     error: null,
+    currentPage: 1,
+    itemsPerPage: 15,
+    totalUsersCount: 0,
   }),
   actions: {
     async fetchUsers() {
-      this.loading = true;
-      this.error = null;
-      const token = localStorage.getItem('token');
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
       if (!token) {
-        this.error = 'Token de autenticación no encontrado.';
-        this.loading = false;
-        return false;
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return false
       }
 
       try {
@@ -40,29 +42,59 @@ const useEventUsersStore = defineStore('eventUsers', {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-          }
-        );
-        this.users = response.data.map(user => ({
+          },
+        )
+        this.users = response.data.map((user) => ({
           ...user,
-          status: user.estado_borrado ? 'Inactivo' : 'Activo'
-        }));
-        return true;
+          status: user.estado_borrado ? 'Inactivo' : 'Activo',
+        }))
+        this.totalUsersCount = this.users.length
+        return true
       } catch (err) {
-        this.error = `Error al cargar los usuarios del evento: ${err.response?.data?.message || err.message}`;
-        console.error('Error fetching event users:', err.response?.data || err.message);
-        return false;
+        this.error = `Error al cargar los usuarios del evento: ${err.response?.data?.message || err.message}`
+        console.error('Error fetching event users:', err.response?.data || err.message)
+        return false
       } finally {
-        this.loading = false;
+        this.loading = false
+      }
+    },
+    async searchPersonByCedula(cedula) {
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
+      if (!token) {
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return null
+      }
+
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedula}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+        return response.data
+      } catch (err) {
+        this.error = `Error al buscar persona por cédula: ${err.response?.data?.message || err.message}`
+        console.error('Error searching person by cedula:', err.response?.data || err.message)
+        return null
+      } finally {
+        this.loading = false
       }
     },
     async deleteUserById(userId) {
-      this.loading = true;
-      this.error = null;
-      const token = localStorage.getItem('token');
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
       if (!token) {
-        this.error = 'Token de autenticación no encontrado.';
-        this.loading = false;
-        return false;
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return false
       }
 
       try {
@@ -73,30 +105,30 @@ const useEventUsersStore = defineStore('eventUsers', {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-          }
-        );
-        const index = this.users.findIndex(user => user.id === userId);
+          },
+        )
+        const index = this.users.findIndex((user) => user.id === userId)
         if (index !== -1) {
-          this.users[index].estado_borrado = true;
-          this.users[index].status = 'Inactivo';
+          this.users[index].estado_borrado = true
+          this.users[index].status = 'Inactivo'
         }
-        return true;
+        return true
       } catch (err) {
-        this.error = `Error al desactivar el usuario: ${err.response?.data?.message || err.message}`;
-        console.error('Error deactivating user:', err.response?.data || err.message);
-        return false;
+        this.error = `Error al desactivar el usuario: ${err.response?.data?.message || err.message}`
+        console.error('Error deactivating user:', err.response?.data || err.message)
+        return false
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
     async activateUserById(userId) {
-      this.loading = true;
-      this.error = null;
-      const token = localStorage.getItem('token');
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
       if (!token) {
-        this.error = 'Token de autenticación no encontrado.';
-        this.loading = false;
-        return false;
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return false
       }
 
       try {
@@ -108,30 +140,30 @@ const useEventUsersStore = defineStore('eventUsers', {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-          }
-        );
-        const index = this.users.findIndex(user => user.id === userId);
+          },
+        )
+        const index = this.users.findIndex((user) => user.id === userId)
         if (index !== -1) {
-          this.users[index].estado_borrado = false;
-          this.users[index].status = 'Activo';
+          this.users[index].estado_borrado = false
+          this.users[index].status = 'Activo'
         }
-        return true;
+        return true
       } catch (err) {
-        this.error = `Error al activar el usuario: ${err.response?.data?.message || err.message}`;
-        console.error('Error activating user:', err.response?.data || err.message);
-        return false;
+        this.error = `Error al activar el usuario: ${err.response?.data?.message || err.message}`
+        console.error('Error activating user:', err.response?.data || err.message)
+        return false
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
     async addUserToEvent(person, event, role) {
-      this.loading = true;
-      this.error = null;
-      const token = localStorage.getItem('token');
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
       if (!token) {
-        this.error = 'Token de autenticación no encontrado.';
-        this.loading = false;
-        return false;
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return false
       }
 
       try {
@@ -139,38 +171,35 @@ const useEventUsersStore = defineStore('eventUsers', {
           persona_id: person.id,
           evento_id: event.id,
           rol_id: role.id,
-          estado_borrado: false // Newly added user is active by default
-        };
+          estado_borrado: false,
+        }
 
-        const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
+        await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-        });
+        })
 
-        // Assuming the API returns the newly assigned user object, or we refetch
-        // For simplicity, we'll re-fetch all users after a successful add/edit.
-        await this.fetchUsers(); // Re-fetch to get accurate data including new ID
+        await this.fetchUsers()
 
-        return true;
+        return true
       } catch (err) {
-        this.error = `Error al asignar usuario al evento: ${err.response?.data?.message || err.message}`;
-        console.error('Error adding user to event:', err);
-        return false;
+        this.error = `Error al asignar usuario al evento: ${err.response?.data?.message || err.message}`
+        console.error('Error adding user to event:', err)
+        return false
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
-    // NEW: Action to edit a user assignment
-    async editUserAssignment(assignmentId, person, event, role, estado_borrado) {
-      this.loading = true;
-      this.error = null;
-      const token = localStorage.getItem('token');
+    async editUserAssignment(assignmentId, person, event, role) {
+      this.loading = true
+      this.error = null
+      const token = localStorage.getItem('token')
       if (!token) {
-        this.error = 'Token de autenticación no encontrado.';
-        this.loading = false;
-        return false;
+        this.error = 'Token de autenticación no encontrado.'
+        this.loading = false
+        return false
       }
 
       try {
@@ -178,8 +207,7 @@ const useEventUsersStore = defineStore('eventUsers', {
           persona_id: person.id,
           evento_id: event.id,
           rol_id: role.id,
-          estado_borrado: estado_borrado
-        };
+        }
 
         await axios.put(
           `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId}`,
@@ -189,231 +217,282 @@ const useEventUsersStore = defineStore('eventUsers', {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-          }
-        );
-
-        // Update the specific user in the store's array or re-fetch
-        const index = this.users.findIndex(user => user.id === assignmentId);
-        if (index !== -1) {
-          this.users[index].persona.nombre = person.nombre;
-          this.users[index].persona.apellido = person.apellido;
-          this.users[index].persona.identificacion = person.identificacion;
-          this.users[index].persona.email = person.email;
-          this.users[index].persona.telefono = person.telefono;
-          this.users[index].evento = event.nombre;
-          this.users[index].rol = role.nombre;
-          this.users[index].estado_borrado = estado_borrado;
-          this.users[index].status = estado_borrado ? 'Inactivo' : 'Activo';
-          this.users[index].evento_id = event.id;
-          this.users[index].rol_id = role.id;
-          this.users[index].persona_id = person.id;
-        }
-
-        // It's often safer to re-fetch all users after an edit for full data consistency
-        await this.fetchUsers();
-
-        return true;
+          },
+        )
+        await this.fetchUsers()
+        return true
       } catch (err) {
-        this.error = `Error al actualizar la asignación: ${err.response?.data?.message || err.message}`;
-        console.error('Error editing user assignment:', err);
-        return false;
+        this.error = `Error al actualizar la asignación: ${err.response?.data?.message || err.message}`
+        console.error('Error editing user assignment:', err)
+        return false
       } finally {
-        this.loading = false;
+        this.loading = false
       }
-    }
+    },
+    setCurrentPage(page) {
+      this.currentPage = page
+    },
   },
-});
+})
 
-const store = useEventUsersStore();
-const loading = computed(() => store.loading);
+const store = useEventUsersStore()
+const loading = computed(() => store.loading)
 
-const showErrorModal = ref(false);
-const errorMessage = ref('');
+const showErrorModal = ref(false)
+const errorMessage = ref('')
 
-const showOkModal = ref(false);
-const okModalMessage = ref('');
-const handleOkModalClose = () => { showOkModal.value = false; };
+const showOkModal = ref(false)
+const okModalMessage = ref('')
+const handleOkModalClose = () => {
+  showOkModal.value = false
+}
 
-const showConfirmationModal = ref(false);
-const confirmModalTitle = ref('');
-const confirmModalMessage = ref('');
-const confirmModalConfirmText = ref('');
-const confirmModalCancelText = ref('Cancelar');
-let onConfirmCallback = () => {};
+const showConfirmationModal = ref(false)
+const confirmModalTitle = ref('')
+const confirmModalMessage = ref('')
+const confirmModalConfirmText = ref('')
+const confirmModalCancelText = ref('Cancelar')
+let onConfirmCallback = () => {}
 
 const openConfirmationModal = ({ title, message, confirmText, cancelText, onConfirm }) => {
-  confirmModalTitle.value = title;
-  confirmModalMessage.value = message;
-  confirmModalConfirmText.value = confirmText;
-  confirmModalCancelText.value = cancelText;
-  onConfirmCallback = onConfirm;
-  showConfirmationModal.value = true;
-};
+  confirmModalTitle.value = title
+  confirmModalMessage.value = message
+  confirmModalConfirmText.value = confirmText
+  confirmModalCancelText.value = cancelText
+  onConfirmCallback = onConfirm
+  showConfirmationModal.value = true
+}
 
 const handleDynamicConfirm = () => {
-  onConfirmCallback();
-  showConfirmationModal.value = false;
-};
+  onConfirmCallback()
+  showConfirmationModal.value = false
+}
 
 const handleDynamicCancel = () => {
-  showConfirmationModal.value = false;
-};
+  showConfirmationModal.value = false
+}
 
-const universalDeleteModalRef = ref(null);
-const modalTitle = ref('');
-const modalMessage = ref('');
-const modalConfirmText = ref('');
-let userToDeleteId = null;
-let userToDeleteName = null;
+const universalDeleteModalRef = ref(null)
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalConfirmText = ref('')
+let userToDeleteId = null
+let userToDeleteName = null
 
 const handleDeleteConfirmed = async () => {
   if (userToDeleteId) {
-    const success = await store.deleteUserById(userToDeleteId);
+    const success = await store.deleteUserById(userToDeleteId)
     if (success) {
-      okModalMessage.value = `Usuario ${userToDeleteName} desactivado con éxito!`;
-      showOkModal.value = true;
+      okModalMessage.value = `Usuario ${userToDeleteName} desactivado con éxito!`
+      showOkModal.value = true
     } else {
-      errorMessage.value = store.error || 'Error desconocido al desactivar el usuario.';
-      showErrorModal.value = true;
+      errorMessage.value = store.error || 'Error desconocido al desactivar el usuario.'
+      showErrorModal.value = true
     }
   }
-  universalDeleteModalRef.value.hide();
-  userToDeleteId = null;
-  userToDeleteName = null;
-};
+  universalDeleteModalRef.value.hide()
+  userToDeleteId = null
+  userToDeleteName = null
+}
 
 const handleErrorModalClose = () => {
-  showErrorModal.value = false;
-  errorMessage.value = '';
-};
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
 
-const showFilterModal = ref(false);
+const showFilterModal = ref(false)
 const currentFilters = ref({
   event: '',
   role: '',
-  status: ''
-});
+  status: '',
+})
 
 const openFilterModal = () => {
-  showFilterModal.value = true;
-};
+  showFilterModal.value = true
+}
 
 const handleApplyFilters = (newFilters) => {
-  currentFilters.value = { ...newFilters };
-  showFilterModal.value = false;
-};
+  currentFilters.value = { ...newFilters }
+  store.setCurrentPage(1)
+  showFilterModal.value = false
+}
 
 const handleClearFilters = () => {
-  currentFilters.value = { event: '', role: '', status: '' };
-  showFilterModal.value = false;
-};
+  currentFilters.value = { event: '', role: '', status: '' }
+  store.setCurrentPage(1)
+  showFilterModal.value = false
+}
 
-const filteredUsers = computed(() => {
-  let users = store.users;
+const searchQuery = ref('')
+const searchResults = ref([])
+const isSearching = ref(false)
 
-  if (currentFilters.value.event) {
-    users = users.filter(user => user.evento === currentFilters.value.event);
-  }
-  if (currentFilters.value.role) {
-    users = users.filter(user => user.rol === currentFilters.value.role);
-  }
-  if (currentFilters.value.status) {
-    users = users.filter(user => user.status === currentFilters.value.status);
+const performSearch = async () => {
+  if (!searchQuery.value.trim()) {
+    isSearching.value = false
+    searchResults.value = [] // Clear search results when query is empty
+    store.setCurrentPage(1) // Reset to first page
+    store.error = null // Clear any search-related errors
+    return
   }
 
-  return users;
-});
+  isSearching.value = true
+  searchResults.value = []
+  store.error = null
+
+  const persona = await store.searchPersonByCedula(searchQuery.value.trim())
+
+  if (persona) {
+    searchResults.value = store.users.filter(
+      (user) => user.persona.identificacion === persona.identificacion,
+    )
+    if (searchResults.value.length === 0) {
+      store.error = 'No se encontraron asignaciones para la cédula especificada.'
+    }
+  } else {
+    searchResults.value = []
+  }
+  store.setCurrentPage(1)
+}
+
+const clearSearch = () => {
+  searchQuery.value = ''
+  isSearching.value = false
+  searchResults.value = []
+  store.setCurrentPage(1)
+  store.error = null
+}
+
+const displayedUsers = computed(() => {
+  let usersToPaginate = []
+
+  if (isSearching.value && searchQuery.value.trim()) {
+    usersToPaginate = searchResults.value
+  } else {
+    usersToPaginate = store.users.filter((user) => {
+      let matches = true
+      if (currentFilters.value.event && user.evento !== currentFilters.value.event) {
+        matches = false
+      }
+      if (currentFilters.value.role && user.rol !== currentFilters.value.role) {
+        matches = false
+      }
+      if (currentFilters.value.status && user.status !== currentFilters.value.status) {
+        matches = false
+      }
+      return matches
+    })
+  }
+
+  store.totalUsersCount = usersToPaginate.length
+
+  const startIndex = (store.currentPage - 1) * store.itemsPerPage
+  const endIndex = startIndex + store.itemsPerPage
+  return usersToPaginate.slice(startIndex, endIndex)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(store.totalUsersCount / store.itemsPerPage)
+})
+
+const handlePageChange = (page) => {
+  store.setCurrentPage(page)
+}
 
 const uniqueEvents = computed(() => {
-  const events = store.users.map(user => user.evento);
-  return [...new Set(events)].sort();
-});
+  const events = store.users.map((user) => user.evento)
+  return [...new Set(events)].sort()
+})
 
 const uniqueRoles = computed(() => {
-  const roles = store.users.map(user => user.rol);
-  return [...new Set(roles)].sort();
-});
+  const roles = store.users.map((user) => user.rol)
+  return [...new Set(roles)].sort()
+})
 
-const statusOptions = ref(['Activo', 'Inactivo']);
+const statusOptions = ref(['Activo', 'Inactivo'])
 
-// --- Add/Edit User Modal State and Logic ---
-const showAddUserModal = ref(false);
-const addUserModalMode = ref('add'); // 'add' or 'edit'
-const addUserInitialData = ref(null); // Data for editing
+const showAddUserModal = ref(false)
+const addUserModalMode = ref('add')
+const addUserInitialData = ref(null)
 
 const openAddUserModal = () => {
-  addUserModalMode.value = 'add';
-  addUserInitialData.value = null;
-  showAddUserModal.value = true;
-};
+  addUserModalMode.value = 'add'
+  addUserInitialData.value = null
+  showAddUserModal.value = true
+}
 
-const handleAddUserConfirmed = async ({ person, event, role, estado_borrado }) => {
-  const success = await store.addUserToEvent(person, event, role, estado_borrado);
+const handleAddUserConfirmed = async ({ person, event, role }) => {
+  const success = await store.addUserToEvent(person, event, role)
   if (success) {
-    okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`;
-    showOkModal.value = true;
+    okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`
+    showOkModal.value = true
+    store.setCurrentPage(1)
+    clearSearch()
   } else {
-    errorMessage.value = store.error || 'Error desconocido al asignar usuario.';
-    showErrorModal.value = true;
+    errorMessage.value = store.error || 'Error desconocido al asignar usuario.'
+    showErrorModal.value = true
   }
-  // The modal closes itself now, no need to manually set showAddUserModal = false here
-};
+}
 
-// NEW: Handler for when AddUserModal emits 'edit-user'
-const handleEditUserConfirmed = async ({ id, person, event, role, estado_borrado }) => {
-  const success = await store.editUserAssignment(id, person, event, role, estado_borrado);
+const handleEditUserConfirmed = async ({ id, person, event, role }) => {
+  const success = await store.editUserAssignment(id, person, event, role)
   if (success) {
-    okModalMessage.value = `Asignación de ${person.nombre} ${person.apellido} actualizada con éxito!`;
-    showOkModal.value = true;
+    okModalMessage.value = `Asignación de ${person.nombre} ${person.apellido} actualizada con éxito!`
+    showOkModal.value = true
+    clearSearch()
   } else {
-    errorMessage.value = store.error || 'Error desconocido al actualizar la asignación.';
-    showErrorModal.value = true;
+    errorMessage.value = store.error || 'Error desconocido al actualizar la asignación.'
+    showErrorModal.value = true
   }
-};
+}
 
-// --- Table actions ---
 const editUser = (user) => {
-  addUserModalMode.value = 'edit';
-  addUserInitialData.value = user; // Pass the entire user object for initial data
-  showAddUserModal.value = true;
-};
+  addUserModalMode.value = 'edit'
+  addUserInitialData.value = {
+    id: user.id,
+    persona_id: user.persona.id,
+    evento_id: user.evento_id,
+    rol_id: user.rol_id,
+  }
+  showAddUserModal.value = true
+}
 
 const deleteUser = (userId, userName) => {
-  userToDeleteId = userId;
-  userToDeleteName = userName;
-  modalTitle.value = "Desactivar Usuario";
-  modalMessage.value = `¿Estás seguro de que quieres desactivar a <strong>${userName}</strong> de este evento? Podrás reactivarlo más tarde.`;
-  modalConfirmText.value = "Sí, Desactivar";
-  universalDeleteModalRef.value.show();
-};
+  userToDeleteId = userId
+  userToDeleteName = userName
+  modalTitle.value = 'Desactivar Usuario'
+  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName} de este evento? Podrás reactivarlo más tarde.`
+  modalConfirmText.value = 'Sí, Desactivar'
+  universalDeleteModalRef.value.show()
+}
 
 const activateUser = (userId, userName) => {
   openConfirmationModal({
-    title: "Activar Usuario",
-    message: `¿Estás seguro de que quieres **reactivar** a <strong>${userName}</strong> en este evento?`,
-    confirmText: "Sí, Activar",
-    cancelText: "Cancelar",
+    title: 'Activar Usuario',
+    message: `¿Estás seguro de que quieres reactivar a ${userName} en este evento?`,
+    confirmText: 'Sí, Activar',
+    cancelText: 'Cancelar',
     onConfirm: async () => {
-      const success = await store.activateUserById(userId);
+      const success = await store.activateUserById(userId)
       if (success) {
-        okModalMessage.value = `Usuario ${userName} reactivado con éxito!`;
-        showOkModal.value = true;
+        okModalMessage.value = `Usuario ${userName} reactivado con éxito!`
+        showOkModal.value = true
       } else {
-        errorMessage.value = store.error || 'Error desconocido al activar el usuario.';
-        showErrorModal.value = true;
+        errorMessage.value = store.error || 'Error desconocido al activar el usuario.'
+        showErrorModal.value = true
       }
-    }
-  });
-};
+    },
+  })
+}
 
 onMounted(() => {
-  store.fetchUsers().then(success => {
+  store.fetchUsers().then((success) => {
     if (!success) {
-      errorMessage.value = store.error;
-      showErrorModal.value = true;
+      errorMessage.value = store.error
+      showErrorModal.value = true
     }
-  });
-});
+  })
+})
 </script>
 
 <template>
@@ -421,14 +500,25 @@ onMounted(() => {
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute/>
+      <PageHeaderRoute />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <div class="users-header">
-          <div class="total-users">Todos los usuarios <span>{{ filteredUsers.length }}</span></div>
+          <div class="total-users">
+            Todos los usuarios <span>{{ store.totalUsersCount }}</span>
+          </div>
           <div class="users-actions">
             <div class="search-input-wrapper">
               <i class="fas fa-search search-icon"></i>
-              <input type="text" placeholder="Search" class="search-input" />
+              <input
+                type="text"
+                placeholder="Buscar por cédula"
+                class="search-input"
+                v-model="searchQuery"
+                @keyup.enter="performSearch"
+              />
+              <button v-if="searchQuery" @click="clearSearch" class="clear-search-button">
+                &times;
+              </button>
             </div>
             <button class="btn btn-filter" @click="openFilterModal">
               <i class="fas fa-filter"></i> Filters
@@ -448,8 +538,11 @@ onMounted(() => {
         </div>
 
         <div class="user-list-body">
-          <p v-if="!filteredUsers.length && !loading" class="no-users-message">No hay usuarios registrados para eventos con los filtros aplicados.</p>
-          <div v-for="user in filteredUsers" :key="user.id" class="user-item">
+          <p v-if="!displayedUsers.length && !loading && !store.error" class="no-users-message">
+            No hay usuarios registrados para eventos con los filtros o búsqueda aplicados.
+          </p>
+          <p v-if="store.error" class="no-users-message error-message">{{ store.error }}</p>
+          <div v-for="user in displayedUsers" :key="user.id" class="user-item">
             <div class="user-info">
               <div class="user-avatar">
                 <img src="/src/assets/iconos/UserDefault.webp" alt="User Avatar" />
@@ -460,36 +553,54 @@ onMounted(() => {
               </div>
             </div>
             <div class="user-access">
-              <span class="access-badge" :class="user.rol">{{ user.rol }}</span>
+              <span class="access-badge" :class="user.rol.replace(/\s/g, '')">{{ user.rol }}</span>
             </div>
             <div class="user-evento">{{ user.evento }}</div>
-            <div class="user-estado" :class="{'status-active': user.status === 'Activo', 'status-inactive': user.status === 'Inactivo'}">{{ user.status }}</div>
+            <div
+              class="user-estado"
+              :class="{
+                'status-active': user.status === 'Activo',
+                'status-inactive': user.status === 'Inactivo',
+              }"
+            >
+              {{ user.status }}
+            </div>
             <div class="user-actions-buttons">
               <button @click="editUser(user)" class="btn btn-action-edit">
-                  <i class="fas fa-pencil-alt"></i>
+                <i class="fas fa-pencil-alt"></i>
               </button>
               <button
                 v-if="user.status === 'Activo'"
                 @click="deleteUser(user.id, `${user.persona.nombre} ${user.persona.apellido}`)"
                 class="btn btn-action-delete"
               >
-                  <i class="fas fa-trash"></i>
+                <i class="fas fa-trash"></i>
               </button>
               <button
                 v-else
                 @click="activateUser(user.id, `${user.persona.nombre} ${user.persona.apellido}`)"
                 class="btn btn-action-activate"
               >
-                  <i class="fas fa-check"></i>
+                <i class="fas fa-check"></i>
               </button>
             </div>
           </div>
         </div>
+        <Pagination
+          :currentPage="store.currentPage"
+          :totalPages="totalPages"
+          @page-changed="handlePageChange"
+        />
       </div>
     </div>
   </div>
 
-  <OkModal :show="showOkModal" :message="okModalMessage" :duration="1000" @close="handleOkModalClose" />
+  <OkModal
+    :show="showOkModal"
+    :message="okModalMessage"
+    :duration="1000"
+    @close="handleOkModalClose"
+  />
 
   <ConfirmationModal
     :show="showConfirmationModal"
@@ -501,7 +612,13 @@ onMounted(() => {
     @cancel="handleDynamicCancel"
   />
 
-  <DeleteModal ref="universalDeleteModalRef" :title="modalTitle" :message="modalMessage" :confirmButtonText="modalConfirmText" @confirmed="handleDeleteConfirmed" />
+  <DeleteModal
+    ref="universalDeleteModalRef"
+    :title="modalTitle"
+    :message="modalMessage"
+    :confirmButtonText="modalConfirmText"
+    @confirmed="handleDeleteConfirmed"
+  />
 
   <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 
@@ -579,6 +696,8 @@ onMounted(() => {
 
 .search-input-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .search-input {
@@ -588,6 +707,7 @@ onMounted(() => {
   font-size: 0.9em;
   width: 200px;
   transition: border-color 0.2s;
+  flex-grow: 1;
 }
 
 .search-input:focus {
@@ -601,6 +721,25 @@ onMounted(() => {
   top: 50%;
   transform: translateY(-50%);
   color: #888;
+  pointer-events: none;
+}
+
+.clear-search-button {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  color: #999;
+  cursor: pointer;
+  padding: 0 5px;
+  line-height: 1;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.clear-search-button:hover {
+  color: #666;
 }
 
 .btn-filter {
@@ -726,8 +865,6 @@ onMounted(() => {
   font-weight: 500;
   white-space: nowrap;
 }
-
-/* Specific badge colors based on 'rol' */
 .access-badge.AdminEvento {
   background-color: #e6ffed;
   color: #28a745;
@@ -741,7 +878,6 @@ onMounted(() => {
   color: #17a2b8;
 }
 
-/* Styles for Evento and Estado columns */
 .user-evento {
   font-size: 0.9em;
   color: #666;
@@ -753,14 +889,13 @@ onMounted(() => {
 }
 
 .status-active {
-  color: #28a745; /* Green for active */
+  color: #28a745;
 }
 
 .status-inactive {
-  color: #dc3545; /* Red for inactive */
+  color: #dc3545;
 }
 
-/* Actions container */
 .user-actions-buttons {
   text-align: right;
   display: flex;
@@ -768,19 +903,18 @@ onMounted(() => {
   gap: 8px;
 }
 
-/* Action buttons */
-.btn-action-edit, .btn-action-delete, .btn-action-activate {
+.btn-action-edit,
+.btn-action-delete,
+.btn-action-activate {
   background: none;
   border: none;
   cursor: pointer;
   font-size: 1em;
   padding: 5px;
   border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.btn-action-edit {
-  color: #007bff;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 
 .btn-action-edit:hover {
@@ -798,7 +932,7 @@ onMounted(() => {
 }
 
 .btn-action-activate {
-  color: #28a745; /* Green for activate button */
+  color: #28a745;
 }
 
 .btn-action-activate:hover {
@@ -810,5 +944,9 @@ onMounted(() => {
   padding: 20px;
   text-align: center;
   color: #888;
+}
+.no-users-message.error-message {
+  color: #dc3545;
+  font-weight: bold;
 }
 </style>

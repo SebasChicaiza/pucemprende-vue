@@ -37,7 +37,8 @@ const rolesLoading = ref(false);
 const rolesError = ref(null);
 
 const assignmentId = ref(null);
-const estadoBorrado = ref(false);
+// Removed estadoBorrado from here as it's no longer managed by the form for editing.
+// For 'add' mode, we'll default it to false (activo) directly in handleAction.
 
 const isSubmitting = ref(false);
 const submissionError = ref(null);
@@ -109,7 +110,6 @@ async function fetchAssignmentDetails(id) {
   }
 
   try {
-    // 1. Fetch the main assignment details (evento-rol-persona)
     const assignmentResponse = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${id}`,
       {
@@ -122,7 +122,6 @@ async function fetchAssignmentDetails(id) {
     const assignmentData = assignmentResponse.data;
     assignmentId.value = assignmentData.id;
 
-    // 2. Fetch Persona details using assignmentData.persona_id
     const personResponse = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/${assignmentData.persona_id}`,
       {
@@ -135,7 +134,6 @@ async function fetchAssignmentDetails(id) {
     foundPerson.value = personResponse.data;
     cedulaSearchQuery.value = personResponse.data.identificacion;
 
-    // 3. Fetch Evento details using assignmentData.evento_id
     const eventResponse = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${assignmentData.evento_id}`,
       {
@@ -148,9 +146,9 @@ async function fetchAssignmentDetails(id) {
     selectedEvent.value = eventResponse.data;
     eventSearchQuery.value = eventResponse.data.nombre;
 
-    // 4. Set selectedRole and estadoBorrado from assignmentData
     selectedRole.value = assignmentData.rol_id;
-    estadoBorrado.value = assignmentData.estado_borrado;
+    // We no longer need to set estadoBorrado here for the form,
+    // as it won't be displayed or edited directly from this modal.
 
   } catch (err) {
     submissionError.value = `Error al cargar los detalles de la asignación: ${err.response?.data?.message || err.message}`;
@@ -158,7 +156,7 @@ async function fetchAssignmentDetails(id) {
   } finally {
     personSearchLoading.value = false;
     eventSearchLoading.value = false;
-    rolesLoading.value = false; // This one might be set by fetchRolesForSelect later if not done already
+    rolesLoading.value = false;
   }
 }
 
@@ -263,10 +261,13 @@ async function handleAction() {
       evento_id: selectedEvent.value.id,
       rol_id: selectedRole.value,
       persona_id: foundPerson.value.id,
-      estado_borrado: estadoBorrado.value
+      // estado_borrado is no longer sent from the form for edit mode.
+      // For 'add' mode, we hardcode it to false (activo) as new assignments are always active.
     };
 
     if (props.mode === 'add') {
+      // For new assignments, always set estado_borrado to false (activo)
+      payload.estado_borrado = false;
       await axios.post(
         `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`,
         payload,
@@ -281,9 +282,12 @@ async function handleAction() {
         person: foundPerson.value,
         event: selectedEvent.value,
         role: allRoles.value.find(r => r.id === selectedRole.value),
-        estado_borrado: estadoBorrado.value
+        // When adding, implicitly assume it's active. The parent might need to handle this.
+        estado_borrado: false
       });
     } else if (props.mode === 'edit') {
+      // When editing, do NOT send estado_borrado from this form.
+      // The backend should maintain its current state or be updated via activate/deactivate endpoints.
       await axios.put(
         `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId.value}`,
         payload,
@@ -294,12 +298,15 @@ async function handleAction() {
           },
         }
       );
+      // For 'edit-user' emit, we still need to send the original status
+      // or ensure the parent refreshes the data.
+      // Since the parent component's handleEditUserConfirmed will refetch all users,
+      // we don't need to explicitly pass estado_borrado here.
       emit('edit-user', {
         id: assignmentId.value,
         person: foundPerson.value,
         event: selectedEvent.value,
-        role: allRoles.value.find(r => r.id === selectedRole.value),
-        estado_borrado: estadoBorrado.value
+        role: allRoles.value.find(r => r.id === selectedRole.value)
       });
     }
     closeModal();
@@ -328,7 +335,8 @@ const closeModal = () => {
   rolesLoading.value = false;
 
   assignmentId.value = null;
-  estadoBorrado.value = false;
+  // estadoBorrado is no longer a direct ref
+  // estadoBorrado.value = false;
 
   isSubmitting.value = false;
   submissionError.value = null;
@@ -360,7 +368,8 @@ watch(() => props.show, (newVal) => {
     rolesLoading.value = false;
 
     assignmentId.value = null;
-    estadoBorrado.value = false;
+    // estadoBorrado is no longer a direct ref
+    // estadoBorrado.value = false;
 
     isSubmitting.value = false;
     submissionError.value = null;
@@ -463,14 +472,7 @@ watch(() => props.show, (newVal) => {
                 <p v-if="rolesLoading" class="loading-message">Cargando roles...</p>
               </div>
 
-              <div v-if="props.mode === 'edit'" class="form-group">
-                <label for="status-select">Estado:</label>
-                <select id="status-select" v-model="estadoBorrado">
-                  <option :value="false">Activo</option>
-                  <option :value="true">Inactivo</option>
-                </select>
               </div>
-            </div>
           </div>
           <p v-if="submissionError" class="error-message form-submission-error">{{ submissionError }}</p>
         </div>
@@ -487,6 +489,7 @@ watch(() => props.show, (newVal) => {
 </template>
 
 <style scoped>
+/* Keep existing styles as is */
 .modal-overlay {
   position: fixed;
   top: 0;
