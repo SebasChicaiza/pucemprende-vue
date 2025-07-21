@@ -11,7 +11,7 @@ import ScrollBar from '@/components/ScrollBar.vue';
 import ConfirmationModal from '@/components/ConfirmationModal.vue';
 import ErrorModal from '@/components/ErrorModal.vue';
 import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue';
-import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'; // NEW: Import AddUserModal
+import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue';
 import { defineStore } from 'pinia';
 
 // Define a Pinia store for event users (inline as requested)
@@ -124,7 +124,6 @@ const useEventUsersStore = defineStore('eventUsers', {
         this.loading = false;
       }
     },
-    // NEW: Action to add a user (placeholder for now)
     async addUserToEvent(person, event, role) {
       this.loading = true;
       this.error = null;
@@ -136,36 +135,24 @@ const useEventUsersStore = defineStore('eventUsers', {
       }
 
       try {
-        // Simulate API call to assign role
-        // Replace with actual API call later:
-        // const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/asignar`, {
-        //   persona_id: person.id,
-        //   evento_id: event.id,
-        //   rol_id: role.id
-        // }, {
-        //   headers: {
-        //     'Content-Type': 'application/json',
-        //     Authorization: `Bearer ${token}`,
-        //   },
-        // });
-
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-
-        // Assuming the API returns the new assigned user object, or we construct it
-        const newUser = {
-          id: Date.now(), // Mock ID
-          evento: event.nombre,
-          rol: role.nombre,
-          persona: {
-            nombre: person.nombre,
-            apellido: person.apellido,
-            identificacion: person.identificacion,
-          },
-          estado_borrado: false, // Newly added user is active
-          status: 'Activo'
+        const payload = {
+          persona_id: person.id,
+          evento_id: event.id,
+          rol_id: role.id,
+          estado_borrado: false // Newly added user is active by default
         };
 
-        this.users.push(newUser); // Add the new user to the store
+        const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // Assuming the API returns the newly assigned user object, or we refetch
+        // For simplicity, we'll re-fetch all users after a successful add/edit.
+        await this.fetchUsers(); // Re-fetch to get accurate data including new ID
+
         return true;
       } catch (err) {
         this.error = `Error al asignar usuario al evento: ${err.response?.data?.message || err.message}`;
@@ -174,26 +161,79 @@ const useEventUsersStore = defineStore('eventUsers', {
       } finally {
         this.loading = false;
       }
+    },
+    // NEW: Action to edit a user assignment
+    async editUserAssignment(assignmentId, person, event, role, estado_borrado) {
+      this.loading = true;
+      this.error = null;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        this.error = 'Token de autenticación no encontrado.';
+        this.loading = false;
+        return false;
+      }
+
+      try {
+        const payload = {
+          persona_id: person.id,
+          evento_id: event.id,
+          rol_id: role.id,
+          estado_borrado: estado_borrado
+        };
+
+        await axios.put(
+          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId}`,
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        // Update the specific user in the store's array or re-fetch
+        const index = this.users.findIndex(user => user.id === assignmentId);
+        if (index !== -1) {
+          this.users[index].persona.nombre = person.nombre;
+          this.users[index].persona.apellido = person.apellido;
+          this.users[index].persona.identificacion = person.identificacion;
+          this.users[index].persona.email = person.email;
+          this.users[index].persona.telefono = person.telefono;
+          this.users[index].evento = event.nombre;
+          this.users[index].rol = role.nombre;
+          this.users[index].estado_borrado = estado_borrado;
+          this.users[index].status = estado_borrado ? 'Inactivo' : 'Activo';
+          this.users[index].evento_id = event.id;
+          this.users[index].rol_id = role.id;
+          this.users[index].persona_id = person.id;
+        }
+
+        // It's often safer to re-fetch all users after an edit for full data consistency
+        await this.fetchUsers();
+
+        return true;
+      } catch (err) {
+        this.error = `Error al actualizar la asignación: ${err.response?.data?.message || err.message}`;
+        console.error('Error editing user assignment:', err);
+        return false;
+      } finally {
+        this.loading = false;
+      }
     }
   },
 });
 
-// Use the store in your component
 const store = useEventUsersStore();
 const loading = computed(() => store.loading);
-
-const route = useRoute()
-const router = useRouter()
 
 const showErrorModal = ref(false);
 const errorMessage = ref('');
 
-// --- OK Modal State ---
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 const handleOkModalClose = () => { showOkModal.value = false; };
 
-// --- Confirmation Modal State (for Activate) ---
 const showConfirmationModal = ref(false);
 const confirmModalTitle = ref('');
 const confirmModalMessage = ref('');
@@ -219,7 +259,6 @@ const handleDynamicCancel = () => {
   showConfirmationModal.value = false;
 };
 
-// --- DeleteModal State (for Deactivate) ---
 const universalDeleteModalRef = ref(null);
 const modalTitle = ref('');
 const modalMessage = ref('');
@@ -243,13 +282,11 @@ const handleDeleteConfirmed = async () => {
   userToDeleteName = null;
 };
 
-// --- ERROR Modal Fix ---
 const handleErrorModalClose = () => {
   showErrorModal.value = false;
   errorMessage.value = '';
 };
 
-// --- Filter Modal State and Logic ---
 const showFilterModal = ref(false);
 const currentFilters = ref({
   event: '',
@@ -271,7 +308,6 @@ const handleClearFilters = () => {
   showFilterModal.value = false;
 };
 
-// Computed property for filtered users
 const filteredUsers = computed(() => {
   let users = store.users;
 
@@ -288,7 +324,6 @@ const filteredUsers = computed(() => {
   return users;
 });
 
-// Computed properties for filter options (used by FilterModal)
 const uniqueEvents = computed(() => {
   const events = store.users.map(user => user.evento);
   return [...new Set(events)].sort();
@@ -301,15 +336,19 @@ const uniqueRoles = computed(() => {
 
 const statusOptions = ref(['Activo', 'Inactivo']);
 
-// --- Add User Modal State and Logic ---
+// --- Add/Edit User Modal State and Logic ---
 const showAddUserModal = ref(false);
+const addUserModalMode = ref('add'); // 'add' or 'edit'
+const addUserInitialData = ref(null); // Data for editing
 
 const openAddUserModal = () => {
+  addUserModalMode.value = 'add';
+  addUserInitialData.value = null;
   showAddUserModal.value = true;
 };
 
-const handleAddUserConfirmed = async ({ person, event, role }) => {
-  const success = await store.addUserToEvent(person, event, role);
+const handleAddUserConfirmed = async ({ person, event, role, estado_borrado }) => {
+  const success = await store.addUserToEvent(person, event, role, estado_borrado);
   if (success) {
     okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`;
     showOkModal.value = true;
@@ -317,14 +356,26 @@ const handleAddUserConfirmed = async ({ person, event, role }) => {
     errorMessage.value = store.error || 'Error desconocido al asignar usuario.';
     showErrorModal.value = true;
   }
-  showAddUserModal.value = false; // Close modal regardless of success/failure
+  // The modal closes itself now, no need to manually set showAddUserModal = false here
+};
+
+// NEW: Handler for when AddUserModal emits 'edit-user'
+const handleEditUserConfirmed = async ({ id, person, event, role, estado_borrado }) => {
+  const success = await store.editUserAssignment(id, person, event, role, estado_borrado);
+  if (success) {
+    okModalMessage.value = `Asignación de ${person.nombre} ${person.apellido} actualizada con éxito!`;
+    showOkModal.value = true;
+  } else {
+    errorMessage.value = store.error || 'Error desconocido al actualizar la asignación.';
+    showErrorModal.value = true;
+  }
 };
 
 // --- Table actions ---
 const editUser = (user) => {
-  console.log('Edit user:', user);
-  okModalMessage.value = `Editar usuario: ${user.persona.nombre} ${user.persona.apellido}`;
-  showOkModal.value = true;
+  addUserModalMode.value = 'edit';
+  addUserInitialData.value = user; // Pass the entire user object for initial data
+  showAddUserModal.value = true;
 };
 
 const deleteUser = (userId, userName) => {
@@ -355,7 +406,6 @@ const activateUser = (userId, userName) => {
   });
 };
 
-// --- Lifecycle Hook ---
 onMounted(() => {
   store.fetchUsers().then(success => {
     if (!success) {
@@ -383,7 +433,6 @@ onMounted(() => {
             <button class="btn btn-filter" @click="openFilterModal">
               <i class="fas fa-filter"></i> Filters
             </button>
-            <!-- NEW: Add user button to open the modal -->
             <button class="btn btn-primary add-user-btn" @click="openAddUserModal">
               <i class="fas fa-plus"></i> Añadir usuario
             </button>
@@ -467,15 +516,18 @@ onMounted(() => {
     @clear-filters="handleClearFilters"
   />
 
-  <!-- NEW: Add User Modal Component -->
   <AddUserModal
     :show="showAddUserModal"
+    :mode="addUserModalMode"
+    :initialData="addUserInitialData"
     @close="showAddUserModal = false"
     @add-user="handleAddUserConfirmed"
+    @edit-user="handleEditUserConfirmed"
   />
 </template>
 
 <style scoped>
+/* Keep existing styles as is */
 /* General Layout */
 .d-flex {
   display: flex;

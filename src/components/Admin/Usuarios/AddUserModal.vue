@@ -6,10 +6,18 @@ const props = defineProps({
   show: {
     type: Boolean,
     default: false
+  },
+  mode: {
+    type: String,
+    default: 'add'
+  },
+  initialData: {
+    type: Object,
+    default: null
   }
 });
 
-const emit = defineEmits(['close', 'add-user']);
+const emit = defineEmits(['close', 'add-user', 'edit-user']);
 
 const cedulaSearchQuery = ref('');
 const foundPerson = ref(null);
@@ -28,6 +36,9 @@ const allRoles = ref([]);
 const rolesLoading = ref(false);
 const rolesError = ref(null);
 
+const assignmentId = ref(null);
+const estadoBorrado = ref(false);
+
 const isSubmitting = ref(false);
 const submissionError = ref(null);
 
@@ -38,6 +49,8 @@ const filteredEventOptions = computed(() => {
   const query = eventSearchQuery.value.toLowerCase();
   return allEvents.value.filter(event => event.nombre.toLowerCase().includes(query));
 });
+
+// --- API Calls ---
 
 async function fetchPersonByCedula() {
   if (!cedulaSearchQuery.value) {
@@ -79,6 +92,76 @@ async function fetchPersonByCedula() {
     personSearchLoading.value = false;
   }
 }
+
+async function fetchAssignmentDetails(id) {
+  personSearchLoading.value = true;
+  eventSearchLoading.value = true;
+  rolesLoading.value = true;
+  submissionError.value = null;
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    submissionError.value = 'Token de autenticación no encontrado.';
+    personSearchLoading.value = false;
+    eventSearchLoading.value = false;
+    rolesLoading.value = false;
+    return;
+  }
+
+  try {
+    // 1. Fetch the main assignment details (evento-rol-persona)
+    const assignmentResponse = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${id}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    const assignmentData = assignmentResponse.data;
+    assignmentId.value = assignmentData.id;
+
+    // 2. Fetch Persona details using assignmentData.persona_id
+    const personResponse = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/${assignmentData.persona_id}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    foundPerson.value = personResponse.data;
+    cedulaSearchQuery.value = personResponse.data.identificacion;
+
+    // 3. Fetch Evento details using assignmentData.evento_id
+    const eventResponse = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${assignmentData.evento_id}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    selectedEvent.value = eventResponse.data;
+    eventSearchQuery.value = eventResponse.data.nombre;
+
+    // 4. Set selectedRole and estadoBorrado from assignmentData
+    selectedRole.value = assignmentData.rol_id;
+    estadoBorrado.value = assignmentData.estado_borrado;
+
+  } catch (err) {
+    submissionError.value = `Error al cargar los detalles de la asignación: ${err.response?.data?.message || err.message}`;
+    console.error('Error fetching assignment details:', err);
+  } finally {
+    personSearchLoading.value = false;
+    eventSearchLoading.value = false;
+    rolesLoading.value = false; // This one might be set by fetchRolesForSelect later if not done already
+  }
+}
+
 
 async function fetchEventsForAutocomplete() {
   eventSearchLoading.value = true;
@@ -151,8 +234,7 @@ const onEventFocus = () => {
   showEventSuggestions.value = true;
 };
 
-// UPDATED: handleAddUser to make the API call
-async function handleAddUser() {
+async function handleAction() {
   if (!foundPerson.value) {
     submissionError.value = 'Por favor, busca y selecciona una persona.';
     return;
@@ -179,33 +261,51 @@ async function handleAddUser() {
   try {
     const payload = {
       evento_id: selectedEvent.value.id,
-      rol_id: selectedRole.value, // This is already the ID from the select
+      rol_id: selectedRole.value,
       persona_id: foundPerson.value.id,
-      estado_borrado: false // Newly assigned users are active
+      estado_borrado: estadoBorrado.value
     };
 
-    await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`,
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    // Emit event to parent with assignment details
-    // The parent component can then re-fetch the user list to show the new assignment
-    emit('add-user', {
-      person: foundPerson.value,
-      event: selectedEvent.value,
-      role: allRoles.value.find(r => r.id === selectedRole.value)
-    });
-    closeModal(); // Close modal on successful assignment
+    if (props.mode === 'add') {
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`,
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      emit('add-user', {
+        person: foundPerson.value,
+        event: selectedEvent.value,
+        role: allRoles.value.find(r => r.id === selectedRole.value),
+        estado_borrado: estadoBorrado.value
+      });
+    } else if (props.mode === 'edit') {
+      await axios.put(
+        `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId.value}`,
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      emit('edit-user', {
+        id: assignmentId.value,
+        person: foundPerson.value,
+        event: selectedEvent.value,
+        role: allRoles.value.find(r => r.id === selectedRole.value),
+        estado_borrado: estadoBorrado.value
+      });
+    }
+    closeModal();
   } catch (err) {
-    submissionError.value = `Error al asignar rol: ${err.response?.data?.message || err.message}`;
-    console.error('Error assigning role:', err);
+    submissionError.value = `Error al ${props.mode === 'add' ? 'asignar' : 'guardar'} rol: ${err.response?.data?.message || err.message}`;
+    console.error(`Error ${props.mode === 'add' ? 'adding' : 'editing'} user to event:`, err);
   } finally {
     isSubmitting.value = false;
   }
@@ -227,6 +327,9 @@ const closeModal = () => {
   rolesError.value = null;
   rolesLoading.value = false;
 
+  assignmentId.value = null;
+  estadoBorrado.value = false;
+
   isSubmitting.value = false;
   submissionError.value = null;
 
@@ -240,13 +343,31 @@ onMounted(() => {
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
+    // Reset all fields when modal is shown
     cedulaSearchQuery.value = '';
     foundPerson.value = null;
     personSearchError.value = null;
+    personSearchLoading.value = false;
+
     eventSearchQuery.value = '';
     selectedEvent.value = null;
+    eventSearchError.value = null;
+    eventSearchLoading.value = false;
+    showEventSuggestions.value = false;
+
     selectedRole.value = '';
+    rolesError.value = null;
+    rolesLoading.value = false;
+
+    assignmentId.value = null;
+    estadoBorrado.value = false;
+
+    isSubmitting.value = false;
     submissionError.value = null;
+
+    if (props.mode === 'edit' && props.initialData && props.initialData.id) {
+      fetchAssignmentDetails(props.initialData.id);
+    }
   }
 });
 </script>
@@ -256,7 +377,7 @@ watch(() => props.show, (newVal) => {
     <div v-if="show" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content add-user-modal">
         <div class="modal-header">
-          <h2><i class="fas fa-user-plus"></i> Añadir Usuario al Evento</h2>
+          <h2><i class="fas fa-user-plus"></i> {{ props.mode === 'add' ? 'Añadir Usuario al Evento' : 'Editar Asignación de Usuario' }}</h2>
           <button class="close-button" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
@@ -272,8 +393,9 @@ watch(() => props.show, (newVal) => {
                     v-model="cedulaSearchQuery"
                     placeholder="Ingrese la cédula"
                     @keyup.enter="fetchPersonByCedula"
+                    :disabled="props.mode === 'edit'"
                   />
-                  <button @click="fetchPersonByCedula" class="btn btn-search" :disabled="personSearchLoading">
+                  <button @click="fetchPersonByCedula" class="btn btn-search" :disabled="personSearchLoading || props.mode === 'edit'">
                     <i v-if="personSearchLoading" class="fas fa-spinner fa-spin"></i>
                     <i v-else class="fas fa-search"></i>
                   </button>
@@ -286,7 +408,7 @@ watch(() => props.show, (newVal) => {
                 <p><strong>Nombre:</strong> {{ foundPerson.nombre }} {{ foundPerson.apellido }}</p>
                 <p><strong>Cédula:</strong> {{ foundPerson.identificacion }}</p>
                 <p><strong>Email:</strong> {{ foundPerson.email }}</p>
-                <button @click="foundPerson = null; cedulaSearchQuery = ''" class="btn btn-clear-person">
+                <button v-if="props.mode === 'add'" @click="foundPerson = null; cedulaSearchQuery = ''" class="btn btn-clear-person">
                   Limpiar Selección
                 </button>
               </div>
@@ -308,10 +430,10 @@ watch(() => props.show, (newVal) => {
                       @input="onEventInput"
                       @focus="onEventFocus"
                       placeholder="Buscar o seleccionar evento"
-                      :disabled="eventSearchLoading"
+                      :disabled="eventSearchLoading || props.mode === 'edit'"
                     />
                     <button
-                      v-if="eventSearchQuery"
+                      v-if="eventSearchQuery && props.mode === 'add'"
                       class="clear-button"
                       @click="clearEventInput"
                     >
@@ -319,7 +441,7 @@ watch(() => props.show, (newVal) => {
                     </button>
                   </div>
                   <p v-if="eventSearchError" class="error-message">{{ eventSearchError }}</p>
-                  <ul v-if="showEventSuggestions && filteredEventOptions.length && eventSearchQuery" class="suggestions-list">
+                  <ul v-if="showEventSuggestions && filteredEventOptions.length && eventSearchQuery && props.mode === 'add'" class="suggestions-list">
                     <li v-for="event in filteredEventOptions" :key="event.id" @click="selectEventSuggestion(event)">
                       {{ event.nombre }}
                     </li>
@@ -340,15 +462,23 @@ watch(() => props.show, (newVal) => {
                 <p v-if="rolesError" class="error-message">{{ rolesError }}</p>
                 <p v-if="rolesLoading" class="loading-message">Cargando roles...</p>
               </div>
+
+              <div v-if="props.mode === 'edit'" class="form-group">
+                <label for="status-select">Estado:</label>
+                <select id="status-select" v-model="estadoBorrado">
+                  <option :value="false">Activo</option>
+                  <option :value="true">Inactivo</option>
+                </select>
+              </div>
             </div>
           </div>
           <p v-if="submissionError" class="error-message form-submission-error">{{ submissionError }}</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="closeModal">Cancelar</button>
-          <button class="btn btn-primary" @click="handleAddUser" :disabled="isSubmitting || !foundPerson || !selectedEvent || !selectedRole">
+          <button class="btn btn-primary" @click="handleAction" :disabled="isSubmitting || !foundPerson || !selectedEvent || !selectedRole">
             <i v-if="isSubmitting" class="fas fa-spinner fa-spin"></i>
-            <span v-else>Asignar Rol</span>
+            <span v-else>{{ props.mode === 'add' ? 'Asignar Rol' : 'Guardar Cambios' }}</span>
           </button>
         </div>
       </div>
@@ -374,7 +504,6 @@ watch(() => props.show, (newVal) => {
   background: white;
   padding: 30px;
   border-radius: 12px;
-  /* NEW: Updated width */
   width: 1200px;
   max-width: 95%;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
