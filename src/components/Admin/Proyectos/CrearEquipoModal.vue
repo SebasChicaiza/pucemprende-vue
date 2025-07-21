@@ -138,54 +138,51 @@ async function buscarPersonaPorCedula() {
   }
 }
 
-function seleccionarPersona(persona) {
-  integrantes.value.push({
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    identificacion: persona.identificacion,
-    telefono: persona.telefono,
-    correo: persona.email,
-    rol: '',
-  })
-  cedulaBusqueda.value = ''
-  resultadosBusqueda.value = []
-}
+async function seleccionarPersona(persona) {
+  const token = localStorage.getItem('token')
+  if (!token) return
 
-function addIntegrante() {
-  integrantes.value.push({
-    nombre: '',
-    apellido: '',
-    identificacion: '',
-    telefono: '',
-    correo: '',
-    rol: '',
-  })
-}
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${persona.identificacion}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
 
-function guardarEquipo() {
-  const equipo = {
-    nombre: nombreEquipo.value,
-    integrantes: integrantes.value,
+    const personaCompleta = Array.isArray(response.data) ? response.data[0] : response.data
+
+    // Agregar al arreglo incluyendo el persona_id (pero no se mostrará en tabla)
+    integrantes.value.push({
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      identificacion: persona.identificacion,
+      telefono: persona.telefono,
+      correo: persona.email,
+      persona_id: personaCompleta.id, // 👈 lo guardamos aquí
+      rol: '',
+    })
+  } catch (error) {
+    console.error('Error obteniendo persona completa:', error)
   }
-  // Emitir datos al padre
-  emit('guardar', equipo)
-  emit('close')
 }
-async function crearCabeceraEquipo() {
+
+async function guardarEquipo() {
   const token = localStorage.getItem('token')
   if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
+    alert('No se encontró token de autenticación.')
     return
   }
 
-  loading.value = true
-
+  // Crear cabecera del equipo
   try {
-    const response = await axios.post(
+    const equipoResponse = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
       {
         nombre: nombreEquipo.value,
-        evento_id: props.eventoId, // 👈 asegúrate de pasarlo como prop
+        evento_id: props.eventoId,
         ranking: null,
       },
       {
@@ -195,16 +192,40 @@ async function crearCabeceraEquipo() {
       },
     )
 
-    const equipoId = response.data.id
-    console.log('ID del equipo creado:', equipoId)
+    const equipoId = equipoResponse.data.id
+    console.log('Equipo creado con ID:', equipoId)
 
-    return equipoId // 👈 retornamos el ID por si se necesita después
-  } catch (e) {
-    console.error(e)
-    error.value = 'Error al crear el equipo. Intente más tarde.'
-    return null
-  } finally {
-    loading.value = false
+    // Calcular fechas
+    const fechaInicio = new Date().toISOString().split('T')[0] // yyyy-mm-dd
+    const fechaFin = new Date()
+    fechaFin.setDate(fechaFin.getDate() + 42) // 6 semanas
+    const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
+
+    // Guardar integrantes
+    for (const integrante of integrantes.value) {
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
+        {
+          rol_id: 1,
+          proyecto_id: equipoId,
+          persona_id: integrante.persona_id, // ya lo guardamos al añadir
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFinFormatted,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+    }
+
+    alert('Equipo creado correctamente.')
+    emit('guardar') // opcional: puedes pasar el equipoId si quieres
+    emit('close')
+  } catch (error) {
+    console.error('Error al guardar el equipo o los miembros:', error)
+    alert('Ocurrió un error al guardar el equipo. Intenta de nuevo.')
   }
 }
 </script>
@@ -254,7 +275,7 @@ async function crearCabeceraEquipo() {
   border-color: #0f2a5c;
 }
 .resultados-scroll {
-  max-height: 200px; /* Ajusta la altura según lo que necesites */
+  max-height: 200px;
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 6px;
