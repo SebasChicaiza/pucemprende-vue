@@ -11,7 +11,9 @@ import OrganizadoresView from '@/views/Admin/OrganizadoresView.vue'
 import ProyectosView from '@/views/Admin/ProyectosView.vue'
 import EventDetailView from '@/views/Admin/EventDetailView.vue'
 import CrearProyectosView from '@/views/Admin/CrearProyectosView.vue'
-import UsersView from '@/components/Admin/Usuarios/UsersView.vue'
+import UsersView from '@/views/Admin/UsersView.vue'
+import UserGlobal from '@/views/Admin/UserGlobal.vue'
+import UserEvent from '@/views/Admin/UserEvent.vue'
 
 
 const router = createRouter({
@@ -103,6 +105,22 @@ const router = createRouter({
       component: UsersView,
       meta: {
         title: 'Usuarios',
+      },
+    },
+    {
+      path: '/admin/usuarios/generales',
+      name: 'UsuariosSistema',
+      component: UserGlobal,
+      meta: {
+        title: 'Usuarios - Usuarios del Sistema',
+      },
+    },
+    {
+      path: '/admin/usuarios/eventos',
+      name: 'UsuariosEventos',
+      component: UserEvent,
+      meta: {
+        title: 'Usuarios - Usuarios de Eventos',
       },
     },
     /* EJEMPLO LAZY LOADING

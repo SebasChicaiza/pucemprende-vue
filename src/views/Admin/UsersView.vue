@@ -40,10 +40,10 @@ const handleDeleteConfirmed = () => { /* Logic to delete */ universalDeleteModal
 const selectUserManagementOption = (option) => {
   if (option === 'general') {
     // Navigate to the general user management route
-    router.push({ name: 'AdminGeneralUsers' }); // Replace 'AdminGeneralUsers' with your actual route name
+    router.push("/admin/usuarios/generales"); // Replace 'AdminGeneralUsers' with your actual route name
   } else if (option === 'events') {
     // Navigate to the event user management route
-    router.push({ name: 'AdminEventUsers' }); // Replace 'AdminEventUsers' with your actual route name
+    router.push("/admin/usuarios/eventos"); // Replace 'AdminEventUsers' with your actual route name
   }
 };
 
@@ -75,6 +75,7 @@ const selectUserManagementOption = (option) => {
                     Administra todos los usuarios registrados en la plataforma, incluyendo su información básica, roles y permisos globales.
                     Ideal para la gestión de administradores, moderadores y usuarios estándar del sistema.
                   </p>
+
                   <button class="btn btn-outline-primary mt-3">
                     Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
                   </button>
