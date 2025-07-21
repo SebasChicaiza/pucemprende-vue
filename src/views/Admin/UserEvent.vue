@@ -11,6 +11,7 @@ import ScrollBar from '@/components/ScrollBar.vue';
 import ConfirmationModal from '@/components/ConfirmationModal.vue';
 import ErrorModal from '@/components/ErrorModal.vue';
 import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue';
+import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'; // NEW: Import AddUserModal
 import { defineStore } from 'pinia';
 
 // Define a Pinia store for event users (inline as requested)
@@ -122,13 +123,63 @@ const useEventUsersStore = defineStore('eventUsers', {
       } finally {
         this.loading = false;
       }
+    },
+    // NEW: Action to add a user (placeholder for now)
+    async addUserToEvent(person, event, role) {
+      this.loading = true;
+      this.error = null;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        this.error = 'Token de autenticación no encontrado.';
+        this.loading = false;
+        return false;
+      }
+
+      try {
+        // Simulate API call to assign role
+        // Replace with actual API call later:
+        // const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/asignar`, {
+        //   persona_id: person.id,
+        //   evento_id: event.id,
+        //   rol_id: role.id
+        // }, {
+        //   headers: {
+        //     'Content-Type': 'application/json',
+        //     Authorization: `Bearer ${token}`,
+        //   },
+        // });
+
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+
+        // Assuming the API returns the new assigned user object, or we construct it
+        const newUser = {
+          id: Date.now(), // Mock ID
+          evento: event.nombre,
+          rol: role.nombre,
+          persona: {
+            nombre: person.nombre,
+            apellido: person.apellido,
+            identificacion: person.identificacion,
+          },
+          estado_borrado: false, // Newly added user is active
+          status: 'Activo'
+        };
+
+        this.users.push(newUser); // Add the new user to the store
+        return true;
+      } catch (err) {
+        this.error = `Error al asignar usuario al evento: ${err.response?.data?.message || err.message}`;
+        console.error('Error adding user to event:', err);
+        return false;
+      } finally {
+        this.loading = false;
+      }
     }
   },
 });
 
 // Use the store in your component
 const store = useEventUsersStore();
-// const eventUsers = computed(() => store.users); // This will now be filteredUsers
 const loading = computed(() => store.loading);
 
 const route = useRoute()
@@ -195,7 +246,7 @@ const handleDeleteConfirmed = async () => {
 // --- ERROR Modal Fix ---
 const handleErrorModalClose = () => {
   showErrorModal.value = false;
-  errorMessage.value = ''; // Also clear the message when closing
+  errorMessage.value = '';
 };
 
 // --- Filter Modal State and Logic ---
@@ -211,27 +262,14 @@ const openFilterModal = () => {
 };
 
 const handleApplyFilters = (newFilters) => {
-  currentFilters.value = { ...newFilters }; // Update currentFilters with selected values
+  currentFilters.value = { ...newFilters };
   showFilterModal.value = false;
 };
 
 const handleClearFilters = () => {
-  currentFilters.value = { event: '', role: '', status: '' }; // Reset filters
+  currentFilters.value = { event: '', role: '', status: '' };
   showFilterModal.value = false;
 };
-
-// Computed properties for filter options
-const uniqueEvents = computed(() => {
-  const events = store.users.map(user => user.evento);
-  return [...new Set(events)].sort();
-});
-
-const uniqueRoles = computed(() => {
-  const roles = store.users.map(user => user.rol);
-  return [...new Set(roles)].sort();
-});
-
-const statusOptions = ref(['Activo', 'Inactivo']);
 
 // Computed property for filtered users
 const filteredUsers = computed(() => {
@@ -249,6 +287,38 @@ const filteredUsers = computed(() => {
 
   return users;
 });
+
+// Computed properties for filter options (used by FilterModal)
+const uniqueEvents = computed(() => {
+  const events = store.users.map(user => user.evento);
+  return [...new Set(events)].sort();
+});
+
+const uniqueRoles = computed(() => {
+  const roles = store.users.map(user => user.rol);
+  return [...new Set(roles)].sort();
+});
+
+const statusOptions = ref(['Activo', 'Inactivo']);
+
+// --- Add User Modal State and Logic ---
+const showAddUserModal = ref(false);
+
+const openAddUserModal = () => {
+  showAddUserModal.value = true;
+};
+
+const handleAddUserConfirmed = async ({ person, event, role }) => {
+  const success = await store.addUserToEvent(person, event, role);
+  if (success) {
+    okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`;
+    showOkModal.value = true;
+  } else {
+    errorMessage.value = store.error || 'Error desconocido al asignar usuario.';
+    showErrorModal.value = true;
+  }
+  showAddUserModal.value = false; // Close modal regardless of success/failure
+};
 
 // --- Table actions ---
 const editUser = (user) => {
@@ -313,8 +383,9 @@ onMounted(() => {
             <button class="btn btn-filter" @click="openFilterModal">
               <i class="fas fa-filter"></i> Filters
             </button>
-            <button class="btn btn-primary add-user-btn">
-              <i class="fas fa-plus"></i> Add user
+            <!-- NEW: Add user button to open the modal -->
+            <button class="btn btn-primary add-user-btn" @click="openAddUserModal">
+              <i class="fas fa-plus"></i> Añadir usuario
             </button>
           </div>
         </div>
@@ -394,6 +465,13 @@ onMounted(() => {
     @close="showFilterModal = false"
     @apply-filters="handleApplyFilters"
     @clear-filters="handleClearFilters"
+  />
+
+  <!-- NEW: Add User Modal Component -->
+  <AddUserModal
+    :show="showAddUserModal"
+    @close="showAddUserModal = false"
+    @add-user="handleAddUserConfirmed"
   />
 </template>
 
