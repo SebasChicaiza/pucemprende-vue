@@ -1,112 +1,114 @@
 <script setup>
-import { ref, watch, defineEmits, defineProps, computed, onMounted } from 'vue';
-import axios from 'axios';
+import { ref, watch, defineEmits, defineProps, computed, onMounted } from 'vue'
+import axios from 'axios'
 
 const props = defineProps({
   show: {
     type: Boolean,
-    default: false
+    default: false,
   },
   mode: {
     type: String,
-    default: 'add'
+    default: 'add',
   },
   initialData: {
     type: Object,
-    default: null
-  }
-});
+    default: null,
+  },
+})
 
-const emit = defineEmits(['close', 'add-user', 'edit-user']);
+const emit = defineEmits(['close', 'add-user', 'edit-user'])
 
-const cedulaSearchQuery = ref('');
-const foundPerson = ref(null);
-const personSearchLoading = ref(false);
-const personSearchError = ref(null);
+const cedulaSearchQuery = ref('')
+const foundPerson = ref(null)
+const personSearchLoading = ref(false)
+const personSearchError = ref(null)
 
-const eventSearchQuery = ref('');
-const allEvents = ref([]);
-const selectedEvent = ref(null);
-const eventSearchLoading = ref(false);
-const eventSearchError = ref(null);
-const showEventSuggestions = ref(false);
+const eventSearchQuery = ref('')
+const allEvents = ref([])
+const selectedEvent = ref(null)
+const eventSearchLoading = ref(false)
+const eventSearchError = ref(null)
+const showEventSuggestions = ref(false)
 
-const selectedRole = ref('');
-const allRoles = ref([]);
-const rolesLoading = ref(false);
-const rolesError = ref(null);
+const selectedRole = ref('')
+const allRoles = ref([])
+const rolesLoading = ref(false)
+const rolesError = ref(null)
 
-const assignmentId = ref(null);
-// Removed estadoBorrado from here as it's no longer managed by the form for editing.
-// For 'add' mode, we'll default it to false (activo) directly in handleAction.
+const assignmentId = ref(null)
 
-const isSubmitting = ref(false);
-const submissionError = ref(null);
+const isSubmitting = ref(false)
+const submissionError = ref(null)
 
 const filteredEventOptions = computed(() => {
   if (!eventSearchQuery.value) {
-    return allEvents.value;
+    return allEvents.value
   }
-  const query = eventSearchQuery.value.toLowerCase();
-  return allEvents.value.filter(event => event.nombre.toLowerCase().includes(query));
-});
+  const query = eventSearchQuery.value.toLowerCase()
+  return allEvents.value.filter((event) => event.nombre.toLowerCase().includes(query))
+})
 
 // --- API Calls ---
 
 async function fetchPersonByCedula() {
-  if (!cedulaSearchQuery.value) {
-    foundPerson.value = null;
-    personSearchError.value = null;
-    return;
+  if (!cedulaSearchQuery.value.trim()) {
+    foundPerson.value = null
+    personSearchError.value = null
+    return
   }
 
-  personSearchLoading.value = true;
-  personSearchError.value = null;
-  foundPerson.value = null;
+  personSearchLoading.value = true
+  personSearchError.value = null
+  foundPerson.value = null
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    personSearchError.value = 'Token de autenticación no encontrado.';
-    personSearchLoading.value = false;
-    return;
+    personSearchError.value = 'Token de autenticación no encontrado.'
+    personSearchLoading.value = false
+    return
   }
 
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedulaSearchQuery.value}`,
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedulaSearchQuery.value.trim()}`,
       {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    foundPerson.value = response.data;
+      },
+    )
+    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+      foundPerson.value = response.data[0]
+    } else {
+      personSearchError.value = 'Persona no encontrada con esa cédula.'
+    }
   } catch (err) {
     if (err.response && err.response.status === 404) {
-      personSearchError.value = 'Persona no encontrada con esa cédula.';
+      personSearchError.value = 'Persona no encontrada con esa cédula.'
     } else {
-      personSearchError.value = `Error al buscar persona: ${err.response?.data?.message || err.message}`;
+      personSearchError.value = `Error al buscar persona: ${err.response?.data?.message || err.message}`
     }
-    console.error('Error fetching person by cedula:', err);
+    console.error('Error fetching person by cedula:', err)
   } finally {
-    personSearchLoading.value = false;
+    personSearchLoading.value = false
   }
 }
 
 async function fetchAssignmentDetails(id) {
-  personSearchLoading.value = true;
-  eventSearchLoading.value = true;
-  rolesLoading.value = true;
-  submissionError.value = null;
+  personSearchLoading.value = true
+  eventSearchLoading.value = true
+  rolesLoading.value = true
+  submissionError.value = null
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    submissionError.value = 'Token de autenticación no encontrado.';
-    personSearchLoading.value = false;
-    eventSearchLoading.value = false;
-    rolesLoading.value = false;
-    return;
+    submissionError.value = 'Token de autenticación no encontrado.'
+    personSearchLoading.value = false
+    eventSearchLoading.value = false
+    rolesLoading.value = false
+    return
   }
 
   try {
@@ -117,10 +119,10 @@ async function fetchAssignmentDetails(id) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    const assignmentData = assignmentResponse.data;
-    assignmentId.value = assignmentData.id;
+      },
+    )
+    const assignmentData = assignmentResponse.data
+    assignmentId.value = assignmentData.id
 
     const personResponse = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/${assignmentData.persona_id}`,
@@ -129,10 +131,22 @@ async function fetchAssignmentDetails(id) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    foundPerson.value = personResponse.data;
-    cedulaSearchQuery.value = personResponse.data.identificacion;
+      },
+    )
+    if (
+      personResponse.data &&
+      Array.isArray(personResponse.data) &&
+      personResponse.data.length > 0
+    ) {
+      foundPerson.value = personResponse.data[0]
+    } else if (personResponse.data && !Array.isArray(personResponse.data)) {
+      foundPerson.value = personResponse.data
+    } else {
+      personSearchError.value = 'Detalles de persona no encontrados para la asignación.'
+    }
+    if (foundPerson.value) {
+      cedulaSearchQuery.value = foundPerson.value.identificacion
+    }
 
     const eventResponse = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${assignmentData.evento_id}`,
@@ -141,34 +155,30 @@ async function fetchAssignmentDetails(id) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    selectedEvent.value = eventResponse.data;
-    eventSearchQuery.value = eventResponse.data.nombre;
+      },
+    )
+    selectedEvent.value = eventResponse.data
+    eventSearchQuery.value = eventResponse.data.nombre
 
-    selectedRole.value = assignmentData.rol_id;
-    // We no longer need to set estadoBorrado here for the form,
-    // as it won't be displayed or edited directly from this modal.
-
+    selectedRole.value = assignmentData.rol_id
   } catch (err) {
-    submissionError.value = `Error al cargar los detalles de la asignación: ${err.response?.data?.message || err.message}`;
-    console.error('Error fetching assignment details:', err);
+    submissionError.value = `Error al cargar los detalles de la asignación: ${err.response?.data?.message || err.message}`
+    console.error('Error fetching assignment details:', err)
   } finally {
-    personSearchLoading.value = false;
-    eventSearchLoading.value = false;
-    rolesLoading.value = false;
+    personSearchLoading.value = false
+    eventSearchLoading.value = false
+    rolesLoading.value = false
   }
 }
 
-
 async function fetchEventsForAutocomplete() {
-  eventSearchLoading.value = true;
-  eventSearchError.value = null;
-  const token = localStorage.getItem('token');
+  eventSearchLoading.value = true
+  eventSearchError.value = null
+  const token = localStorage.getItem('token')
   if (!token) {
-    eventSearchError.value = 'Token de autenticación no encontrado.';
-    eventSearchLoading.value = false;
-    return;
+    eventSearchError.value = 'Token de autenticación no encontrado.'
+    eventSearchLoading.value = false
+    return
   }
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
@@ -176,24 +186,24 @@ async function fetchEventsForAutocomplete() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-    });
-    allEvents.value = response.data;
+    })
+    allEvents.value = response.data
   } catch (err) {
-    eventSearchError.value = `Error al cargar eventos: ${err.response?.data?.message || err.message}`;
-    console.error('Error fetching events:', err);
+    eventSearchError.value = `Error al cargar eventos: ${err.response?.data?.message || err.message}`
+    console.error('Error fetching events:', err)
   } finally {
-    eventSearchLoading.value = false;
+    eventSearchLoading.value = false
   }
 }
 
 async function fetchRolesForSelect() {
-  rolesLoading.value = true;
-  rolesError.value = null;
-  const token = localStorage.getItem('token');
+  rolesLoading.value = true
+  rolesError.value = null
+  const token = localStorage.getItem('token')
   if (!token) {
-    rolesError.value = 'Token de autenticación no encontrado.';
-    rolesLoading.value = false;
-    return;
+    rolesError.value = 'Token de autenticación no encontrado.'
+    rolesLoading.value = false
+    return
   }
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/rolEvento`, {
@@ -201,59 +211,60 @@ async function fetchRolesForSelect() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-    });
-    allRoles.value = response.data;
+    })
+    allRoles.value = response.data
   } catch (err) {
-    rolesError.value = `Error al cargar roles: ${err.response?.data?.message || err.message}`;
-    console.error('Error fetching roles:', err);
+    rolesError.value = `Error al cargar roles: ${err.response?.data?.message || err.message}`
+    console.error('Error fetching roles:', err)
   } finally {
-    rolesLoading.value = false;
+    rolesLoading.value = false
   }
 }
 
 const onEventInput = () => {
-  selectedEvent.value = null;
-  showEventSuggestions.value = true;
-};
+  selectedEvent.value = null
+  showEventSuggestions.value = true
+}
 
 const selectEventSuggestion = (event) => {
-  eventSearchQuery.value = event.nombre;
-  selectedEvent.value = event;
-  showEventSuggestions.value = false;
-};
+  eventSearchQuery.value = event.nombre
+  selectedEvent.value = event
+  showEventSuggestions.value = false
+}
 
 const clearEventInput = () => {
-  eventSearchQuery.value = '';
-  selectedEvent.value = null;
-  showEventSuggestions.value = false;
-};
+  eventSearchQuery.value = ''
+  selectedEvent.value = null
+  showEventSuggestions.value = false
+}
 
 const onEventFocus = () => {
-  showEventSuggestions.value = true;
-};
+  showEventSuggestions.value = true
+}
 
 async function handleAction() {
   if (!foundPerson.value) {
-    submissionError.value = 'Por favor, busca y selecciona una persona.';
-    return;
+    submissionError.value = 'Por favor, busca y selecciona una persona.'
+    return
   }
   if (!selectedEvent.value) {
-    submissionError.value = 'Por favor, selecciona un evento.';
-    return;
+    submissionError.value = 'Por favor, selecciona un evento.'
+    return
   }
   if (!selectedRole.value) {
-    submissionError.value = 'Por favor, selecciona un rol.';
-    return;
+    submissionError.value = 'Por favor, selecciona un rol.'
+    return
   }
 
-  isSubmitting.value = true;
-  submissionError.value = null;
+  // Immediately set isSubmitting to true to disable the button
+  isSubmitting.value = true
+  submissionError.value = null
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    submissionError.value = 'Token de autenticación no encontrado.';
-    isSubmitting.value = false;
-    return;
+    submissionError.value = 'Token de autenticación no encontrado.'
+    isSubmitting.value = false // Re-enable button on error
+    return
   }
 
   try {
@@ -261,33 +272,23 @@ async function handleAction() {
       evento_id: selectedEvent.value.id,
       rol_id: selectedRole.value,
       persona_id: foundPerson.value.id,
-      // estado_borrado is no longer sent from the form for edit mode.
-      // For 'add' mode, we hardcode it to false (activo) as new assignments are always active.
-    };
+    }
 
     if (props.mode === 'add') {
-      // For new assignments, always set estado_borrado to false (activo)
-      payload.estado_borrado = false;
-      await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      payload.estado_borrado = false
+      await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
       emit('add-user', {
         person: foundPerson.value,
         event: selectedEvent.value,
-        role: allRoles.value.find(r => r.id === selectedRole.value),
-        // When adding, implicitly assume it's active. The parent might need to handle this.
-        estado_borrado: false
-      });
+        role: allRoles.value.find((r) => r.id === selectedRole.value),
+        estado_borrado: false,
+      })
     } else if (props.mode === 'edit') {
-      // When editing, do NOT send estado_borrado from this form.
-      // The backend should maintain its current state or be updated via activate/deactivate endpoints.
       await axios.put(
         `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId.value}`,
         payload,
@@ -296,89 +297,84 @@ async function handleAction() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-        }
-      );
-      // For 'edit-user' emit, we still need to send the original status
-      // or ensure the parent refreshes the data.
-      // Since the parent component's handleEditUserConfirmed will refetch all users,
-      // we don't need to explicitly pass estado_borrado here.
+        },
+      )
       emit('edit-user', {
         id: assignmentId.value,
         person: foundPerson.value,
         event: selectedEvent.value,
-        role: allRoles.value.find(r => r.id === selectedRole.value)
-      });
+        role: allRoles.value.find((r) => r.id === selectedRole.value),
+      })
     }
-    closeModal();
+    closeModal()
   } catch (err) {
-    submissionError.value = `Error al ${props.mode === 'add' ? 'asignar' : 'guardar'} rol: ${err.response?.data?.message || err.message}`;
-    console.error(`Error ${props.mode === 'add' ? 'adding' : 'editing'} user to event:`, err);
+    submissionError.value = `Error al ${props.mode === 'add' ? 'asignar' : 'guardar'} rol: ${err.response?.data?.message || err.message}`
+    console.error(`Error ${props.mode === 'add' ? 'adding' : 'editing'} user to event:`, err)
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false // Always re-enable button after operation completes (success or failure)
   }
 }
 
 const closeModal = () => {
-  cedulaSearchQuery.value = '';
-  foundPerson.value = null;
-  personSearchError.value = null;
-  personSearchLoading.value = false;
+  cedulaSearchQuery.value = ''
+  foundPerson.value = null
+  personSearchError.value = null
+  personSearchLoading.value = false
 
-  eventSearchQuery.value = '';
-  selectedEvent.value = null;
-  eventSearchError.value = null;
-  eventSearchLoading.value = false;
-  showEventSuggestions.value = false;
+  eventSearchQuery.value = ''
+  selectedEvent.value = null
+  eventSearchError.value = null
+  eventSearchLoading.value = false
+  showEventSuggestions.value = false
 
-  selectedRole.value = '';
-  rolesError.value = null;
-  rolesLoading.value = false;
+  selectedRole.value = ''
+  rolesError.value = null
+  rolesLoading.value = false
 
-  assignmentId.value = null;
-  // estadoBorrado is no longer a direct ref
-  // estadoBorrado.value = false;
+  assignmentId.value = null
 
-  isSubmitting.value = false;
-  submissionError.value = null;
+  isSubmitting.value = false // Ensure isSubmitting is reset when modal closes
+  submissionError.value = null
 
-  emit('close');
-};
+  emit('close')
+}
 
 onMounted(() => {
-  fetchEventsForAutocomplete();
-  fetchRolesForSelect();
-});
+  fetchEventsForAutocomplete()
+  fetchRolesForSelect()
+})
 
-watch(() => props.show, (newVal) => {
-  if (newVal) {
-    // Reset all fields when modal is shown
-    cedulaSearchQuery.value = '';
-    foundPerson.value = null;
-    personSearchError.value = null;
-    personSearchLoading.value = false;
+watch(
+  () => props.show,
+  (newVal) => {
+    if (newVal) {
+      // Reset all fields when modal is shown
+      cedulaSearchQuery.value = ''
+      foundPerson.value = null
+      personSearchError.value = null
+      personSearchLoading.value = false
 
-    eventSearchQuery.value = '';
-    selectedEvent.value = null;
-    eventSearchError.value = null;
-    eventSearchLoading.value = false;
-    showEventSuggestions.value = false;
+      eventSearchQuery.value = ''
+      selectedEvent.value = null
+      eventSearchError.value = null
+      eventSearchLoading.value = false
+      showEventSuggestions.value = false
 
-    selectedRole.value = '';
-    rolesError.value = null;
-    rolesLoading.value = false;
+      selectedRole.value = ''
+      rolesError.value = null
+      rolesLoading.value = false
 
-    assignmentId.value = null;
-    // estadoBorrado is no longer a direct ref
-    // estadoBorrado.value = false;
+      assignmentId.value = null
 
-    isSubmitting.value = false;
-    submissionError.value = null;
+      isSubmitting.value = false // Reset when modal is opened for a fresh start
+      submissionError.value = null
 
-    if (props.mode === 'edit' && props.initialData && props.initialData.id) {
-      fetchAssignmentDetails(props.initialData.id);
+      if (props.mode === 'edit' && props.initialData && props.initialData.id) {
+        fetchAssignmentDetails(props.initialData.id)
+      }
     }
-  }
-});
+  },
+)
 </script>
 
 <template>
@@ -386,7 +382,10 @@ watch(() => props.show, (newVal) => {
     <div v-if="show" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content add-user-modal">
         <div class="modal-header">
-          <h2><i class="fas fa-user-plus"></i> {{ props.mode === 'add' ? 'Añadir Usuario al Evento' : 'Editar Asignación de Usuario' }}</h2>
+          <h2>
+            <i class="fas fa-user-plus"></i>
+            {{ props.mode === 'add' ? 'Añadir Usuario al Evento' : 'Editar Asignación de Usuario' }}
+          </h2>
           <button class="close-button" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
@@ -404,7 +403,11 @@ watch(() => props.show, (newVal) => {
                     @keyup.enter="fetchPersonByCedula"
                     :disabled="props.mode === 'edit'"
                   />
-                  <button @click="fetchPersonByCedula" class="btn btn-search" :disabled="personSearchLoading || props.mode === 'edit'">
+                  <button
+                    @click="fetchPersonByCedula"
+                    class="btn btn-search"
+                    :disabled="personSearchLoading || props.mode === 'edit'"
+                  >
                     <i v-if="personSearchLoading" class="fas fa-spinner fa-spin"></i>
                     <i v-else class="fas fa-search"></i>
                   </button>
@@ -417,11 +420,20 @@ watch(() => props.show, (newVal) => {
                 <p><strong>Nombre:</strong> {{ foundPerson.nombre }} {{ foundPerson.apellido }}</p>
                 <p><strong>Cédula:</strong> {{ foundPerson.identificacion }}</p>
                 <p><strong>Email:</strong> {{ foundPerson.email }}</p>
-                <button v-if="props.mode === 'add'" @click="foundPerson = null; cedulaSearchQuery = ''" class="btn btn-clear-person">
+                <button
+                  v-if="props.mode === 'add'"
+                  @click="((foundPerson = null), (cedulaSearchQuery = ''))"
+                  class="btn btn-clear-person"
+                >
                   Limpiar Selección
                 </button>
               </div>
-              <p v-else-if="!personSearchLoading && cedulaSearchQuery && !personSearchError && !foundPerson" class="info-message">
+              <p
+                v-else-if="
+                  !personSearchLoading && cedulaSearchQuery && !personSearchError && !foundPerson
+                "
+                class="info-message"
+              >
                 Presione Enter o el botón para buscar.
               </p>
             </div>
@@ -450,8 +462,20 @@ watch(() => props.show, (newVal) => {
                     </button>
                   </div>
                   <p v-if="eventSearchError" class="error-message">{{ eventSearchError }}</p>
-                  <ul v-if="showEventSuggestions && filteredEventOptions.length && eventSearchQuery && props.mode === 'add'" class="suggestions-list">
-                    <li v-for="event in filteredEventOptions" :key="event.id" @click="selectEventSuggestion(event)">
+                  <ul
+                    v-if="
+                      showEventSuggestions &&
+                      filteredEventOptions.length &&
+                      eventSearchQuery &&
+                      props.mode === 'add'
+                    "
+                    class="suggestions-list"
+                  >
+                    <li
+                      v-for="event in filteredEventOptions"
+                      :key="event.id"
+                      @click="selectEventSuggestion(event)"
+                    >
                       {{ event.nombre }}
                     </li>
                   </ul>
@@ -466,19 +490,26 @@ watch(() => props.show, (newVal) => {
                 <label for="role-select">Rol en el Evento:</label>
                 <select id="role-select" v-model="selectedRole" :disabled="rolesLoading">
                   <option value="">Selecciona un Rol</option>
-                  <option v-for="role in allRoles" :key="role.id" :value="role.id">{{ role.nombre }}</option>
+                  <option v-for="role in allRoles" :key="role.id" :value="role.id">
+                    {{ role.nombre }}
+                  </option>
                 </select>
                 <p v-if="rolesError" class="error-message">{{ rolesError }}</p>
                 <p v-if="rolesLoading" class="loading-message">Cargando roles...</p>
               </div>
-
-              </div>
+            </div>
           </div>
-          <p v-if="submissionError" class="error-message form-submission-error">{{ submissionError }}</p>
+          <p v-if="submissionError" class="error-message form-submission-error">
+            {{ submissionError }}
+          </p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="closeModal">Cancelar</button>
-          <button class="btn btn-primary" @click="handleAction" :disabled="isSubmitting || !foundPerson || !selectedEvent || !selectedRole">
+          <button
+            class="btn btn-primary"
+            @click="handleAction"
+            :disabled="isSubmitting || !foundPerson || !selectedEvent || !selectedRole"
+          >
             <i v-if="isSubmitting" class="fas fa-spinner fa-spin"></i>
             <span v-else>{{ props.mode === 'add' ? 'Asignar Rol' : 'Guardar Cambios' }}</span>
           </button>
@@ -595,17 +626,19 @@ watch(() => props.show, (newVal) => {
   gap: 10px;
 }
 
-.form-group input[type="text"] {
+.form-group input[type='text'] {
   flex-grow: 1;
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 1em;
   background-color: white;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
-.form-group input[type="text"]:focus {
+.form-group input[type='text']:focus {
   border-color: #174384;
   box-shadow: 0 0 0 3px rgba(23, 67, 132, 0.2);
   outline: none;
@@ -728,7 +761,7 @@ watch(() => props.show, (newVal) => {
   z-index: 10;
   max-height: 150px;
   overflow-y: auto;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   border-radius: 0 0 8px 8px;
   list-style: none;
   padding: 0;
@@ -771,7 +804,9 @@ watch(() => props.show, (newVal) => {
   background-position: right 12px center;
   background-size: 12px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .form-group select:focus {
@@ -793,7 +828,10 @@ watch(() => props.show, (newVal) => {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s;
 }
 
 .btn-primary {
@@ -829,10 +867,12 @@ watch(() => props.show, (newVal) => {
   font-weight: bold;
 }
 
-.modal-fade-enter-active, .modal-fade-leave-active {
+.modal-fade-enter-active,
+.modal-fade-leave-active {
   transition: opacity 0.3s ease;
 }
-.modal-fade-enter-from, .modal-fade-leave-to {
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
 }
 

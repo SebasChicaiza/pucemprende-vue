@@ -1,6 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
@@ -11,7 +10,7 @@ import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'
 import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
-import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue'
+import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue' // Corrected import path for Pagination
 import { defineStore } from 'pinia'
 
 const useEventUsersStore = defineStore('eventUsers', {
@@ -20,7 +19,7 @@ const useEventUsersStore = defineStore('eventUsers', {
     loading: false,
     error: null,
     currentPage: 1,
-    itemsPerPage: 15,
+    itemsPerPage: 10,
     totalUsersCount: 0,
   }),
   actions: {
@@ -78,9 +77,17 @@ const useEventUsersStore = defineStore('eventUsers', {
             },
           },
         )
-        return response.data
+        // Assuming the API returns an array, take the first element if available
+        if (response.data && response.data.length > 0) {
+          return response.data[0]
+        }
+        return null
       } catch (err) {
-        this.error = `Error al buscar persona por cédula: ${err.response?.data?.message || err.message}`
+        if (err.response && err.response.status === 404) {
+          this.error = 'Persona no encontrada con la cédula especificada.'
+        } else {
+          this.error = `Error al buscar persona por cédula: ${err.response?.data?.message || err.message}`
+        }
         console.error('Error searching person by cedula:', err.response?.data || err.message)
         return null
       } finally {
@@ -328,29 +335,41 @@ const searchResults = ref([])
 const isSearching = ref(false)
 
 const performSearch = async () => {
+  store.error = null // Clear any previous search errors first
+
   if (!searchQuery.value.trim()) {
     isSearching.value = false
     searchResults.value = [] // Clear search results when query is empty
     store.setCurrentPage(1) // Reset to first page
-    store.error = null // Clear any search-related errors
     return
   }
 
   isSearching.value = true
-  searchResults.value = []
-  store.error = null
+  searchResults.value = [] // Clear previous search results
 
   const persona = await store.searchPersonByCedula(searchQuery.value.trim())
 
   if (persona) {
+    // Trim identification from both sides to prevent whitespace issues
+    const searchedIdentificacion = persona.identificacion.trim()
     searchResults.value = store.users.filter(
-      (user) => user.persona.identificacion === persona.identificacion,
+      (user) =>
+        user.persona &&
+        user.persona.identificacion &&
+        user.persona.identificacion.trim() === searchedIdentificacion,
     )
     if (searchResults.value.length === 0) {
-      store.error = 'No se encontraron asignaciones para la cédula especificada.'
+      store.error =
+        'Se encontró la persona, pero no hay asignaciones de usuario para esta cédula en eventos.'
     }
   } else {
+    // If persona is null, it means the API returned no persona or there was an error
+    // The store.error will already be set by the searchPersonByCedula action
     searchResults.value = []
+    if (!store.error) {
+      // If store.error wasn't set by the action (e.g., just not found)
+      store.error = 'No se encontró la persona con la cédula especificada.'
+    }
   }
   store.setCurrentPage(1)
 }
@@ -427,7 +446,7 @@ const handleAddUserConfirmed = async ({ person, event, role }) => {
     okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`
     showOkModal.value = true
     store.setCurrentPage(1)
-    clearSearch()
+    clearSearch() // Clear search to ensure new user appears in the main list
   } else {
     errorMessage.value = store.error || 'Error desconocido al asignar usuario.'
     showErrorModal.value = true
@@ -439,7 +458,7 @@ const handleEditUserConfirmed = async ({ id, person, event, role }) => {
   if (success) {
     okModalMessage.value = `Asignación de ${person.nombre} ${person.apellido} actualizada con éxito!`
     showOkModal.value = true
-    clearSearch()
+    clearSearch() // Clear search to ensure updated user appears correctly
   } else {
     errorMessage.value = store.error || 'Error desconocido al actualizar la asignación.'
     showErrorModal.value = true
@@ -461,7 +480,7 @@ const deleteUser = (userId, userName) => {
   userToDeleteId = userId
   userToDeleteName = userName
   modalTitle.value = 'Desactivar Usuario'
-  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName} de este evento? Podrás reactivarlo más tarde.`
+  modalMessage.value = `¿Estás seguro de que quieres desactivar a <strong>${userName}</strong> de este evento? Podrás reactivarlo más tarde.`
   modalConfirmText.value = 'Sí, Desactivar'
   universalDeleteModalRef.value.show()
 }
@@ -469,7 +488,7 @@ const deleteUser = (userId, userName) => {
 const activateUser = (userId, userName) => {
   openConfirmationModal({
     title: 'Activar Usuario',
-    message: `¿Estás seguro de que quieres reactivar a ${userName} en este evento?`,
+    message: `¿Estás seguro de que quieres **reactivar** a <strong>${userName}</strong> en este evento?`,
     confirmText: 'Sí, Activar',
     cancelText: 'Cancelar',
     onConfirm: async () => {
