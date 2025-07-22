@@ -1,4 +1,3 @@
-<!-- src/components/CrearEquipoModal.vue -->
 <template>
   <div v-if="visible" class="modal-backdrop">
     <div class="modal-content">
@@ -66,6 +65,7 @@
                 <th>Teléfono</th>
                 <th>Correo</th>
                 <th>Rol</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -75,10 +75,20 @@
                 <td>{{ integrante.identificacion }}</td>
                 <td>{{ integrante.telefono }}</td>
                 <td>{{ integrante.correo }}</td>
-                <td>{{ integrante.rol || '-' }}</td>
+                <td>
+                  <select v-model="integrante.rol_id" class="form-select form-select-sm">
+                    <option :value="1">Líder</option>
+                    <option :value="2">Integrante</option>
+                  </select>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-danger" @click="eliminarIntegrante(index)">
+                    Eliminar
+                  </button>
+                </td>
               </tr>
               <tr v-if="integrantes.length === 0">
-                <td colspan="6" class="text-center text-muted">Sin integrantes aún</td>
+                <td colspan="7" class="text-center text-muted">Sin integrantes aún</td>
               </tr>
             </tbody>
           </table>
@@ -107,7 +117,6 @@ const props = defineProps({
   eventoId: Number,
 })
 
-console.log('Evento ID en CrearEquipoModal:', props.eventoId)
 const emit = defineEmits(['close', 'guardar'])
 
 const nombreEquipo = ref('')
@@ -128,8 +137,6 @@ async function buscarPersonaPorCedula() {
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedulaBusqueda.value}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-
-    // Si el backend devuelve un array
     resultadosBusqueda.value = Array.isArray(data) ? data : [data]
   } catch (e) {
     busquedaError.value = 'No se encontraron resultados.'
@@ -138,31 +145,32 @@ async function buscarPersonaPorCedula() {
   }
 }
 
+function eliminarIntegrante(index) {
+  integrantes.value.splice(index, 1)
+}
+
 async function seleccionarPersona(persona) {
+  const yaExiste = integrantes.value.some((i) => i.identificacion === persona.identificacion)
+  if (yaExiste) return
+
   const token = localStorage.getItem('token')
   if (!token) return
 
   try {
     const response = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${persona.identificacion}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
+      { headers: { Authorization: `Bearer ${token}` } },
     )
-
     const personaCompleta = Array.isArray(response.data) ? response.data[0] : response.data
 
-    // Agregar al arreglo incluyendo el persona_id (pero no se mostrará en tabla)
     integrantes.value.push({
       nombre: persona.nombre,
       apellido: persona.apellido,
       identificacion: persona.identificacion,
       telefono: persona.telefono,
       correo: persona.email,
-      persona_id: personaCompleta.id, // 👈 lo guardamos aquí
-      rol: '',
+      persona_id: personaCompleta.id,
+      rol_id: 2,
     })
   } catch (error) {
     console.error('Error obteniendo persona completa:', error)
@@ -176,7 +184,6 @@ async function guardarEquipo() {
     return
   }
 
-  // Crear cabecera del equipo
   try {
     const equipoResponse = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
@@ -185,43 +192,31 @@ async function guardarEquipo() {
         evento_id: props.eventoId,
         ranking: null,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
+      { headers: { Authorization: `Bearer ${token}` } },
     )
-
     const equipoId = equipoResponse.data.id
-    console.log('Equipo creado con ID:', equipoId)
 
-    // Calcular fechas
-    const fechaInicio = new Date().toISOString().split('T')[0] // yyyy-mm-dd
+    const fechaInicio = new Date().toISOString().split('T')[0]
     const fechaFin = new Date()
-    fechaFin.setDate(fechaFin.getDate() + 42) // 6 semanas
+    fechaFin.setDate(fechaFin.getDate() + 42)
     const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
 
-    // Guardar integrantes
     for (const integrante of integrantes.value) {
       await axios.post(
         `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
         {
-          rol_id: 1,
+          rol_id: integrante.rol_id,
           proyecto_id: equipoId,
-          persona_id: integrante.persona_id, // ya lo guardamos al añadir
+          persona_id: integrante.persona_id,
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFinFormatted,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       )
     }
 
     alert('Equipo creado correctamente.')
-    emit('guardar') // opcional: puedes pasar el equipoId si quieres
+    emit('guardar')
     emit('close')
   } catch (error) {
     console.error('Error al guardar el equipo o los miembros:', error)
