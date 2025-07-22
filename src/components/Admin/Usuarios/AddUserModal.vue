@@ -276,12 +276,6 @@ async function handleAction() {
 
     if (props.mode === 'add') {
       payload.estado_borrado = false
-      await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      })
       emit('add-user', {
         person: foundPerson.value,
         event: selectedEvent.value,
@@ -289,16 +283,6 @@ async function handleAction() {
         estado_borrado: false,
       })
     } else if (props.mode === 'edit') {
-      await axios.put(
-        `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId.value}`,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
       emit('edit-user', {
         id: assignmentId.value,
         person: foundPerson.value,
