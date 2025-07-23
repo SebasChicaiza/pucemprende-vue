@@ -10,237 +10,9 @@ import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'
 import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
-import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue' // Corrected import path for Pagination
-import { defineStore } from 'pinia'
-
-const useEventUsersStore = defineStore('eventUsers', {
-  state: () => ({
-    users: [],
-    loading: false,
-    error: null,
-    currentPage: 1,
-    itemsPerPage: 10,
-    totalUsersCount: 0,
-  }),
-  actions: {
-    async fetchUsers() {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return false
-      }
-
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/detalles`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        this.users = response.data.map((user) => ({
-          ...user,
-          status: user.estado_borrado ? 'Inactivo' : 'Activo',
-        }))
-        this.totalUsersCount = this.users.length
-        return true
-      } catch (err) {
-        this.error = `Error al cargar los usuarios del evento: ${err.response?.data?.message || err.message}`
-        console.error('Error fetching event users:', err.response?.data || err.message)
-        return false
-      } finally {
-        this.loading = false
-      }
-    },
-    async searchPersonByCedula(cedula) {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return null
-      }
-
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedula}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        // Assuming the API returns an array, take the first element if available
-        if (response.data && response.data.length > 0) {
-          return response.data[0]
-        }
-        return null
-      } catch (err) {
-        if (err.response && err.response.status === 404) {
-          this.error = 'Persona no encontrada con la cédula especificada.'
-        } else {
-          this.error = `Error al buscar persona por cédula: ${err.response?.data?.message || err.message}`
-        }
-        console.error('Error searching person by cedula:', err.response?.data || err.message)
-        return null
-      } finally {
-        this.loading = false
-      }
-    },
-    async deleteUserById(userId) {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return false
-      }
-
-      try {
-        await axios.delete(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${userId}/borrar`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        const index = this.users.findIndex((user) => user.id === userId)
-        if (index !== -1) {
-          this.users[index].estado_borrado = true
-          this.users[index].status = 'Inactivo'
-        }
-        return true
-      } catch (err) {
-        this.error = `Error al desactivar el usuario: ${err.response?.data?.message || err.message}`
-        console.error('Error deactivating user:', err.response?.data || err.message)
-        return false
-      } finally {
-        this.loading = false
-      }
-    },
-    async activateUserById(userId) {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return false
-      }
-
-      try {
-        await axios.patch(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${userId}/activar`,
-          {},
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        const index = this.users.findIndex((user) => user.id === userId)
-        if (index !== -1) {
-          this.users[index].estado_borrado = false
-          this.users[index].status = 'Activo'
-        }
-        return true
-      } catch (err) {
-        this.error = `Error al activar el usuario: ${err.response?.data?.message || err.message}`
-        console.error('Error activating user:', err.response?.data || err.message)
-        return false
-      } finally {
-        this.loading = false
-      }
-    },
-    async addUserToEvent(person, event, role) {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return false
-      }
-
-      try {
-        const payload = {
-          persona_id: person.id,
-          evento_id: event.id,
-          rol_id: role.id,
-          estado_borrado: false,
-        }
-
-        await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        await this.fetchUsers()
-
-        return true
-      } catch (err) {
-        this.error = `Error al asignar usuario al evento: ${err.response?.data?.message || err.message}`
-        console.error('Error adding user to event:', err)
-        return false
-      } finally {
-        this.loading = false
-      }
-    },
-    async editUserAssignment(assignmentId, person, event, role) {
-      this.loading = true
-      this.error = null
-      const token = localStorage.getItem('token')
-      if (!token) {
-        this.error = 'Token de autenticación no encontrado.'
-        this.loading = false
-        return false
-      }
-
-      try {
-        const payload = {
-          persona_id: person.id,
-          evento_id: event.id,
-          rol_id: role.id,
-        }
-
-        await axios.put(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${assignmentId}`,
-          payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        await this.fetchUsers()
-        return true
-      } catch (err) {
-        this.error = `Error al actualizar la asignación: ${err.response?.data?.message || err.message}`
-        console.error('Error editing user assignment:', err)
-        return false
-      } finally {
-        this.loading = false
-      }
-    },
-    setCurrentPage(page) {
-      this.currentPage = page
-    },
-  },
-})
+import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue'
+import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'
+import { useEventUsersStore } from '@/stores/eventUsers' // UPDATED: Import the store from its new file
 
 const store = useEventUsersStore()
 const loading = computed(() => store.loading)
@@ -335,22 +107,21 @@ const searchResults = ref([])
 const isSearching = ref(false)
 
 const performSearch = async () => {
-  store.error = null // Clear any previous search errors first
+  store.error = null
 
   if (!searchQuery.value.trim()) {
     isSearching.value = false
-    searchResults.value = [] // Clear search results when query is empty
-    store.setCurrentPage(1) // Reset to first page
+    searchResults.value = []
+    store.setCurrentPage(1)
     return
   }
 
   isSearching.value = true
-  searchResults.value = [] // Clear previous search results
+  searchResults.value = []
 
   const persona = await store.searchPersonByCedula(searchQuery.value.trim())
 
   if (persona) {
-    // Trim identification from both sides to prevent whitespace issues
     const searchedIdentificacion = persona.identificacion.trim()
     searchResults.value = store.users.filter(
       (user) =>
@@ -363,11 +134,8 @@ const performSearch = async () => {
         'Se encontró la persona, pero no hay asignaciones de usuario para esta cédula en eventos.'
     }
   } else {
-    // If persona is null, it means the API returned no persona or there was an error
-    // The store.error will already be set by the searchPersonByCedula action
     searchResults.value = []
     if (!store.error) {
-      // If store.error wasn't set by the action (e.g., just not found)
       store.error = 'No se encontró la persona con la cédula especificada.'
     }
   }
@@ -440,13 +208,24 @@ const openAddUserModal = () => {
   showAddUserModal.value = true
 }
 
-const handleAddUserConfirmed = async ({ person, event, role }) => {
-  const success = await store.addUserToEvent(person, event, role)
+const handleAddUserConfirmed = async (payload) => {
+  const success = await store.addUserToEvent(
+    { id: payload.persona_id },
+    { id: payload.evento_id },
+    { id: payload.rol_id },
+  )
+
+  console.log('Add user payload:', payload)
+
   if (success) {
-    okModalMessage.value = `Usuario ${person.nombre} ${person.apellido} asignado a ${event.nombre} como ${role.nombre} con éxito!`
+    const personName = payload.person_name || 'Nuevo Usuario'
+    const eventName = payload.event_name || 'Evento'
+    const roleName = payload.role_name || 'Rol'
+
+    okModalMessage.value = `Usuario ${personName} asignado a ${eventName} como ${roleName} con éxito!`
     showOkModal.value = true
     store.setCurrentPage(1)
-    clearSearch() // Clear search to ensure new user appears in the main list
+    clearSearch()
   } else {
     errorMessage.value = store.error || 'Error desconocido al asignar usuario.'
     showErrorModal.value = true
@@ -458,7 +237,7 @@ const handleEditUserConfirmed = async ({ id, person, event, role }) => {
   if (success) {
     okModalMessage.value = `Asignación de ${person.nombre} ${person.apellido} actualizada con éxito!`
     showOkModal.value = true
-    clearSearch() // Clear search to ensure updated user appears correctly
+    clearSearch()
   } else {
     errorMessage.value = store.error || 'Error desconocido al actualizar la asignación.'
     showErrorModal.value = true
@@ -480,7 +259,7 @@ const deleteUser = (userId, userName) => {
   userToDeleteId = userId
   userToDeleteName = userName
   modalTitle.value = 'Desactivar Usuario'
-  modalMessage.value = `¿Estás seguro de que quieres desactivar a <strong>${userName}</strong> de este evento? Podrás reactivarlo más tarde.`
+  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName} de este evento? Podrás reactivarlo más tarde.`
   modalConfirmText.value = 'Sí, Desactivar'
   universalDeleteModalRef.value.show()
 }
@@ -488,7 +267,7 @@ const deleteUser = (userId, userName) => {
 const activateUser = (userId, userName) => {
   openConfirmationModal({
     title: 'Activar Usuario',
-    message: `¿Estás seguro de que quieres **reactivar** a <strong>${userName}</strong> en este evento?`,
+    message: `¿Estás seguro de que quieres **reactivar** a ${userName} en este evento?`,
     confirmText: 'Sí, Activar',
     cancelText: 'Cancelar',
     onConfirm: async () => {
@@ -502,6 +281,29 @@ const activateUser = (userId, userName) => {
       }
     },
   })
+}
+
+const showManageRolesModal = ref(false)
+const openManageRolesModal = () => {
+  showManageRolesModal.value = true
+  store.fetchRoles().then((success) => {
+    if (!success) {
+      errorMessage.value = store.error || 'Error al cargar roles para gestión.'
+      showErrorModal.value = true
+    }
+  })
+}
+
+const handleRoleOperationSuccess = ({ message }) => {
+  okModalMessage.value = message
+  showOkModal.value = true
+  store.fetchRoles()
+  store.fetchUsers()
+}
+
+const handleRoleOperationError = ({ message }) => {
+  errorMessage.value = message
+  showErrorModal.value = true
 }
 
 onMounted(() => {
@@ -541,6 +343,9 @@ onMounted(() => {
             </div>
             <button class="btn btn-filter" @click="openFilterModal">
               <i class="fas fa-filter"></i> Filters
+            </button>
+            <button class="btn btn-secondary manage-roles-btn" @click="openManageRolesModal">
+              <i class="fas fa-user-tag"></i> Gestionar Roles
             </button>
             <button class="btn btn-primary add-user-btn" @click="openAddUserModal">
               <i class="fas fa-plus"></i> Añadir usuario
@@ -660,6 +465,14 @@ onMounted(() => {
     @add-user="handleAddUserConfirmed"
     @edit-user="handleEditUserConfirmed"
   />
+
+  <ManageRolesModal
+    :show="showManageRolesModal"
+    :roles="store.roles"
+    @close="showManageRolesModal = false"
+    @success="handleRoleOperationSuccess"
+    @error="handleRoleOperationError"
+  />
 </template>
 
 <style scoped>
@@ -775,6 +588,22 @@ onMounted(() => {
 
 .btn-filter:hover {
   background-color: #e0e0e0;
+}
+
+.manage-roles-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.manage-roles-btn:hover {
+  background-color: #5a6268;
 }
 
 .add-user-btn {

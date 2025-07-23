@@ -26,13 +26,13 @@ const personSearchError = ref(null)
 
 const eventSearchQuery = ref('')
 const allEvents = ref([])
-const selectedEvent = ref(null)
+const selectedEvent = ref(null) // This now holds the full event object
 const eventSearchLoading = ref(false)
 const eventSearchError = ref(null)
 const showEventSuggestions = ref(false)
 
-const selectedRole = ref('')
-const allRoles = ref([])
+const selectedRole = ref('') // This holds the role ID
+const allRoles = ref([]) // This holds full role objects
 const rolesLoading = ref(false)
 const rolesError = ref(null)
 
@@ -228,7 +228,7 @@ const onEventInput = () => {
 
 const selectEventSuggestion = (event) => {
   eventSearchQuery.value = event.nombre
-  selectedEvent.value = event
+  selectedEvent.value = event // Store the full event object
   showEventSuggestions.value = false
 }
 
@@ -256,38 +256,38 @@ async function handleAction() {
     return
   }
 
-  // Immediately set isSubmitting to true to disable the button
   isSubmitting.value = true
   submissionError.value = null
 
   const token = localStorage.getItem('token')
   if (!token) {
     submissionError.value = 'Token de autenticación no encontrado.'
-    isSubmitting.value = false // Re-enable button on error
+    isSubmitting.value = false
     return
   }
 
   try {
-    const payload = {
+    // Correctly construct the payload with direct IDs for the parent component
+    const payloadToEmit = {
+      persona_id: foundPerson.value.id,
       evento_id: selectedEvent.value.id,
       rol_id: selectedRole.value,
-      persona_id: foundPerson.value.id,
+      // Include names for the parent's success message
+      person_name: `${foundPerson.value.nombre} ${foundPerson.value.apellido}`,
+      event_name: selectedEvent.value.nombre,
+      role_name:
+        allRoles.value.find((r) => r.id === selectedRole.value)?.nombre || 'Rol Desconocido',
     }
 
     if (props.mode === 'add') {
-      payload.estado_borrado = false
-      emit('add-user', {
-        person: foundPerson.value,
-        event: selectedEvent.value,
-        role: allRoles.value.find((r) => r.id === selectedRole.value),
-        estado_borrado: false,
-      })
+      // In add mode, we emit the payload to the parent
+      emit('add-user', payloadToEmit)
     } else if (props.mode === 'edit') {
       emit('edit-user', {
         id: assignmentId.value,
-        person: foundPerson.value,
-        event: selectedEvent.value,
-        role: allRoles.value.find((r) => r.id === selectedRole.value),
+        person: foundPerson.value, // Keep full object if editUserAssignment expects it
+        event: selectedEvent.value, // Keep full object if editUserAssignment expects it
+        role: allRoles.value.find((r) => r.id === selectedRole.value), // Keep full object
       })
     }
     closeModal()
@@ -295,11 +295,12 @@ async function handleAction() {
     submissionError.value = `Error al ${props.mode === 'add' ? 'asignar' : 'guardar'} rol: ${err.response?.data?.message || err.message}`
     console.error(`Error ${props.mode === 'add' ? 'adding' : 'editing'} user to event:`, err)
   } finally {
-    isSubmitting.value = false // Always re-enable button after operation completes (success or failure)
+    isSubmitting.value = false
   }
 }
 
 const closeModal = () => {
+  // Reset all fields when modal is closed
   cedulaSearchQuery.value = ''
   foundPerson.value = null
   personSearchError.value = null
@@ -317,7 +318,7 @@ const closeModal = () => {
 
   assignmentId.value = null
 
-  isSubmitting.value = false // Ensure isSubmitting is reset when modal closes
+  isSubmitting.value = false
   submissionError.value = null
 
   emit('close')
@@ -332,7 +333,7 @@ watch(
   () => props.show,
   (newVal) => {
     if (newVal) {
-      // Reset all fields when modal is shown
+      // Clear fields and reset state when modal is opened for a fresh start
       cedulaSearchQuery.value = ''
       foundPerson.value = null
       personSearchError.value = null
@@ -350,9 +351,10 @@ watch(
 
       assignmentId.value = null
 
-      isSubmitting.value = false // Reset when modal is opened for a fresh start
+      isSubmitting.value = false
       submissionError.value = null
 
+      // Fetch initial data if in edit mode
       if (props.mode === 'edit' && props.initialData && props.initialData.id) {
         fetchAssignmentDetails(props.initialData.id)
       }

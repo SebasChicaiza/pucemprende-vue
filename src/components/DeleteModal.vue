@@ -1,10 +1,21 @@
 <template>
-  <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+  <div
+    class="modal fade"
+    id="confirmationModal"
+    tabindex="-1"
+    aria-labelledby="confirmationModalLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="confirmationModalLabel">Confirmar Acción</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Close"
+          ></button>
         </div>
         <div class="modal-body text-center">
           <div class="alert-icon-container mb-3">
@@ -25,8 +36,8 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
-import { Modal } from 'bootstrap'; // Import Bootstrap's Modal class
+import { defineProps, defineEmits } from 'vue'
+import { Modal } from 'bootstrap' // Import Bootstrap's Modal class
 
 const props = defineProps({
   message: {
@@ -41,32 +52,32 @@ const props = defineProps({
     type: String,
     default: 'Eliminar',
   },
-});
+})
 
-const emit = defineEmits(['confirmed']);
+const emit = defineEmits(['confirmed'])
 
-let bsModal = null; // Variable to hold the Bootstrap modal instance
+let bsModal = null // Variable to hold the Bootstrap modal instance
 
 const show = () => {
   if (!bsModal) {
-    bsModal = new Modal(document.getElementById('confirmationModal'));
+    bsModal = new Modal(document.getElementById('confirmationModal'))
   }
-  bsModal.show();
-};
+  bsModal.show()
+}
 
 const hide = () => {
   if (bsModal) {
-    bsModal.hide();
+    bsModal.hide()
   }
-};
+}
 
 const confirmAction = () => {
-  emit('confirmed');
-  hide();
-};
+  emit('confirmed')
+  hide()
+}
 
 // Expose show and hide methods to the parent component
-defineExpose({ show, hide });
+defineExpose({ show, hide })
 </script>
 
 <style scoped>
