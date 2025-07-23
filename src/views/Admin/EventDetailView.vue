@@ -9,10 +9,10 @@ import DefaultImage from '@/assets/banners/EventoConstruccion.png'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
-import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue';
-import ScrollBar from '@/components/ScrollBar.vue';
-import ConfirmationModal from '@/components/ConfirmationModal.vue';
-import ErrorModal from '@/components/ErrorModal.vue';
+import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'
+import ScrollBar from '@/components/ScrollBar.vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import ErrorModal from '@/components/ErrorModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,50 +21,52 @@ const eventDetails = ref(null)
 const eventImages = ref([])
 const loading = ref(true)
 const loadingImages = ref(false)
-const isLoadingImagesInModal = ref(false);
+const isLoadingImagesInModal = ref(false)
 
-const mainImage = ref('');
-const DEFAULT_IMAGE_URL = DefaultImage;
+const mainImage = ref('')
+const DEFAULT_IMAGE_URL = DefaultImage
 
-const universalDeleteModalRef = ref(null);
-const modalTitle = ref('');
-const modalMessage = ref('');
-const modalWarning = ref('');
-const modalConfirmText = ref('');
-const currentDeleteAction = ref(null);
+const universalDeleteModalRef = ref(null)
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalWarning = ref('')
+const modalConfirmText = ref('')
+const currentDeleteAction = ref(null)
 
-const showOkModal = ref(false);
-const okModalMessage = ref('');
+const showOkModal = ref(false)
+const okModalMessage = ref('')
 
-const showErrorModal = ref(false);
-const errorMessage = ref('');
+const showErrorModal = ref(false)
+const errorMessage = ref('')
 
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
-const showImageManagementModal = ref(false);
-const imageToDelete = ref(null);
-const imageManagementModalRef = ref(null); // Ref to access modal component's methods
+const showImageManagementModal = ref(false)
+const imageToDelete = ref(null)
+const imageManagementModalRef = ref(null) // Ref to access modal component's methods
 
-const showReactivateConfirmModal = ref(false);
+const showReactivateConfirmModal = ref(false)
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
-    return eventImages.value;
+    return eventImages.value
   }
-  return [{ id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' }];
-});
+  return [
+    { id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' },
+  ]
+})
 
 const selectImage = (image) => {
-  mainImage.value = image.url;
-};
+  mainImage.value = image.url
+}
 
 async function fetchEventDetails() {
-  loading.value = true;
+  loading.value = true
   const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.';
-    showErrorModal.value = true;
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
     return
   }
 
@@ -76,26 +78,26 @@ async function fetchEventDetails() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     )
     eventDetails.value = response.data
   } catch (err) {
     console.error('Error fetching event details:', err.response?.data || err.message)
-    errorMessage.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
-    throw err;
+    errorMessage.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+    throw err
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function fetchEventImages() {
-  loadingImages.value = true;
-  const token = localStorage.getItem('token');
+  loadingImages.value = true
+  const token = localStorage.getItem('token')
   if (!token) {
-    loadingImages.value = false;
-    mainImage.value = DEFAULT_IMAGE_URL;
-    return;
+    loadingImages.value = false
+    mainImage.value = DEFAULT_IMAGE_URL
+    return
   }
 
   try {
@@ -106,211 +108,222 @@ async function fetchEventImages() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
+      },
+    )
 
-    const fetchedImages = eventArchivosResponse.data;
-    eventImages.value = fetchedImages;
+    const fetchedImages = eventArchivosResponse.data
+    eventImages.value = fetchedImages
 
     if (eventImages.value.length > 0) {
       // Ensure the mainImage is one of the fetched images, or set the first one
-      if (!mainImage.value || !fetchedImages.some(img => img.url === mainImage.value)) {
-        mainImage.value = eventImages.value[0].url;
+      if (!mainImage.value || !fetchedImages.some((img) => img.url === mainImage.value)) {
+        mainImage.value = eventImages.value[0].url
       }
     } else {
-      mainImage.value = DEFAULT_IMAGE_URL;
+      mainImage.value = DEFAULT_IMAGE_URL
     }
-
   } catch (err) {
-    console.error('Error fetching event images, no image found:', err.response?.data || err.message);
-    mainImage.value = DEFAULT_IMAGE_URL;
-    eventImages.value = []; // Ensure it's an empty array if there's an error or no images
+    console.error('Error fetching event images, no image found:', err.response?.data || err.message)
+    mainImage.value = DEFAULT_IMAGE_URL
+    eventImages.value = [] // Ensure it's an empty array if there's an error or no images
   } finally {
-    loadingImages.value = false;
+    loadingImages.value = false
   }
 }
 
 const handleDeleteConfirmed = async () => {
   if (currentDeleteAction.value === 'deleteEvent') {
-    await deleteEvent();
+    await deleteEvent()
   } else if (currentDeleteAction.value === 'deleteImage') {
-    await confirmDeleteImage();
+    await confirmDeleteImage()
   }
-  currentDeleteAction.value = null;
-};
+  currentDeleteAction.value = null
+}
 
 const showDeleteConfirmation = () => {
-  modalTitle.value = 'Confirmar Eliminación de Evento';
-  modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?';
-  modalWarning.value = 'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento';
-  modalConfirmText.value = 'Sí, Deshabilitar Evento';
-  currentDeleteAction.value = 'deleteEvent';
-  universalDeleteModalRef.value.show();
-};
+  modalTitle.value = 'Confirmar Eliminación de Evento'
+  modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?'
+  modalWarning.value =
+    'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento'
+  modalConfirmText.value = 'Sí, Deshabilitar Evento'
+  currentDeleteAction.value = 'deleteEvent'
+  universalDeleteModalRef.value.show()
+}
 
 const deleteEvent = async () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.';
-    showErrorModal.value = true;
-    return;
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return
   }
 
-  loading.value = true;
+  loading.value = true
   try {
-    await axios.delete(
-      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
+    await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    okModalMessage.value = '¡El evento ha deshabilitado exitosamente!'
+    showOkModal.value = true
+
+    setTimeout(() => {
+      router.push('/admin/eventos/')
+    }, 1000)
+  } catch (err) {
+    console.error('Error deleting event:', err.response?.data || err.message)
+    errorMessage.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+  } finally {
+    if (universalDeleteModalRef.value) {
+      universalDeleteModalRef.value.hide()
+    }
+    loading.value = false
+  }
+}
+
+const handleOkModalClose = () => {
+  showOkModal.value = false
+}
+
+const handleErrorModalClose = () => {
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
+
+async function fetchEventDetailsForEdit(idToEdit) {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return null
+  }
+
+  loading.value = true
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`,
       {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    okModalMessage.value = '¡El evento ha deshabilitado exitosamente!';
-    showOkModal.value = true;
-
-    setTimeout(() => {
-      router.push("/admin/eventos/");
-    }, 1000);
-
-  } catch (err) {
-    console.error('Error deleting event:', err.response?.data || err.message);
-    errorMessage.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
-  } finally {
-    if (universalDeleteModalRef.value) {
-      universalDeleteModalRef.value.hide();
-    }
-    loading.value = false;
-  }
-};
-
-const handleOkModalClose = () => {
-  showOkModal.value = false;
-};
-
-const handleErrorModalClose = () => {
-  showErrorModal.value = false;
-  errorMessage.value = '';
-};
-
-async function fetchEventDetailsForEdit(idToEdit) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.';
-    showErrorModal.value = true;
-    return null;
-  }
-
-  loading.value = true;
-  try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
       },
-    });
-    console.log('Detailed Event Data for Edit:', response.data);
-    currentEventToEdit.value = response.data;
-    showCreateEditModal.value = true;
-    return response.data;
+    )
+    console.log('Detailed Event Data for Edit:', response.data)
+    currentEventToEdit.value = response.data
+    showCreateEditModal.value = true
+    return response.data
   } catch (err) {
-    console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
-    errorMessage.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
-    return null;
+    console.error('Error fetching detailed event for edit:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+    return null
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 const handleEditButtonClick = () => {
   if (eventId.value) {
-    fetchEventDetailsForEdit(eventId.value);
+    fetchEventDetailsForEdit(eventId.value)
   } else {
-    console.error('Cannot edit: Event ID is not available.');
-    errorMessage.value = 'No se puede editar: El ID del evento no está disponible.';
-    showErrorModal.value = true;
+    console.error('Cannot edit: Event ID is not available.')
+    errorMessage.value = 'No se puede editar: El ID del evento no está disponible.'
+    showErrorModal.value = true
   }
-};
+}
 
 const handleModalClose = () => {
-  showCreateEditModal.value = false;
-  currentEventToEdit.value = null;
-};
+  showCreateEditModal.value = false
+  currentEventToEdit.value = null
+}
 
 const handleModalSubmit = async (emittedEventData) => {
-  showCreateEditModal.value = false;
-  currentEventToEdit.value = null;
+  showCreateEditModal.value = false
+  currentEventToEdit.value = null
 
   if (eventId.value) {
-    await fetchEventDetails();
-    await fetchEventImages();
+    await fetchEventDetails()
+    await fetchEventImages()
   }
-};
+}
 
-async function uploadFileToBackend(file, type = 'general') {
-  const token = localStorage.getItem('token');
+async function uploadFileToBackend(file, eventoId) {
+  const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
-    showErrorModal.value = true;
-    return null;
+    errorMessage.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.'
+    showErrorModal.value = true
+    return null
   }
 
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('name', file.name.split('.')[0]);
-  formData.append('tipo', type);
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('name', file.name.split('.')[0])
+  formData.append('evento_id', eventoId)
+
+  console.log('Uploading file to backend:', formData)
 
   // isLoadingImagesInModal.value = true; // This is set in the calling function
   try {
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`,
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log('File uploaded to Archivos:', response.data);
+    )
+    console.log('File uploaded to Archivos:', response.data)
     // Assuming backend returns { id, url, tipo } or similar direct file info
-    return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo, name: file.name };
+    return {
+      id: response.data.file.id,
+      url: response.data.file.url,
+      tipo: response.data.file.tipo,
+      name: file.name,
+    }
   } catch (error) {
-    console.error('Error uploading file to Archivos:', error.response?.data || error.message);
-    errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`;
-    showErrorModal.value = true;
-    return null;
+    console.error('Error uploading file to Archivos:', error.response?.data || error.message)
+    errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`
+    showErrorModal.value = true
+    return null
   }
 }
 
 const openImageManagementModal = () => {
-  showImageManagementModal.value = true;
-};
+  showImageManagementModal.value = true
+}
 
 const closeImageManagementModal = () => {
-  showImageManagementModal.value = false;
-};
+  showImageManagementModal.value = false
+}
 
 const triggerDeleteImage = (image) => {
-  imageToDelete.value = image;
-  modalTitle.value = 'Confirmar Eliminación de Imagen';
-  modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?';
-  modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente la imagen del evento.';
-  modalConfirmText.value = 'Sí, Eliminar Imagen';
-  currentDeleteAction.value = 'deleteImage';
-  universalDeleteModalRef.value.show();
-};
+  imageToDelete.value = image
+  modalTitle.value = 'Confirmar Eliminación de Imagen'
+  modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?'
+  modalWarning.value =
+    'Esta acción es irreversible y eliminará permanentemente la imagen del evento.'
+  modalConfirmText.value = 'Sí, Eliminar Imagen'
+  currentDeleteAction.value = 'deleteImage'
+  universalDeleteModalRef.value.show()
+}
 
 const confirmDeleteImage = async () => {
-  if (!imageToDelete.value) return;
+  if (!imageToDelete.value) return
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado para eliminar imagen.';
-    showErrorModal.value = true;
-    return;
+    errorMessage.value = 'Token de autenticación no encontrado para eliminar imagen.'
+    showErrorModal.value = true
+    return
   }
 
-  isLoadingImagesInModal.value = true;
+  isLoadingImagesInModal.value = true
   try {
     await axios.delete(
       `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento/${imageToDelete.value.id}`,
@@ -319,47 +332,46 @@ const confirmDeleteImage = async () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
+      },
+    )
 
-    okModalMessage.value = '¡Imagen eliminada exitosamente!';
-    showOkModal.value = true;
+    okModalMessage.value = '¡Imagen eliminada exitosamente!'
+    showOkModal.value = true
 
     // After successful deletion, re-fetch all images to update the list
-    await fetchEventImages();
+    await fetchEventImages()
 
     // If the main image was deleted, reset it
     if (mainImage.value === imageToDelete.value.url) {
-      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
+      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL
     }
-
   } catch (err) {
-    console.error('Error deleting image:', err.response?.data || err.message);
-    errorMessage.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
+    console.error('Error deleting image:', err.response?.data || err.message)
+    errorMessage.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
   } finally {
     if (universalDeleteModalRef.value) {
-      universalDeleteModalRef.value.hide();
+      universalDeleteModalRef.value.hide()
     }
-    imageToDelete.value = null;
-    isLoadingImagesInModal.value = false;
+    imageToDelete.value = null
+    isLoadingImagesInModal.value = false
   }
-};
+}
 
 const triggerReactivateEvent = () => {
-  showReactivateConfirmModal.value = true;
-};
+  showReactivateConfirmModal.value = true
+}
 
 const handleReactivateConfirm = async () => {
-  showReactivateConfirmModal.value = false;
-  const token = localStorage.getItem('token');
+  showReactivateConfirmModal.value = false
+  const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.';
-    showErrorModal.value = true;
-    return;
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return
   }
 
-  loading.value = true;
+  loading.value = true
   try {
     await axios.put(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
@@ -369,45 +381,44 @@ const handleReactivateConfirm = async () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }
-    );
-    okModalMessage.value = '¡El evento ha sido reactivado exitosamente!';
-    showOkModal.value = true;
-    await fetchEventDetails();
-
+      },
+    )
+    okModalMessage.value = '¡El evento ha sido reactivado exitosamente!'
+    showOkModal.value = true
+    await fetchEventDetails()
   } catch (err) {
-    console.error('Error reactivating event:', err.response?.data || err.message);
-    errorMessage.value = `Error al reactivar el evento: ${err.response?.data?.message || err.message}`;
-    showErrorModal.value = true;
+    console.error('Error reactivating event:', err.response?.data || err.message)
+    errorMessage.value = `Error al reactivar el evento: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handleReactivateCancel = () => {
-  showReactivateConfirmModal.value = false;
-};
+  showReactivateConfirmModal.value = false
+}
 
 const uploadNewImages = async (newFiles) => {
   if (!newFiles || newFiles.length === 0) {
-    console.warn('No files selected for upload.');
-    return;
+    console.warn('No files selected for upload.')
+    return
   }
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado para subir imágenes.';
-    showErrorModal.value = true;
-    return;
+    errorMessage.value = 'Token de autenticación no encontrado para subir imágenes.'
+    showErrorModal.value = true
+    return
   }
 
-  isLoadingImagesInModal.value = true;
-  const uploadPromises = [];
+  isLoadingImagesInModal.value = true
+  const uploadPromises = []
 
   for (const file of newFiles) {
     uploadPromises.push(
       (async () => {
-        const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general');
+        const uploadedArchivo = await uploadFileToBackend(file, eventId.value)
         if (uploadedArchivo) {
           try {
             // Your backend should return the full image object including its URL and ID
@@ -421,125 +432,133 @@ const uploadNewImages = async (newFiles) => {
                 url: uploadedArchivo.url, // URL from the initial upload
                 tipo: uploadedArchivo.tipo, // Type from the initial upload
                 // Make sure your backend saves the 'name' and returns it here too
-                name: uploadedArchivo.name // Pass the file name to be saved in backend
+                name: uploadedArchivo.name, // Pass the file name to be saved in backend
               },
               {
                 headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                 },
-              }
-            );
-            console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}:`, linkResponse.data);
-            return linkResponse.data; // Return the fully linked image object
+              },
+            )
+            console.log(
+              `Image ${uploadedArchivo.id} linked to event ${eventId.value}:`,
+              linkResponse.data,
+            )
+            return linkResponse.data // Return the fully linked image object
           } catch (linkError) {
-            console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
-            errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
-            showErrorModal.value = true;
-            return null; // Return null if linking fails
+            console.error(
+              `Error linking image ${uploadedArchivo.id} to event:`,
+              linkError.response?.data || linkError.message,
+            )
+            errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`
+            showErrorModal.value = true
+            return null // Return null if linking fails
           }
         }
-        return null; // Return null if initial upload fails
-      })()
-    );
+        return null // Return null if initial upload fails
+      })(),
+    )
   }
 
-  const results = await Promise.all(uploadPromises);
-  const successfulUploads = results.filter(result => result !== null); // Filter out failed uploads
+  const results = await Promise.all(uploadPromises)
+  const successfulUploads = results.filter((result) => result !== null) // Filter out failed uploads
 
   if (successfulUploads.length > 0) {
-    okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`;
-    showOkModal.value = true;
+    okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`
+    showOkModal.value = true
     // CRUCIAL: Re-fetch all images from the backend to ensure a fresh, consistent list
-    await fetchEventImages();
+    await fetchEventImages()
     // Clear the files from the modal's internal state after successful upload and re-fetch
     if (imageManagementModalRef.value) {
-      imageManagementModalRef.value.clearUploadState();
+      imageManagementModalRef.value.clearUploadState()
     }
-  } else {
-    // If some failed, or all failed
-    errorMessage.value = '¡No se pudieron subir o asociar todas las imágenes correctamente!';
-    showErrorModal.value = true;
   }
 
-  isLoadingImagesInModal.value = false;
-};
+  isLoadingImagesInModal.value = false
+}
 
 const formatTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Hora inválida';
-  const options = { hour: '2-digit', minute: '2-digit', hour12: true };
-  return date.toLocaleTimeString('es-ES', options);
-};
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'Hora inválida'
+  const options = { hour: '2-digit', minute: '2-digit', hour12: true }
+  return date.toLocaleTimeString('es-ES', options)
+}
 
 const formatShortDate = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Fecha inválida';
-  const options = { month: 'short', day: 'numeric' }; // e.g., "Jul. 20"
-  return date.toLocaleDateString('es-ES', options);
-};
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'Fecha inválida'
+  const options = { month: 'short', day: 'numeric' } // e.g., "Jul. 20"
+  return date.toLocaleDateString('es-ES', options)
+}
 
 onMounted(async () => {
   try {
-    eventId.value = route.params.id;
+    eventId.value = route.params.id
     if (eventId.value) {
-      await fetchEventDetails();
-      await fetchEventImages();
+      await fetchEventDetails()
+      await fetchEventImages()
     } else {
-      errorMessage.value = 'ID de evento no proporcionado.';
-      showErrorModal.value = true;
-      mainImage.value = DEFAULT_IMAGE_URL;
+      errorMessage.value = 'ID de evento no proporcionado.'
+      showErrorModal.value = true
+      mainImage.value = DEFAULT_IMAGE_URL
     }
   } catch (e) {
-    console.error("Error during initial event details load:", e);
-    errorMessage.value = `Error durante la carga inicial de detalles del evento: ${e.message}`;
-    showErrorModal.value = true;
-    mainImage.value = DEFAULT_IMAGE_URL;
+    console.error('Error during initial event details load:', e)
+    errorMessage.value = `Error durante la carga inicial de detalles del evento: ${e.message}`
+    showErrorModal.value = true
+    mainImage.value = DEFAULT_IMAGE_URL
   }
-});
+})
 
 watch(
   () => route.params.id,
   async (newId, oldId) => {
     if (newId && newId !== oldId) {
-      loading.value = true;
+      loading.value = true
       try {
-        eventId.value = newId;
-        errorMessage.value = '';
-        showErrorModal.value = false;
-        eventDetails.value = null;
-        eventImages.value = [];
-        mainImage.value = DEFAULT_IMAGE_URL;
-        loadingImages.value = true;
+        eventId.value = newId
+        errorMessage.value = ''
+        showErrorModal.value = false
+        eventDetails.value = null
+        eventImages.value = []
+        mainImage.value = DEFAULT_IMAGE_URL
+        loadingImages.value = true
 
-        await fetchEventDetails();
-        await fetchEventImages();
+        await fetchEventDetails()
+        await fetchEventImages()
       } catch (e) {
-        console.error("Error during route param change load:", e);
-        errorMessage.value = `Error durante el cambio de ruta y carga de datos: ${e.message}`;
-        showErrorModal.value = true;
+        console.error('Error during route param change load:', e)
+        errorMessage.value = `Error durante el cambio de ruta y carga de datos: ${e.message}`
+        showErrorModal.value = true
       } finally {
-        loading.value = false;
+        loading.value = false
       }
     }
-  }
-);
+  },
+)
 
 const goBack = () => {
-  router.back();
-};
+  router.back()
+}
 
 const formatDate = (dateString) => {
-  if (!dateString) return '';
-  const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) {
-    return 'Fecha inválida';
+  if (!dateString) return ''
+  const options = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   }
-  return date.toLocaleDateString('es-ES', options);
-};
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) {
+    return 'Fecha inválida'
+  }
+  return date.toLocaleDateString('es-ES', options)
+}
 </script>
 <template>
   <LoaderComponent v-if="loading" />
@@ -547,8 +566,10 @@ const formatDate = (dateString) => {
     <Sidebar />
 
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute :currentRouteName="route.name"
-        :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'" />
+      <PageHeaderRoute
+        :currentRouteName="route.name"
+        :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'"
+      />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <!-- Removed old error display -->
@@ -561,7 +582,10 @@ const formatDate = (dateString) => {
               <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
             </div>
             <div class="d-flex">
-              <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">
+              <button
+                class="btn btn-primary btn-m me-2 animated-btn"
+                @click="handleEditButtonClick"
+              >
                 <i class="fa-solid fa-pencil me-2"></i>Editar
               </button>
               <div v-if="!eventDetails.estado_borrado">
@@ -580,30 +604,50 @@ const formatDate = (dateString) => {
                       <span class="visually-hidden">Cargando miniaturas...</span>
                     </div>
                   </div>
-                  <div v-else class="flex-grow-1 d-flex flex-column justify-content-start align-items-center">
-                    <div v-for="image in imagesToDisplay" :key="image.id" class="thumbnail-container mb-2"
-                      :class="{ 'active-thumbnail': mainImage === image.url }" @click="selectImage(image)">
+                  <div
+                    v-else
+                    class="flex-grow-1 d-flex flex-column justify-content-start align-items-center"
+                  >
+                    <div
+                      v-for="image in imagesToDisplay"
+                      :key="image.id"
+                      class="thumbnail-container mb-2"
+                      :class="{ 'active-thumbnail': mainImage === image.url }"
+                      @click="selectImage(image)"
+                    >
                       <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
                     </div>
                   </div>
                 </ScrollBar>
-                <button class="btn btn-primary add-image-plus-btn animated-btn" @click="openImageManagementModal"
-                  title="Editar Imágenes">
+                <button
+                  class="btn btn-primary add-image-plus-btn animated-btn"
+                  @click="openImageManagementModal"
+                  title="Editar Imágenes"
+                >
                   <i class="fas fa-plus"></i>
                 </button>
               </div>
               <div class="flex-grow-1 main-image-display">
-                <div v-if="loadingImages" class="d-flex justify-content-center align-items-center h-100">
-                  <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                  </div>
+                <div
+                  v-if="loadingImages"
+                  class="d-flex justify-content-center align-items-center h-100"
+                >
+                  <div
+                    class="spinner-border text-primary"
+                    role="status"
+                    style="width: 3rem; height: 3rem"
+                  ></div>
                 </div>
-                <img v-else :src="mainImage" class="img-fluid rounded main-event-image"
-                  :alt="eventDetails.nombre || 'Event Image'" />
+                <img
+                  v-else
+                  :src="mainImage"
+                  class="img-fluid rounded main-event-image"
+                  :alt="eventDetails.nombre || 'Event Image'"
+                />
               </div>
             </div>
 
             <div class="col-md-4 event-info-section">
-
               <div class="info-group">
                 <p class="info-label">Descripción</p>
                 <p class="info-content">{{ eventDetails.descripcion }}</p>
@@ -630,12 +674,16 @@ const formatDate = (dateString) => {
                 </div>
               </div>
 
-              <button v-if="eventDetails.inscripcionesAbiertas"
-                class="btn btn-success mb-4 animated-btn">Inscribirse</button>
+              <button
+                v-if="eventDetails.inscripcionesAbiertas"
+                class="btn btn-success mb-4 animated-btn"
+              >
+                Inscribirse
+              </button>
               <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
             </div>
 
-            <hr class="my-3">
+            <hr class="my-3" />
 
             <div class="d-flex justify-content-between flex-wrap event-attributes">
               <div class="attribute-item">
@@ -658,7 +706,9 @@ const formatDate = (dateString) => {
           </div>
 
           <!-- New Section for Event Status and Reactivate Button -->
-          <div class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section">
+          <div
+            class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section"
+          >
             <div class="d-flex align-items-center">
               <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
                 <i class="fas fa-check-circle me-2"></i> Este evento está activo
@@ -667,8 +717,11 @@ const formatDate = (dateString) => {
                 <i class="fas fa-times-circle me-2"></i> El evento está desactivado
               </span>
             </div>
-            <button v-if="eventDetails.estado_borrado" class="btn btn-success animated-btn"
-              @click="triggerReactivateEvent">
+            <button
+              v-if="eventDetails.estado_borrado"
+              class="btn btn-success animated-btn"
+              @click="triggerReactivateEvent"
+            >
               <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
             </button>
           </div>
@@ -676,109 +729,208 @@ const formatDate = (dateString) => {
           <div class="mt-4">
             <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
               <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="pills-cronogramas-tab" data-bs-toggle="pill"
-                  data-bs-target="#pills-cronogramas" type="button" role="tab" aria-controls="pills-cronogramas"
-                  aria-selected="true">
+                <button
+                  class="nav-link active"
+                  id="pills-cronogramas-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-cronogramas"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-cronogramas"
+                  aria-selected="true"
+                >
                   Cronogramas
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button class="nav-link" id="pills-equipos-tab" data-bs-toggle="pill" data-bs-target="#pills-equipos"
-                  type="button" role="tab" aria-controls="pills-equipos" aria-selected="false">
+                <button
+                  class="nav-link"
+                  id="pills-equipos-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-equipos"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-equipos"
+                  aria-selected="false"
+                >
                   Equipos
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button class="nav-link" id="pills-formularios-tab" data-bs-toggle="pill"
-                  data-bs-target="#pills-formularios" type="button" role="tab" aria-controls="pills-formularios"
-                  aria-selected="false">
+                <button
+                  class="nav-link"
+                  id="pills-formularios-tab"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pills-formularios"
+                  type="button"
+                  role="tab"
+                  aria-controls="pills-formularios"
+                  aria-selected="false"
+                >
                   Formularios
                 </button>
               </li>
             </ul>
             <div class="tab-content" id="pills-tabContent">
-              <div class="tab-pane fade show active" id="pills-cronogramas" role="tabpanel"
-                aria-labelledby="pills-cronogramas-tab">
-                <div v-if="eventDetails && eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
+              <div
+                class="tab-pane fade show active"
+                id="pills-cronogramas"
+                role="tabpanel"
+                aria-labelledby="pills-cronogramas-tab"
+              >
+                <div
+                  v-if="
+                    eventDetails && eventDetails.cronogramas && eventDetails.cronogramas.length > 0
+                  "
+                >
                   <div class="accordion" id="nestedAccordionCronogramas">
-                    <div class="accordion-item" v-for="(cronograma) in eventDetails.cronogramas" :key="cronograma.id">
+                    <div
+                      class="accordion-item"
+                      v-for="cronograma in eventDetails.cronogramas"
+                      :key="cronograma.id"
+                    >
                       <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
-                        <button class="accordion-button nested-accordion-button collapsed" type="button"
-                          data-bs-toggle="collapse" :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
-                          aria-expanded="false" :aria-controls="`cronogramaCollapse${cronograma.id}`">
+                        <button
+                          class="accordion-button nested-accordion-button collapsed"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
+                          aria-expanded="false"
+                          :aria-controls="`cronogramaCollapse${cronograma.id}`"
+                        >
                           <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
                           {{ cronograma.titulo }}
                         </button>
                       </h2>
-                      <div :id="`cronogramaCollapse${cronograma.id}`" class="accordion-collapse collapse"
+                      <div
+                        :id="`cronogramaCollapse${cronograma.id}`"
+                        class="accordion-collapse collapse"
                         :aria-labelledby="`cronogramaHeading${cronograma.id}`"
-                        data-bs-parent="#nestedAccordionCronogramas">
+                        data-bs-parent="#nestedAccordionCronogramas"
+                      >
                         <div class="accordion-body nested-accordion-body">
-                          <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
-                          <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
-                          <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
+                          <p class="mb-2">
+                            <strong>Descripción:</strong> {{ cronograma.descripcion }}
+                          </p>
+                          <p class="mb-2">
+                            <strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}
+                          </p>
+                          <p class="mb-3">
+                            <strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}
+                          </p>
                           <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
                           <div
-                            v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0">
-                            <div class="accordion accordion-flush" :id="`activitiesAccordion${cronograma.id}`">
-                              <div class="accordion-item" v-for="actividad in cronograma.actividades_cronogramas"
-                                :key="actividad.id">
+                            v-if="
+                              cronograma.actividades_cronogramas &&
+                              cronograma.actividades_cronogramas.length > 0
+                            "
+                          >
+                            <div
+                              class="accordion accordion-flush"
+                              :id="`activitiesAccordion${cronograma.id}`"
+                            >
+                              <div
+                                class="accordion-item"
+                                v-for="actividad in cronograma.actividades_cronogramas"
+                                :key="actividad.id"
+                              >
                                 <h2 class="accordion-header" :id="`activityHeading${actividad.id}`">
-                                  <button class="accordion-button activity-accordion-button collapsed" type="button"
-                                    data-bs-toggle="collapse" :data-bs-target="`#activityCollapse${actividad.id}`"
-                                    aria-expanded="false" :aria-controls="`activityCollapse${actividad.id}`">
+                                  <button
+                                    class="accordion-button activity-accordion-button collapsed"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    :data-bs-target="`#activityCollapse${actividad.id}`"
+                                    aria-expanded="false"
+                                    :aria-controls="`activityCollapse${actividad.id}`"
+                                  >
                                     <i class="fas fa-check-circle activity-icon me-2"></i>
                                     {{ actividad.titulo }}
                                     <div class="activity-date-display ms-auto">
-                                      <i class="fas fa-clock activity-date-icon me-1" title="Inicio de Actividad"></i>
-                                      <span class="activity-start-date">{{ formatTime(actividad.fecha_inicio) }}</span>
+                                      <i
+                                        class="fas fa-clock activity-date-icon me-1"
+                                        title="Inicio de Actividad"
+                                      ></i>
+                                      <span class="activity-start-date">{{
+                                        formatTime(actividad.fecha_inicio)
+                                      }}</span>
                                       <span class="mx-1">-</span>
-                                      <span class="activity-end-date">{{ formatTime(actividad.fecha_fin) }}</span>
-                                      <i class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
-                                        title="Fecha de Actividad"></i>
-                                      <span class="activity-full-date">{{ formatShortDate(actividad.fecha_inicio)
-                                        }}</span>
+                                      <span class="activity-end-date">{{
+                                        formatTime(actividad.fecha_fin)
+                                      }}</span>
+                                      <i
+                                        class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
+                                        title="Fecha de Actividad"
+                                      ></i>
+                                      <span class="activity-full-date">{{
+                                        formatShortDate(actividad.fecha_inicio)
+                                      }}</span>
                                     </div>
                                   </button>
                                 </h2>
-                                <div :id="`activityCollapse${actividad.id}`" class="accordion-collapse collapse"
+                                <div
+                                  :id="`activityCollapse${actividad.id}`"
+                                  class="accordion-collapse collapse"
                                   :aria-labelledby="`activityHeading${actividad.id}`"
-                                  :data-bs-parent="`#activitiesAccordion${cronograma.id}`">
+                                  :data-bs-parent="`#activitiesAccordion${cronograma.id}`"
+                                >
                                   <div class="accordion-body activity-accordion-body">
-                                    <p class="mb-2"><strong>Descripción:</strong> {{ actividad.descripcion || 'Sindescripción.' }}</p>
+                                    <p class="mb-2">
+                                      <strong>Descripción:</strong>
+                                      {{ actividad.descripcion || 'Sindescripción.' }}
+                                    </p>
                                   </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                          <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
+                          <p v-else class="text-muted text-center py-2">
+                            No hay actividades para este cronograma.
+                          </p>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-muted mt-3">No hay cronogramas disponibles para este evento.</p>
+                <p v-else class="text-muted mt-3">
+                  No hay cronogramas disponibles para este evento.
+                </p>
               </div>
 
-              <div class="tab-pane fade" id="pills-equipos" role="tabpanel" aria-labelledby="pills-equipos-tab">
+              <div
+                class="tab-pane fade"
+                id="pills-equipos"
+                role="tabpanel"
+                aria-labelledby="pills-equipos-tab"
+              >
                 <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
                   <h5 class="mb-3">Información de Equipos</h5>
-                  <p class="mb-0">Equipos del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
-                  <p class="text-muted mt-2">Aquí se mostrará la información de los equipos asociados a este evento.</p>
+                  <p class="mb-0">
+                    Equipos del evento: <strong>{{ eventDetails?.nombre }}</strong>
+                  </p>
+                  <p class="text-muted mt-2">
+                    Aquí se mostrará la información de los equipos asociados a este evento.
+                  </p>
                 </div>
               </div>
 
-              <div class="tab-pane fade" id="pills-formularios" role="tabpanel" aria-labelledby="pills-formularios-tab">
+              <div
+                class="tab-pane fade"
+                id="pills-formularios"
+                role="tabpanel"
+                aria-labelledby="pills-formularios-tab"
+              >
                 <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
                   <h5 class="mb-3">Información de Formularios</h5>
-                  <p class="mb-0">Formularios del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
-                  <p class="text-muted mt-2">Aquí se mostrará la información de los formularios asociados a este evento.
+                  <p class="mb-0">
+                    Formularios del evento: <strong>{{ eventDetails?.nombre }}</strong>
+                  </p>
+                  <p class="text-muted mt-2">
+                    Aquí se mostrará la información de los formularios asociados a este evento.
                   </p>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
         <div v-else-if="!loading" class="container text-center text-muted mt-5">
           No se pudieron cargar los detalles del evento o el evento no existe.
@@ -787,23 +939,48 @@ const formatDate = (dateString) => {
     </div>
   </div>
 
+  <OkModal
+    :show="showOkModal"
+    :message="okModalMessage"
+    :duration="1000"
+    @close="handleOkModalClose"
+  />
 
-  <OkModal :show="showOkModal" :message="okModalMessage" :duration=1000 @close="handleOkModalClose" />
+  <ModalCrearEvento
+    :show="showCreateEditModal"
+    :eventData="currentEventToEdit"
+    @close="handleModalClose"
+    @submit="handleModalSubmit"
+  />
 
-  <ModalCrearEvento :show="showCreateEditModal" :eventData="currentEventToEdit" @close="handleModalClose"
-    @submit="handleModalSubmit" />
+  <ImageManagementModal
+    :show="showImageManagementModal"
+    :currentImages="eventImages"
+    :isLoading="isLoadingImagesInModal"
+    @close="closeImageManagementModal"
+    @delete-image="triggerDeleteImage"
+    @upload-images="uploadNewImages"
+    ref="imageManagementModalRef"
+  />
 
-  <ImageManagementModal :show="showImageManagementModal" :currentImages="eventImages"
-    :isLoading="isLoadingImagesInModal" @close="closeImageManagementModal" @delete-image="triggerDeleteImage"
-    @upload-images="uploadNewImages" ref="imageManagementModalRef" />
-
-  <ConfirmationModal :show="showReactivateConfirmModal" title="Reactivar Evento"
+  <ConfirmationModal
+    :show="showReactivateConfirmModal"
+    title="Reactivar Evento"
     message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
-    confirmText="Sí, Reactivar" cancelText="Cancelar" @confirm="handleReactivateConfirm"
-    @cancel="handleReactivateCancel" />
+    confirmText="Sí, Reactivar"
+    cancelText="Cancelar"
+    @confirm="handleReactivateConfirm"
+    @cancel="handleReactivateCancel"
+  />
 
-  <DeleteModal ref="universalDeleteModalRef" :title="modalTitle" :message="modalMessage" :warning="modalWarning"
-    :confirmButtonText="modalConfirmText" @confirmed="handleDeleteConfirmed" />
+  <DeleteModal
+    ref="universalDeleteModalRef"
+    :title="modalTitle"
+    :message="modalMessage"
+    :warning="modalWarning"
+    :confirmButtonText="modalConfirmText"
+    @confirmed="handleDeleteConfirmed"
+  />
 
   <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 </template>
@@ -852,7 +1029,6 @@ const formatDate = (dateString) => {
   position: relative;
   overflow: hidden;
 }
-
 
 .btn-primary {
   background-color: #174384;
@@ -957,8 +1133,8 @@ const formatDate = (dateString) => {
 }
 
 .card {
-  border: 1px solid rgba(0, 0, 0, .125);
-  border-radius: .25rem;
+  border: 1px solid rgba(0, 0, 0, 0.125);
+  border-radius: 0.25rem;
 }
 
 .card.mb-4:not(.main-event-details) {
@@ -998,7 +1174,9 @@ const formatDate = (dateString) => {
   color: #ffffff;
   font-weight: 600;
   border-bottom: 1px solid #14386b;
-  transition: all 0.2s ease, color 0.2s ease;
+  transition:
+    all 0.2s ease,
+    color 0.2s ease;
   padding: 1rem 1.25rem;
 }
 
@@ -1013,7 +1191,9 @@ const formatDate = (dateString) => {
 }
 
 .accordion-button .accordion-indicator-icon {
-  transition: transform 0.2s ease-in-out, color 0.2s ease;
+  transition:
+    transform 0.2s ease-in-out,
+    color 0.2s ease;
   color: #ffffff;
 }
 
@@ -1025,7 +1205,6 @@ const formatDate = (dateString) => {
 .accordion-button::after {
   display: none;
 }
-
 
 .accordion-body {
   padding: 1.5rem;
@@ -1167,7 +1346,7 @@ const formatDate = (dateString) => {
   color: #343a40;
   font-weight: 500;
   font-size: 0.95rem;
-  border-bottom: 1px solid rgba(0,0,0,.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .activity-date-display {
@@ -1186,23 +1365,23 @@ const formatDate = (dateString) => {
 .activity-start-date,
 .activity-end-date,
 .activity-full-date {
-    white-space: nowrap; /* Prevent dates from wrapping */
+  white-space: nowrap; /* Prevent dates from wrapping */
 }
 
 /* Ensure the full date is displayed on smaller screens if necessary, or adjust layout */
 @media (max-width: 576px) {
-    .activity-date-display {
-        flex-wrap: wrap; /* Allow dates to wrap on very small screens */
-        justify-content: flex-end; /* Keep them to the right */
-        text-align: right;
-    }
-    .activity-date-icon {
-        margin-left: 0.5rem !important; /* Adjust icon spacing */
-        margin-right: 0.25rem !important;
-    }
-    .activity-full-date {
-        flex-basis: 100%; /* Make full date take full line if it wraps */
-        margin-top: 0.2rem;
-    }
+  .activity-date-display {
+    flex-wrap: wrap; /* Allow dates to wrap on very small screens */
+    justify-content: flex-end; /* Keep them to the right */
+    text-align: right;
+  }
+  .activity-date-icon {
+    margin-left: 0.5rem !important; /* Adjust icon spacing */
+    margin-right: 0.25rem !important;
+  }
+  .activity-full-date {
+    flex-basis: 100%; /* Make full date take full line if it wraps */
+    margin-top: 0.2rem;
+  }
 }
 </style>
