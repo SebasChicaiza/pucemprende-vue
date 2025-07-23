@@ -44,7 +44,7 @@ const currentEventToEdit = ref(null)
 
 const showImageManagementModal = ref(false)
 const imageToDelete = ref(null)
-const imageManagementModalRef = ref(null) // Ref to access modal component's methods
+const imageManagementModalRef = ref(null)
 
 const showReactivateConfirmModal = ref(false)
 
@@ -55,6 +55,26 @@ const imagesToDisplay = computed(() => {
   return [
     { id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' },
   ]
+})
+
+const canEditEvent = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const userRolId = user.rol_id
+
+  if (userRolId === 8) {
+    return true
+  }
+
+  if (userRolId === 1 && eventDetails.value) {
+    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]')
+    // Ensure eventDetails.value.id is used for matching against evento_id
+    const hasEventPermission = eventos.some(
+      (e) => e.evento_id === eventDetails.value.id && e.rol_id === 1,
+    )
+    return hasEventPermission
+  }
+
+  return false
 })
 
 const selectImage = (image) => {
@@ -115,7 +135,6 @@ async function fetchEventImages() {
     eventImages.value = fetchedImages
 
     if (eventImages.value.length > 0) {
-      // Ensure the mainImage is one of the fetched images, or set the first one
       if (!mainImage.value || !fetchedImages.some((img) => img.url === mainImage.value)) {
         mainImage.value = eventImages.value[0].url
       }
@@ -125,7 +144,7 @@ async function fetchEventImages() {
   } catch (err) {
     console.error('Error fetching event images, no image found:', err.response?.data || err.message)
     mainImage.value = DEFAULT_IMAGE_URL
-    eventImages.value = [] // Ensure it's an empty array if there's an error or no images
+    eventImages.value = []
   } finally {
     loadingImages.value = false
   }
@@ -266,7 +285,6 @@ async function uploadFileToBackend(file, eventoId) {
 
   console.log('Uploading file to backend:', formData)
 
-  // isLoadingImagesInModal.value = true; // This is set in the calling function
   try {
     const response = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`,
@@ -279,7 +297,6 @@ async function uploadFileToBackend(file, eventoId) {
       },
     )
     console.log('File uploaded to Archivos:', response.data)
-    // Assuming backend returns { id, url, tipo } or similar direct file info
     return {
       id: response.data.file.id,
       url: response.data.file.url,
@@ -338,10 +355,8 @@ const confirmDeleteImage = async () => {
     okModalMessage.value = '¡Imagen eliminada exitosamente!'
     showOkModal.value = true
 
-    // After successful deletion, re-fetch all images to update the list
     await fetchEventImages()
 
-    // If the main image was deleted, reset it
     if (mainImage.value === imageToDelete.value.url) {
       mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL
     }
@@ -421,18 +436,14 @@ const uploadNewImages = async (newFiles) => {
         const uploadedArchivo = await uploadFileToBackend(file, eventId.value)
         if (uploadedArchivo) {
           try {
-            // Your backend should return the full image object including its URL and ID
-            // after linking. The `linkResponse.data` should be the actual image object
-            // that you want to add to `eventImages.value`.
             const linkResponse = await axios.post(
               `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
               {
-                archivo_id: uploadedArchivo.id, // ID from the initial upload
+                archivo_id: uploadedArchivo.id,
                 evento_id: eventId.value,
-                url: uploadedArchivo.url, // URL from the initial upload
-                tipo: uploadedArchivo.tipo, // Type from the initial upload
-                // Make sure your backend saves the 'name' and returns it here too
-                name: uploadedArchivo.name, // Pass the file name to be saved in backend
+                url: uploadedArchivo.url,
+                tipo: uploadedArchivo.tipo,
+                name: uploadedArchivo.name,
               },
               {
                 headers: {
@@ -445,7 +456,7 @@ const uploadNewImages = async (newFiles) => {
               `Image ${uploadedArchivo.id} linked to event ${eventId.value}:`,
               linkResponse.data,
             )
-            return linkResponse.data // Return the fully linked image object
+            return linkResponse.data
           } catch (linkError) {
             console.error(
               `Error linking image ${uploadedArchivo.id} to event:`,
@@ -453,23 +464,21 @@ const uploadNewImages = async (newFiles) => {
             )
             errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`
             showErrorModal.value = true
-            return null // Return null if linking fails
+            return null
           }
         }
-        return null // Return null if initial upload fails
+        return null
       })(),
     )
   }
 
   const results = await Promise.all(uploadPromises)
-  const successfulUploads = results.filter((result) => result !== null) // Filter out failed uploads
+  const successfulUploads = results.filter((result) => result !== null)
 
   if (successfulUploads.length > 0) {
     okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`
     showOkModal.value = true
-    // CRUCIAL: Re-fetch all images from the backend to ensure a fresh, consistent list
     await fetchEventImages()
-    // Clear the files from the modal's internal state after successful upload and re-fetch
     if (imageManagementModalRef.value) {
       imageManagementModalRef.value.clearUploadState()
     }
@@ -490,7 +499,7 @@ const formatShortDate = (dateString) => {
   if (!dateString) return ''
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return 'Fecha inválida'
-  const options = { month: 'short', day: 'numeric' } // e.g., "Jul. 20"
+  const options = { month: 'short', day: 'numeric' }
   return date.toLocaleDateString('es-ES', options)
 }
 
@@ -560,6 +569,7 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('es-ES', options)
 }
 </script>
+
 <template>
   <LoaderComponent v-if="loading" />
   <div class="d-flex" style="height: 100vh; overflow: hidden">
@@ -572,7 +582,6 @@ const formatDate = (dateString) => {
       />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <!-- Removed old error display -->
         <div class="container-fluid" v-if="eventDetails">
           <div class="d-flex align-items-center justify-content-between mb-4">
             <div class="d-flex align-items-center">
@@ -583,12 +592,13 @@ const formatDate = (dateString) => {
             </div>
             <div class="d-flex">
               <button
+                v-if="canEditEvent"
                 class="btn btn-primary btn-m me-2 animated-btn"
                 @click="handleEditButtonClick"
               >
                 <i class="fa-solid fa-pencil me-2"></i>Editar
               </button>
-              <div v-if="!eventDetails.estado_borrado">
+              <div v-if="!eventDetails.estado_borrado && canEditEvent">
                 <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
                   <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
                 </button>
@@ -620,6 +630,7 @@ const formatDate = (dateString) => {
                   </div>
                 </ScrollBar>
                 <button
+                  v-if="canEditEvent"
                   class="btn btn-primary add-image-plus-btn animated-btn"
                   @click="openImageManagementModal"
                   title="Editar Imágenes"
@@ -705,7 +716,6 @@ const formatDate = (dateString) => {
             </div>
           </div>
 
-          <!-- New Section for Event Status and Reactivate Button -->
           <div
             class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section"
           >
@@ -718,7 +728,7 @@ const formatDate = (dateString) => {
               </span>
             </div>
             <button
-              v-if="eventDetails.estado_borrado"
+              v-if="eventDetails.estado_borrado && canEditEvent"
               class="btn btn-success animated-btn"
               @click="triggerReactivateEvent"
             >
@@ -876,7 +886,7 @@ const formatDate = (dateString) => {
                                   <div class="accordion-body activity-accordion-body">
                                     <p class="mb-2">
                                       <strong>Descripción:</strong>
-                                      {{ actividad.descripcion || 'Sindescripción.' }}
+                                      {{ actividad.descripcion || 'Sin descripción.' }}
                                     </p>
                                   </div>
                                 </div>
