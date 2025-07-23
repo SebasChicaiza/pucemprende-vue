@@ -26,13 +26,13 @@ const personSearchError = ref(null)
 
 const eventSearchQuery = ref('')
 const allEvents = ref([])
-const selectedEvent = ref(null) // This now holds the full event object
+const selectedEvent = ref(null)
 const eventSearchLoading = ref(false)
 const eventSearchError = ref(null)
 const showEventSuggestions = ref(false)
 
-const selectedRole = ref('') // This holds the role ID
-const allRoles = ref([]) // This holds full role objects
+const selectedRole = ref('')
+const allRoles = ref([])
 const rolesLoading = ref(false)
 const rolesError = ref(null)
 
@@ -48,8 +48,6 @@ const filteredEventOptions = computed(() => {
   const query = eventSearchQuery.value.toLowerCase()
   return allEvents.value.filter((event) => event.nombre.toLowerCase().includes(query))
 })
-
-// --- API Calls ---
 
 async function fetchPersonByCedula() {
   if (!cedulaSearchQuery.value.trim()) {
@@ -228,7 +226,7 @@ const onEventInput = () => {
 
 const selectEventSuggestion = (event) => {
   eventSearchQuery.value = event.nombre
-  selectedEvent.value = event // Store the full event object
+  selectedEvent.value = event
   showEventSuggestions.value = false
 }
 
@@ -267,12 +265,10 @@ async function handleAction() {
   }
 
   try {
-    // Correctly construct the payload with direct IDs for the parent component
     const payloadToEmit = {
       persona_id: foundPerson.value.id,
       evento_id: selectedEvent.value.id,
       rol_id: selectedRole.value,
-      // Include names for the parent's success message
       person_name: `${foundPerson.value.nombre} ${foundPerson.value.apellido}`,
       event_name: selectedEvent.value.nombre,
       role_name:
@@ -280,14 +276,13 @@ async function handleAction() {
     }
 
     if (props.mode === 'add') {
-      // In add mode, we emit the payload to the parent
       emit('add-user', payloadToEmit)
     } else if (props.mode === 'edit') {
       emit('edit-user', {
         id: assignmentId.value,
-        person: foundPerson.value, // Keep full object if editUserAssignment expects it
-        event: selectedEvent.value, // Keep full object if editUserAssignment expects it
-        role: allRoles.value.find((r) => r.id === selectedRole.value), // Keep full object
+        person: foundPerson.value,
+        event: selectedEvent.value,
+        role: allRoles.value.find((r) => r.id === selectedRole.value),
       })
     }
     closeModal()
@@ -353,6 +348,9 @@ watch(
 
       isSubmitting.value = false
       submissionError.value = null
+
+      // Refetch all roles when the modal is opened
+      fetchRolesForSelect()
 
       // Fetch initial data if in edit mode
       if (props.mode === 'edit' && props.initialData && props.initialData.id) {
