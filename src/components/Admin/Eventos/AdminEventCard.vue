@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits } from 'vue'
+import { defineProps, defineEmits, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -23,6 +23,26 @@ const emitEditEvent = () => {
 const emitViewEvent = () => {
   emit('view-event', props.event.id) // Emit just the ID for viewing
 }
+
+const canEdit = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const userId = user.id
+  const userRolId = user.rol_id
+
+  if (userRolId === 8) {
+    return true
+  }
+
+  if (userRolId === 1) {
+    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]')
+    // Check if there's an entry in 'eventos' for the current event_id and rol_id 1
+    // It's assumed that `props.event.id` corresponds to `evento_id` in the 'eventos' array.
+    const hasEventPermission = eventos.some((e) => e.evento_id === props.event.id && e.rol_id === 1)
+    return hasEventPermission
+  }
+
+  return false
+})
 </script>
 
 <template>
@@ -30,7 +50,7 @@ const emitViewEvent = () => {
     <div class="card-body">
       <div class="d-flex justify-content-between">
         <small class="text-muted fw-bold">Evento</small>
-        <i class="fas fa-pen edit-icon" @click="emitEditEvent"></i>
+        <i v-if="canEdit" class="fas fa-pen edit-icon" @click="emitEditEvent"></i>
       </div>
 
       <h5 class="card-title mt-2 fixed-title">
@@ -71,7 +91,6 @@ const emitViewEvent = () => {
       </div>
 
       <div class="d-flex gap-2">
-        <!-- Attach the new emitViewEvent function to the button -->
         <button class="btn btn-outline-primary btn-sm" @click="emitViewEvent">Ver evento</button>
         <button
           v-if="event.inscripcionesAbiertas"

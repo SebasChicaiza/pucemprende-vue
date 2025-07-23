@@ -1,11 +1,11 @@
 <script setup>
 import LoaderComponent from '@/components/LoaderComponent.vue'
-import AppNavbar from '@/components/AppNavbar.vue';
-import AppFooter from '@/components/AppFooter.vue';
+import AppNavbar from '@/components/AppNavbar.vue'
+import AppFooter from '@/components/AppFooter.vue'
 </script>
 
 <template>
-  <AppNavbar/>
+  <AppNavbar />
   <LoaderComponent v-if="loading" />
   <div
     class="vh-100 d-flex justify-content-center align-items-center"
@@ -61,7 +61,7 @@ import AppFooter from '@/components/AppFooter.vue';
       <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
     </div>
   </div>
-  <AppFooter/>
+  <AppFooter />
 </template>
 
 <script>
@@ -105,6 +105,7 @@ export default {
 
         try {
           data = JSON.parse(text)
+          console.log('Respuesta del servidor:', data)
         } catch (jsonError) {
           console.error('Respuesta no válida (HTML en vez de JSON):', text + jsonError)
           this.error = 'El servidor no respondió correctamente. Intenta más tarde.'
@@ -117,6 +118,7 @@ export default {
 
         localStorage.setItem('token', `Bearer ${data.access_token}`)
         localStorage.setItem('user', JSON.stringify(data.user))
+        localStorage.setItem('eventos', JSON.stringify(data.eventos || []))
 
         if (data.user.rol_id === 1 || data.user.rol_id === 8) {
           this.$router.push('/admin/eventos')
