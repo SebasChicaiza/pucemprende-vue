@@ -64,7 +64,6 @@
                 <th>Cédula</th>
                 <th>Teléfono</th>
                 <th>Correo</th>
-                <th>Rol</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -75,12 +74,6 @@
                 <td>{{ integrante.identificacion }}</td>
                 <td>{{ integrante.telefono }}</td>
                 <td>{{ integrante.correo }}</td>
-                <td>
-                  <select v-model="integrante.rol_id" class="form-select form-select-sm">
-                    <option :value="1">Líder</option>
-                    <option :value="2">Integrante</option>
-                  </select>
-                </td>
                 <td>
                   <button class="btn btn-sm btn-danger" @click="eliminarIntegrante(index)">
                     Eliminar
@@ -97,6 +90,8 @@
 
       <!-- Footer -->
       <div class="modal-footer">
+        <p v-if="dialogoError" class="text-danger fw-semibold mb-2">{{ dialogoError }}</p>
+
         <button class="btn btn-primary" @click="guardarEquipo">Guardar equipo</button>
       </div>
     </div>
@@ -111,6 +106,7 @@ const cedulaBusqueda = ref('')
 const resultadosBusqueda = ref([])
 const buscando = ref(false)
 const busquedaError = ref('')
+const dialogoError = ref('')
 
 const props = defineProps({
   visible: Boolean,
@@ -185,6 +181,7 @@ async function guardarEquipo() {
   }
 
   try {
+    // 1. Crear el equipo
     const equipoResponse = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
       {
@@ -194,19 +191,22 @@ async function guardarEquipo() {
       },
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    const equipoId = equipoResponse.data.id
 
+    const equipoId = equipoResponse.data.id
+    console.log('Equipo creado con ID:', equipoId)
+
+    // 2. Fechas para miembros
     const fechaInicio = new Date().toISOString().split('T')[0]
     const fechaFin = new Date()
     fechaFin.setDate(fechaFin.getDate() + 42)
     const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
 
+    // 3. Asociar miembros usando la nueva API
     for (const integrante of integrantes.value) {
       await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
+        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
         {
-          rol_id: integrante.rol_id,
-          proyecto_id: equipoId,
+          equipo_id: equipoId,
           persona_id: integrante.persona_id,
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFinFormatted,
@@ -215,9 +215,9 @@ async function guardarEquipo() {
       )
     }
 
+    dialogoError.value = ''
     alert('Equipo creado correctamente.')
     emit('guardar')
-    emit('close')
   } catch (error) {
     console.error('Error al guardar el equipo o los miembros:', error)
     alert('Ocurrió un error al guardar el equipo. Intenta de nuevo.')
@@ -238,10 +238,11 @@ async function guardarEquipo() {
 .modal-content {
   background: white;
   border-radius: 12px;
-  width: 90%;
-  max-width: 800px;
+  width: 70rem;
   padding: 1.5rem;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .modal-header,
 .modal-footer {

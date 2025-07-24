@@ -2,7 +2,8 @@
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import CrearEquipoModal from '@/components/Admin/Proyectos/CrearEquipoModal.vue'
 
@@ -10,9 +11,12 @@ import { useRoute } from 'vue-router'
 
 const showModal = ref(false)
 
+const router = useRouter()
 const route = useRoute()
 
 const eventoId = route.params.eventoId
+
+const miembrosEquipo = ref([])
 
 // Form state
 const logoImage = ref({ file: null, id: null, url: '' })
@@ -33,6 +37,51 @@ async function showTimedSuccessMessage(msg) {
   // Podrías usar un store o evento para notificar
   console.log(msg)
 }
+
+async function fetchMiembrosEquipo(equipoId) {
+  const token = localStorage.getItem('token')
+  if (!token || !equipoId) return
+
+  try {
+    const { data } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    const miembrosFiltrados = data.filter((m) => m.equipo_id === equipoId)
+
+    // Llenar cada miembro con su persona si no viene embebida
+    const miembrosConPersona = await Promise.all(
+      miembrosFiltrados.map(async (m) => {
+        if (!m.persona) {
+          try {
+            const resPersona = await axios.get(
+              `${import.meta.env.VITE_URL_BACKEND}/api/persona/${m.persona_id}`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            )
+            m.persona = resPersona.data
+          } catch (e) {
+            console.warn(`No se pudo obtener persona con ID ${m.persona_id}`)
+            m.persona = { nombre: 'N/A', apellido: '', email: '', identificacion: '' }
+          }
+        }
+        return m
+      }),
+    )
+
+    miembrosEquipo.value = miembrosConPersona
+  } catch (error) {
+    console.error('Error al obtener miembros del equipo:', error)
+    miembrosEquipo.value = []
+  }
+}
+
+watch(selectedEquipo, (nuevoEquipoId) => {
+  if (nuevoEquipoId) {
+    fetchMiembrosEquipo(nuevoEquipoId)
+  } else {
+    miembrosEquipo.value = []
+  }
+})
 
 // Subir archivo al backend como logo
 async function uploadFileToBackend(file) {
@@ -82,60 +131,95 @@ function onLogoChange(event) {
 async function fetchEquipos() {
   const token = localStorage.getItem('token')
   if (!token) return
+
   try {
     const { data } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    equipos.value = data
+
+    equipos.value = data.filter((e) => e.borrado_en === null || e.estado_borrado === false)
   } catch {
     console.warn('No se pudieron cargar equipos')
   }
 }
 
-// Enviar formulario de inscripción
 async function submitForm() {
-  if (!titulo.value || !descripcion.value || !selectedEquipo.value) {
-    await showTimedErrorMessage('Completa todos los campos obligatorios.')
+  const token = localStorage.getItem('token')
+  if (!token) {
+    alert('No se encontró token de autenticación.')
     return
   }
 
-  // Subimos logo si hay archivo nuevo
-  if (logoImage.value.file) {
-    const uploaded = await uploadFileToBackend(logoImage.value.file)
-    if (uploaded) {
-      logoImage.value.id = uploaded.id
-      logoImage.value.url = uploaded.url
-      await showTimedSuccessMessage('Logo cargado correctamente')
-    } else {
-      return
-    }
+  if (!titulo.value || !descripcion.value || !selectedEquipo.value) {
+    alert('Por favor completa todos los campos.')
+    return
   }
 
-  // Crear proyecto
-  loading.value = true
+  // Validar que haya al menos un líder en el equipo (opcional si lo haces antes)
+  const tieneLider = miembrosEquipo.value.some((m) => m.rol_id === 1)
+  if (!tieneLider) {
+    alert('Debes asignar al menos un integrante con rol de Líder.')
+    return
+  }
+
   try {
-    const token = localStorage.getItem('token')
-    await axios.post(
+    // 1. Generar fechas
+    const fechaInicio = new Date().toISOString().split('T')[0]
+    const fechaFin = new Date()
+    fechaFin.setDate(fechaFin.getDate() + 42)
+    const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
+
+    // 2. Crear el proyecto
+    const { data: proyectoCreado } = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
       {
         titulo: titulo.value,
         descripcion: descripcion.value,
         equipo_id: selectedEquipo.value,
-        logo_id: logoImage.value.id,
+        estado: 'ACTIVO',
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFinFormatted,
       },
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    await showTimedSuccessMessage('Inscripción exitosa')
-    // redirigir o limpiar formulario
-  } catch (err) {
-    console.error('Error al crear proyecto:', err)
-    await showTimedErrorMessage('Error al enviar inscripción. Intenta de nuevo.')
-  } finally {
-    loading.value = false
+
+    // 3. Subir el logo si existe
+    if (logoImage.value && logoImage.value.url) {
+      // a. Subir el archivo a /api/archivos
+      const { data: archivoId } = await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
+        {
+          url: logoImage.value.url,
+          tipo: 'png', // o 'jpg', 'pdf', etc. según lo que tengas
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      // b. Asociar el archivo al proyecto
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
+        {
+          archivo_id: archivoId,
+          proyecto_id: proyectoCreado.id,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    }
+
+    alert('Proyecto creado correctamente.')
+    router.push('/proyectos') // o donde quieras redirigir
+  } catch (error) {
+    console.error('Error al crear el proyecto:', error)
+    alert('Ocurrió un error al crear el proyecto. Revisa la consola para más detalles.')
   }
 }
 
 onMounted(fetchEquipos)
+
+function handleGuardarEquipo() {
+  showModal.value = false
+  fetchEquipos()
+}
 </script>
 
 <template>
@@ -214,6 +298,38 @@ onMounted(fetchEquipos)
               <option value="" disabled>Selecciona un equipo con el que deseas participar</option>
               <option v-for="e in equipos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
             </select>
+            <div v-if="miembrosEquipo.length" class="mt-4">
+              <h5>Miembros del equipo seleccionado</h5>
+              <table class="table table-bordered">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Cédula</th>
+                    <th>Correo</th>
+                    <th>Rol</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="miembro in miembrosEquipo" :key="miembro.id">
+                    <td>{{ miembro.persona?.nombre }} {{ miembro.persona?.apellido }}</td>
+                    <td>{{ miembro.persona?.identificacion }}</td>
+                    <td>{{ miembro.persona?.email }}</td>
+
+                    <td>
+                      <select
+                        v-model="miembro.rol_id"
+                        @change="actualizarRol(miembro)"
+                        class="form-select form-select-sm"
+                      >
+                        <option :value="1">Líder</option>
+                        <option :value="2">Integrante</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <div class="mt-2 d-flex align-items-center">
               <span class="me-2 text-muted small">Si no tienes equipo, crea uno</span>
               <button
