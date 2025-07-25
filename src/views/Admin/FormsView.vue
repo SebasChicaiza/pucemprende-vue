@@ -12,7 +12,7 @@ import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 import { useEventosStore } from '@/stores/eventos'
-import ModalProcesoEvaluacion from '@/components/Admin/Formularios/ModalProcesoEvaluacion.vue' // Updated import path and name
+import ModalProcesoEvaluacion from '@/components/Admin/Formularios/ModalProcesoEvaluacion.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,13 +43,13 @@ const modalWarning = ref('')
 const modalConfirmText = ref('')
 
 const showCreateProcessModal = ref(false)
-const currentProcessToEdit = ref(null) // NEW: Holds the process data for editing
-const isEditing = ref(false) // NEW: Flag to indicate edit mode
+const currentProcessToEdit = ref(null)
+const isEditing = ref(false)
 
 const showConfirmationModal = ref(false)
 const confirmModalTitle = ref('')
-const confirmModalMessage = ref('')
-const confirmModalConfirmText = ref('')
+const confirmModalMessage = ''
+const confirmModalConfirmText = ''
 const confirmModalCancelText = ref('Cancelar')
 
 let onConfirmCallback = () => {}
@@ -78,8 +78,8 @@ const handleDynamicCancel = () => {
 
 const openCreateProcessModal = () => {
   if (selectedEventForFilter.value) {
-    isEditing.value = false // Set to create mode
-    currentProcessToEdit.value = null // Clear any previous edit data
+    isEditing.value = false
+    currentProcessToEdit.value = null
     showCreateProcessModal.value = true
   } else {
     errorMessage.value =
@@ -88,9 +88,8 @@ const openCreateProcessModal = () => {
   }
 }
 
-// NEW: Function to open modal in edit mode
 const openEditProcessModal = async (processId) => {
-  loading.value = true // Show main loader while fetching specific process
+  loading.value = true
   const token = localStorage.getItem('token')
   if (!token) {
     errorMessage.value = 'Token de autenticación no encontrado.'
@@ -110,9 +109,9 @@ const openEditProcessModal = async (processId) => {
       },
     )
     currentProcessToEdit.value = response.data
-    selectedEventForFilter.value = response.data.evento // Ensure event info is available for the modal
-    isEditing.value = true // Set to edit mode
-    showCreateProcessModal.value = true // Open the modal
+    selectedEventForFilter.value = response.data.evento
+    isEditing.value = true
+    showCreateProcessModal.value = true
   } catch (err) {
     console.error('Error fetching process for edit:', err.response?.data || err.message)
     errorMessage.value = `Error al cargar los detalles del proceso para edición: ${err.response?.data?.message || err.message}`
@@ -124,11 +123,10 @@ const openEditProcessModal = async (processId) => {
 
 const handleCreateProcessModalClose = () => {
   showCreateProcessModal.value = false
-  currentProcessToEdit.value = null // Clear data when modal closes
-  isEditing.value = false // Reset mode
+  currentProcessToEdit.value = null
+  isEditing.value = false
 }
 
-// Modified to handle both create and edit submissions
 const handleNewProcessCreated = async (payload) => {
   if (payload.type === 'create') {
     okModalMessage.value = `Proceso "${payload.data.titulo}" creado exitosamente.`
@@ -136,7 +134,7 @@ const handleNewProcessCreated = async (payload) => {
     okModalMessage.value = `Proceso "${payload.data.titulo}" actualizado exitosamente.`
   }
   showOkModal.value = true
-  await fetchProcesosEvaluacion() // Re-fetch processes to update the list
+  await fetchProcesosEvaluacion()
 }
 
 async function fetchProcesosEvaluacion() {
@@ -386,22 +384,18 @@ watch(processSearchQuery, () => {
             :key="proceso.id"
             class="evaluation-card"
           >
-            <h3 class="process-title">{{ proceso.titulo }}</h3>
+            <div class="card-header-top-right">
+              <button class="btn-edit-process-corner" @click="openEditProcessModal(proceso.id)">
+                <i class="fas fa-pencil-alt"></i>
+              </button>
+            </div>
+            <h2 class="process-title">{{ proceso.titulo }}</h2>
             <p class="event-name">{{ proceso.evento.nombre }}</p>
             <p class="event-dates">
               <i class="fas fa-calendar-alt me-1"></i>
               {{ formatShortDateWithSlashes(proceso.evento.fecha_inicio) }} -
               {{ formatShortDateWithSlashes(proceso.evento.fecha_fin) }}
             </p>
-            <div class="card-actions">
-              <button class="btn btn-primary templates-button">
-                <i class="fas fa-star me-2"></i>Plantillas de evaluacion
-              </button>
-              <!-- NEW: Edit button -->
-              <button class="btn btn-edit-process" @click="openEditProcessModal(proceso.id)">
-                <i class="fas fa-pencil-alt"></i>
-              </button>
-            </div>
             <p class="event-description">
               {{
                 proceso.evento.descripcion.length > 100
@@ -409,6 +403,9 @@ watch(processSearchQuery, () => {
                   : proceso.evento.descripcion
               }}
             </p>
+            <button class="btn btn-primary templates-button mt-auto">
+              <i class="fas fa-star me-2"></i>Plantillas de evaluacion
+            </button>
           </div>
         </div>
 
@@ -478,23 +475,21 @@ watch(processSearchQuery, () => {
 .search-and-create-section {
   display: flex;
   align-items: center;
-  gap: 15px;
-  flex-wrap: wrap; /* Allows wrapping on smaller screens */
+  gap: 60px; /* Updated gap */
+  flex-wrap: wrap;
 }
 
 .autocomplete-wrapper {
   position: relative;
   flex-grow: 1;
-  max-width: 300px; /* Max width for event search */
+  max-width: 300px;
 }
 
-/* Ensure both search inputs have similar styling and flex properties */
 .search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  flex-grow: 1; /* Allows it to grow within its parent */
-  width: 100%; /* Take full width of its parent (autocomplete-wrapper or search-and-create-section) */
+  width: 350px; /* Updated width */
 }
 
 .search-input {
@@ -503,7 +498,7 @@ watch(processSearchQuery, () => {
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 0.95em;
-  width: 100%; /* Important for flex-grow to work as expected */
+  width: 100%;
   transition: border-color 0.2s;
 }
 
@@ -536,13 +531,13 @@ watch(processSearchQuery, () => {
 
 .suggestions-list {
   position: absolute;
-  top: 100%; /* Position below the input */
+  top: 100%;
   left: 0;
   right: 0;
   border: 1px solid #ddd;
   border-top: none;
   background-color: white;
-  z-index: 10; /* Ensure it's above other content */
+  z-index: 10;
   max-height: 200px;
   overflow-y: auto;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -563,9 +558,8 @@ watch(processSearchQuery, () => {
   background-color: #f0f0f0;
 }
 
-/* The original "Crear un proceso de evaluación" button is now part of the banner */
 .create-process-btn {
-  display: none; /* Hide the old button */
+  display: none;
 }
 
 .event-info-banner {
@@ -583,13 +577,13 @@ watch(processSearchQuery, () => {
 }
 
 .create-process-banner-btn {
-  background-color: #28a745; /* A green color for "create" */
+  background-color: #28a745;
   border-color: #28a745;
   color: white;
-  padding: 8px 15px; /* Adjust padding for a smaller button in the banner */
-  font-size: 0.85em; /* Adjust font size */
+  padding: 8px 15px;
+  font-size: 0.85em;
   border-radius: 6px;
-  display: flex; /* To align icon and text */
+  display: flex;
   align-items: center;
   gap: 5px;
 }
@@ -612,6 +606,7 @@ watch(processSearchQuery, () => {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 25px;
   margin-bottom: 30px;
+  align-items: stretch; /* Ensures cards stretch to equal height */
 }
 
 .evaluation-card {
@@ -621,7 +616,8 @@ watch(processSearchQuery, () => {
   padding: 25px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  height: 100%; /* Occupy full height of grid cell */
+  position: relative; /* For absolute positioning of pencil icon */
   transition: transform 0.2s ease-in-out;
 }
 
@@ -629,8 +625,32 @@ watch(processSearchQuery, () => {
   transform: translateY(-5px);
 }
 
+.card-header-top-right {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 2; /* Ensure it's above other content */
+}
+
+.btn-edit-process-corner {
+  background-color: transparent;
+  border: none;
+  color: #6c757d; /* Gray color */
+  padding: 5px;
+  font-size: 1em; /* Smaller size */
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    transform 0.1s ease;
+}
+
+.btn-edit-process-corner:hover {
+  color: #333; /* Darker gray on hover */
+  transform: translateY(-1px);
+}
+
 .process-title {
-  font-size: 1.4rem;
+  font-size: 1.4rem; /* Adjusted from h3 default to keep a consistent visual size */
   font-weight: 700;
   color: #174384;
   margin-bottom: 10px;
@@ -649,14 +669,7 @@ watch(processSearchQuery, () => {
   margin-bottom: 15px;
 }
 
-.card-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: auto; /* Pushes action buttons to the bottom */
-  margin-bottom: 15px;
-  gap: 10px;
-}
+/* Removed .card-actions as templates-button is now directly in card */
 
 .templates-button {
   background-color: #007bff;
@@ -670,7 +683,8 @@ watch(processSearchQuery, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  flex-grow: 1; /* Allow it to take available space */
+  width: 100%; /* Ensures it spans the card width */
+  margin-top: auto; /* Pushes the button to the bottom */
   transition: background-color 0.2s;
 }
 
@@ -678,30 +692,13 @@ watch(processSearchQuery, () => {
   background-color: #0056b3;
 }
 
-.btn-edit-process {
-  background-color: #ffc107; /* Yellow for edit */
-  color: #333;
-  border: none;
-  padding: 10px 12px; /* Smaller padding for icon button */
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-
-.btn-edit-process:hover {
-  background-color: #e0a800;
-}
-
 .event-description {
   font-size: 0.9em;
   color: #666;
   line-height: 1.5;
   text-align: justify;
-  flex-grow: 1; /* Allows description to take available space */
+  flex-grow: 1; /* Allows description to take available space and push button down */
+  margin-bottom: 15px; /* Space before the button */
 }
 
 .pagination-controls {
@@ -738,7 +735,7 @@ watch(processSearchQuery, () => {
 }
 
 .no-data-message {
-  grid-column: 1 / -1; /* Span across all columns */
+  grid-column: 1 / -1;
   text-align: center;
   padding: 40px;
   color: #888;
@@ -757,13 +754,15 @@ watch(processSearchQuery, () => {
   .search-and-create-section {
     flex-direction: column;
     align-items: stretch;
+    gap: 15px;
   }
 
   .autocomplete-wrapper {
     max-width: 100%;
   }
   .search-input-wrapper {
-    max-width: 100%; /* Ensure both inputs take full width when stacked */
+    max-width: 100%;
+    width: 100%;
   }
 
   .event-info-banner {
