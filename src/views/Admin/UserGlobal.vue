@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
@@ -9,13 +9,10 @@ import OkModal from '@/components/OkModal.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
-// import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'; // Not needed for global users yet
-// import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'; // Not needed for global users yet
-// import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'; // REMOVED
 
-import EditGlobalUserModal from '@/components/Admin/Usuarios/EditGlobalUserModal.vue' // NEW: Import the new edit modal
+import EditGlobalUserModal from '@/components/Admin/Usuarios/EditGlobalUserModal.vue'
 
-import { useGlobalUsersStore } from '@/stores/globalUsers' // Import the global user store
+import { useGlobalUsersStore } from '@/stores/globalUsers'
 
 const store = useGlobalUsersStore()
 const loading = computed(() => store.loading)
@@ -64,9 +61,9 @@ let userToChangeStatusCurrentState = null
 
 const handleDeleteConfirmed = async () => {
   if (userToChangeStatusId) {
-    // For global users, "delete" means deactivating by setting 'Inactivo' status
     const success = await store.updateUserStatus(userToChangeStatusId, 'Inactivo')
     if (success) {
+      await nextTick()
       okModalMessage.value = `Usuario ${userToChangeStatusName} desactivado con éxito!`
       showOkModal.value = true
     } else {
@@ -80,12 +77,11 @@ const handleDeleteConfirmed = async () => {
   userToChangeStatusCurrentState = null
 }
 
-const handleErrorModalClose = () => {
+const handleErrorModalClose = (msg = '') => {
   showErrorModal.value = false
-  errorMessage.value = ''
+  errorMessage.value = msg
 }
 
-// Search by Identificacion
 const searchQuery = ref('')
 const searchResults = ref([])
 const isSearching = ref(false)
@@ -123,7 +119,6 @@ const clearSearch = () => {
   store.fetchUsers()
 }
 
-// Displayed users for the table (handles search and pagination)
 const displayedUsers = computed(() => {
   let usersToPaginate = []
 
@@ -148,7 +143,6 @@ const handlePageChange = (page) => {
   store.setCurrentPage(page)
 }
 
-// Edit User Modal Logic
 const showEditUserModal = ref(false)
 const editUserInitialData = ref(null)
 
@@ -158,7 +152,7 @@ const availableRolesOptions = computed(() =>
 
 const editUser = async (user) => {
   editUserInitialData.value = { ...user }
-  await store.fetchRoles() // Fetch roles before opening modal
+  await store.fetchRoles()
   if (store.error) {
     errorMessage.value = store.error
     showErrorModal.value = true
@@ -167,29 +161,20 @@ const editUser = async (user) => {
   }
 }
 
-const handleEditUserConfirmed = async (payload) => {
-  const success = await store.updateUser(payload.id, {
-    email: payload.email,
-    rol_id: payload.rol_id,
-  })
-
-  if (success) {
-    okModalMessage.value = `Usuario ${editUserInitialData.value.nombre} ${editUserInitialData.value.apellido} actualizado con éxito!`
-    showOkModal.value = true
-    clearSearch() // Clear search and re-fetch all users to see changes
-  } else {
-    errorMessage.value = store.error || 'Error desconocido al actualizar el usuario.'
-    showErrorModal.value = true
-  }
+const handleEditUserConfirmed = async (updatedUser) => {
+  await nextTick()
+  okModalMessage.value = `Usuario ${updatedUser.nombre} ${updatedUser.apellido} actualizado con éxito!`
+  showOkModal.value = true
+  showEditUserModal.value = false
+  clearSearch()
 }
 
-// Deactivate/Activate User
 const deactivateUser = (userId, userName) => {
   userToChangeStatusId = userId
   userToChangeStatusName = userName
   userToChangeStatusCurrentState = 'Activo'
   modalTitle.value = 'Desactivar Usuario'
-  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName}? Podrás reactivarlo más tarde.`
+  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName}? Esto marcará su cuenta como inactiva.`
   modalConfirmText.value = 'Sí, Desactivar'
   universalDeleteModalRef.value.show()
 }
@@ -197,12 +182,13 @@ const deactivateUser = (userId, userName) => {
 const activateUser = (userId, userName) => {
   openConfirmationModal({
     title: 'Activar Usuario',
-    message: `¿Estás seguro de que quieres **reactivar** a ${userName}?`,
+    message: `¿Estás seguro de que quieres **reactivar** a ${userName}? Esto marcará su cuenta como activa.`,
     confirmText: 'Sí, Activar',
     cancelText: 'Cancelar',
     onConfirm: async () => {
       const success = await store.updateUserStatus(userId, 'Activo')
       if (success) {
+        await nextTick()
         okModalMessage.value = `Usuario ${userName} reactivado con éxito!`
         showOkModal.value = true
       } else {
@@ -278,24 +264,26 @@ onMounted(() => {
             <div class="user-identificacion">{{ user.identificacion }}</div>
             <div class="user-email-col">{{ user.email }}</div>
             <div class="user-access">
-              <span class="access-badge" :class="user.rol.replace(/\s/g, '')">{{ user.rol }}</span>
+              <!-- Safely access user.rol and provide fallback -->
+              <span class="access-badge" :class="user.rol?.replace(/\s/g, '') || ''">{{
+                user.rol
+              }}</span>
             </div>
             <div
               class="user-estado"
               :class="{
-                'status-active': user.estado && user.estado.toLowerCase() === 'activo',
-                'status-inactive':
-                  (user.estado && user.estado.toLowerCase() === 'inactivo') || user.estado_borrado,
+                'status-active': !user.estado_borrado,
+                'status-inactive': user.estado_borrado,
               }"
             >
-              {{ user.estado }}
+              {{ user.estado_borrado ? 'Inactivo' : 'Activo' }}
             </div>
             <div class="user-actions-buttons">
               <button @click="editUser(user)" class="btn btn-action-edit">
                 <i class="fas fa-pencil-alt"></i>
               </button>
               <button
-                v-if="user.estado && user.estado.toLowerCase() === 'activo'"
+                v-if="!user.estado_borrado"
                 @click="deactivateUser(user.id, `${user.nombre} ${user.apellido}`)"
                 class="btn btn-action-delete"
               >
@@ -353,6 +341,7 @@ onMounted(() => {
     :rolesOptions="availableRolesOptions"
     @close="showEditUserModal = false"
     @edit-user="handleEditUserConfirmed"
+    @error="handleErrorModalClose"
   />
 </template>
 
@@ -600,22 +589,19 @@ onMounted(() => {
   white-space: nowrap;
 }
 .access-badge.Admin {
-  /* Assuming 'Admin' is a global role */
   background-color: #e6ffed;
   color: #28a745;
 }
 .access-badge.Usuario {
-  /* Assuming 'Usuario' is a global role */
   background-color: #e0f2f7;
   color: #17a2b8;
 }
-/* Add more roles as needed from your /api/rol endpoint */
 .access-badge.SuperAdmin {
-  background-color: #ffe0b2; /* A shade of orange/amber */
+  background-color: #ffe0b2;
   color: #ff8f00;
 }
 .access-badge.superjuanjo {
-  background-color: #e1bee7; /* A shade of purple */
+  background-color: #e1bee7;
   color: #9c27b0;
 }
 
