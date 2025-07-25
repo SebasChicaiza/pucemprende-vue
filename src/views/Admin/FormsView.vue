@@ -11,7 +11,8 @@ import ScrollBar from '@/components/ScrollBar.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
-import { useEventosStore } from '@/stores/eventos' // Import the Pinia store
+import { useEventosStore } from '@/stores/eventos'
+import ModalProcesoEvaluacion from '@/components/Admin/Formularios/ModalProcesoEvaluacion.vue' // Updated import path and name
 
 const route = useRoute()
 const router = useRouter()
@@ -20,21 +21,19 @@ const loading = ref(false)
 const showErrorModal = ref(false)
 const errorMessage = ref('')
 
-const procesosEvaluacion = ref([]) // To store the fetched evaluation processes
+const procesosEvaluacion = ref([])
 
-// Pinia store for events
 const eventosStore = useEventosStore()
 
-// Pagination state
 const currentPage = ref(1)
 const itemsPerPage = ref(6)
 
-// Event search and filter state
 const eventSearchQuery = ref('')
 const showEventSuggestions = ref(false)
-const selectedEventForFilter = ref(null) // Stores the full event object selected for filtering
+const selectedEventForFilter = ref(null)
 
-// --- Existing Modals State ---
+const processSearchQuery = ref('')
+
 const showOkModal = ref(false)
 const okModalMessage = ref('')
 const universalDeleteModalRef = ref(null)
@@ -43,7 +42,10 @@ const modalMessage = ref('')
 const modalWarning = ref('')
 const modalConfirmText = ref('')
 
-// --- Dynamic Confirmation Modal State ---
+const showCreateProcessModal = ref(false)
+const currentProcessToEdit = ref(null) // NEW: Holds the process data for editing
+const isEditing = ref(false) // NEW: Flag to indicate edit mode
+
 const showConfirmationModal = ref(false)
 const confirmModalTitle = ref('')
 const confirmModalMessage = ref('')
@@ -74,20 +76,69 @@ const handleDynamicCancel = () => {
   showConfirmationModal.value = false
 }
 
-// Placeholder for the "Crear un proceso de evaluación" button action
-const handleCreateProcess = () => {
+const openCreateProcessModal = () => {
   if (selectedEventForFilter.value) {
-    okModalMessage.value = `Crear proceso para: ${selectedEventForFilter.value.nombre}`
-    showOkModal.value = true
-    // Implement actual navigation or modal opening for creating a process here
-    // router.push({ name: 'createEvaluationProcess', params: { eventId: selectedEventForFilter.value.id } });
+    isEditing.value = false // Set to create mode
+    currentProcessToEdit.value = null // Clear any previous edit data
+    showCreateProcessModal.value = true
   } else {
-    errorMessage.value = 'Debe seleccionar un evento para crear un proceso de evaluación.'
+    errorMessage.value =
+      'Por favor, seleccione un evento primero para crear un proceso de evaluación.'
     showErrorModal.value = true
   }
 }
 
-// Function to fetch all evaluation processes
+// NEW: Function to open modal in edit mode
+const openEditProcessModal = async (processId) => {
+  loading.value = true // Show main loader while fetching specific process
+  const token = localStorage.getItem('token')
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    loading.value = false
+    return
+  }
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/procesos-evaluacion/${processId}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+    currentProcessToEdit.value = response.data
+    selectedEventForFilter.value = response.data.evento // Ensure event info is available for the modal
+    isEditing.value = true // Set to edit mode
+    showCreateProcessModal.value = true // Open the modal
+  } catch (err) {
+    console.error('Error fetching process for edit:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar los detalles del proceso para edición: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleCreateProcessModalClose = () => {
+  showCreateProcessModal.value = false
+  currentProcessToEdit.value = null // Clear data when modal closes
+  isEditing.value = false // Reset mode
+}
+
+// Modified to handle both create and edit submissions
+const handleNewProcessCreated = async (payload) => {
+  if (payload.type === 'create') {
+    okModalMessage.value = `Proceso "${payload.data.titulo}" creado exitosamente.`
+  } else if (payload.type === 'edit') {
+    okModalMessage.value = `Proceso "${payload.data.titulo}" actualizado exitosamente.`
+  }
+  showOkModal.value = true
+  await fetchProcesosEvaluacion() // Re-fetch processes to update the list
+}
+
 async function fetchProcesosEvaluacion() {
   loading.value = true
   const token = localStorage.getItem('token')
@@ -118,38 +169,33 @@ async function fetchProcesosEvaluacion() {
   }
 }
 
-// Computed property to filter event suggestions based on search query from Pinia store
 const filteredEventSuggestions = computed(() => {
   if (!eventSearchQuery.value) {
-    return eventosStore.allEventsList // Use allEventsList from the store
+    return eventosStore.allEventsList
   }
   const query = eventSearchQuery.value.toLowerCase()
   return eventosStore.allEventsList.filter((event) => event.nombre.toLowerCase().includes(query))
 })
 
-// Handle input for event search, clear selected filter if typing
 const onEventInput = () => {
-  selectedEventForFilter.value = null // Clear selected event when user types
-  showEventSuggestions.value = true // Show suggestions
+  selectedEventForFilter.value = null
+  showEventSuggestions.value = true
 }
 
-// Select an event from the suggestions
 const selectEventSuggestion = (event) => {
   eventSearchQuery.value = event.nombre
-  selectedEventForFilter.value = event // Store the full event object for filtering
+  selectedEventForFilter.value = event
   showEventSuggestions.value = false
-  currentPage.value = 1 // Reset to first page when filter changes
+  currentPage.value = 1
 }
 
-// Clear the event search input and filter
 const clearEventInput = () => {
   eventSearchQuery.value = ''
   selectedEventForFilter.value = null
   showEventSuggestions.value = false
-  currentPage.value = 1 // Reset to first page when filter changes
+  currentPage.value = 1
 }
 
-// Computed property for filtered and paginated data
 const filteredAndPaginatedProcesosEvaluacion = computed(() => {
   let filtered = procesosEvaluacion.value
 
@@ -158,11 +204,15 @@ const filteredAndPaginatedProcesosEvaluacion = computed(() => {
       (proceso) => proceso.evento && proceso.evento.id === selectedEventForFilter.value.id,
     )
   } else if (eventSearchQuery.value) {
-    // If something is typed but not selected, filter by partial match
-    const query = eventSearchQuery.value.toLowerCase()
+    const eventQuery = eventSearchQuery.value.toLowerCase()
     filtered = filtered.filter(
-      (proceso) => proceso.evento && proceso.evento.nombre.toLowerCase().includes(query),
+      (proceso) => proceso.evento && proceso.evento.nombre.toLowerCase().includes(eventQuery),
     )
+  }
+
+  if (processSearchQuery.value) {
+    const processQuery = processSearchQuery.value.toLowerCase()
+    filtered = filtered.filter((proceso) => proceso.titulo.toLowerCase().includes(processQuery))
   }
 
   const start = (currentPage.value - 1) * itemsPerPage.value
@@ -170,7 +220,6 @@ const filteredAndPaginatedProcesosEvaluacion = computed(() => {
   return filtered.slice(start, end)
 })
 
-// Computed property for total pages based on filtered data
 const totalPages = computed(() => {
   let filtered = procesosEvaluacion.value
   if (selectedEventForFilter.value) {
@@ -178,20 +227,22 @@ const totalPages = computed(() => {
       (proceso) => proceso.evento && proceso.evento.id === selectedEventForFilter.value.id,
     )
   } else if (eventSearchQuery.value) {
-    const query = eventSearchQuery.value.toLowerCase()
+    const eventQuery = eventSearchQuery.value.toLowerCase()
     filtered = filtered.filter(
-      (proceso) => proceso.evento && proceso.evento.nombre.toLowerCase().includes(query),
+      (proceso) => proceso.evento && proceso.evento.nombre.toLowerCase().includes(eventQuery),
     )
+  }
+  if (processSearchQuery.value) {
+    const processQuery = processSearchQuery.value.toLowerCase()
+    filtered = filtered.filter((proceso) => proceso.titulo.toLowerCase().includes(processQuery))
   }
   return Math.ceil(filtered.length / itemsPerPage.value)
 })
 
-// Handler for page change event from Pagination component
 const handlePageChange = (page) => {
   currentPage.value = page
 }
 
-// Helper function to format dates as DD/MM/YYYY
 const formatShortDateWithSlashes = (dateString) => {
   if (!dateString) return ''
   const date = new Date(dateString)
@@ -199,12 +250,11 @@ const formatShortDateWithSlashes = (dateString) => {
     return 'Fecha inválida'
   }
   const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0') // Month is 0-indexed
+  const month = String(date.getMonth() + 1).padStart(2, '0')
   const year = date.getFullYear()
   return `${day}/${month}/${year}`
 }
 
-// Computed property for the event info banner content
 const bannerContent = computed(() => {
   if (selectedEventForFilter.value) {
     const event = selectedEventForFilter.value
@@ -226,7 +276,7 @@ const bannerContent = computed(() => {
 
 onMounted(() => {
   fetchProcesosEvaluacion()
-  eventosStore.fetchAllEventsForFilter() // NEW: Call the action to fetch all events
+  eventosStore.fetchAllEventsForFilter()
   document.addEventListener('click', onClickOutsideEventSearch)
 })
 
@@ -234,7 +284,6 @@ onUnmounted(() => {
   document.removeEventListener('click', onClickOutsideEventSearch)
 })
 
-// Close suggestions when clicking outside
 const onClickOutsideEventSearch = (event) => {
   const autocompleteWrapper = document.getElementById('event-autocomplete-wrapper')
   if (autocompleteWrapper && !autocompleteWrapper.contains(event.target)) {
@@ -242,11 +291,14 @@ const onClickOutsideEventSearch = (event) => {
   }
 }
 
-// Watch for changes in eventSearchQuery to reset selectedEventForFilter if text input changes after selection
 watch(eventSearchQuery, (newVal, oldVal) => {
   if (selectedEventForFilter.value && newVal !== selectedEventForFilter.value.nombre) {
     selectedEventForFilter.value = null
   }
+})
+
+watch(processSearchQuery, () => {
+  currentPage.value = 1
 })
 </script>
 
@@ -293,8 +345,16 @@ watch(eventSearchQuery, (newVal, oldVal) => {
                 type="text"
                 placeholder="Busca un proceso de evaluacion"
                 class="search-input"
+                v-model="processSearchQuery"
               />
               <i class="fas fa-search search-icon"></i>
+              <button
+                v-if="processSearchQuery"
+                class="clear-button"
+                @click="processSearchQuery = ''"
+              >
+                &times;
+              </button>
             </div>
           </div>
         </div>
@@ -306,7 +366,7 @@ watch(eventSearchQuery, (newVal, oldVal) => {
             <button
               v-if="bannerContent.showCreateButton"
               class="btn btn-primary btn-sm ms-3 create-process-banner-btn"
-              @click="handleCreateProcess"
+              @click="openCreateProcessModal"
             >
               <i class="fas fa-plus-circle me-2"></i>Crear un proceso de evaluación
             </button>
@@ -333,9 +393,15 @@ watch(eventSearchQuery, (newVal, oldVal) => {
               {{ formatShortDateWithSlashes(proceso.evento.fecha_inicio) }} -
               {{ formatShortDateWithSlashes(proceso.evento.fecha_fin) }}
             </p>
-            <button class="btn btn-primary templates-button">
-              <i class="fas fa-star me-2"></i>Plantillas de evaluacion
-            </button>
+            <div class="card-actions">
+              <button class="btn btn-primary templates-button">
+                <i class="fas fa-star me-2"></i>Plantillas de evaluacion
+              </button>
+              <!-- NEW: Edit button -->
+              <button class="btn btn-edit-process" @click="openEditProcessModal(proceso.id)">
+                <i class="fas fa-pencil-alt"></i>
+              </button>
+            </div>
             <p class="event-description">
               {{
                 proceso.evento.descripcion.length > 100
@@ -361,6 +427,16 @@ watch(eventSearchQuery, (newVal, oldVal) => {
     :message="okModalMessage"
     :duration="1000"
     @close="handleOkModalClose"
+  />
+
+  <ModalProcesoEvaluacion
+    :show="showCreateProcessModal"
+    :eventInfo="selectedEventForFilter"
+    :isEditing="isEditing"
+    :processData="currentProcessToEdit"
+    @close="handleCreateProcessModalClose"
+    @submit="handleNewProcessCreated"
+    @error="handleErrorModalClose"
   />
 
   <ConfirmationModal
@@ -403,20 +479,22 @@ watch(eventSearchQuery, (newVal, oldVal) => {
   display: flex;
   align-items: center;
   gap: 15px;
-  flex-wrap: wrap;
+  flex-wrap: wrap; /* Allows wrapping on smaller screens */
 }
 
 .autocomplete-wrapper {
   position: relative;
   flex-grow: 1;
-  max-width: 300px;
+  max-width: 300px; /* Max width for event search */
 }
 
+/* Ensure both search inputs have similar styling and flex properties */
 .search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%; /* Ensure it takes full width of its parent autocomplete-wrapper */
+  flex-grow: 1; /* Allows it to grow within its parent */
+  width: 100%; /* Take full width of its parent (autocomplete-wrapper or search-and-create-section) */
 }
 
 .search-input {
@@ -425,7 +503,7 @@ watch(eventSearchQuery, (newVal, oldVal) => {
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 0.95em;
-  width: 100%;
+  width: 100%; /* Important for flex-grow to work as expected */
   transition: border-color 0.2s;
 }
 
@@ -485,19 +563,9 @@ watch(eventSearchQuery, (newVal, oldVal) => {
   background-color: #f0f0f0;
 }
 
+/* The original "Crear un proceso de evaluación" button is now part of the banner */
 .create-process-btn {
-  background-color: #174384;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.95em;
-  transition: background-color 0.2s;
-}
-
-.create-process-btn:hover {
-  background-color: #123466;
+  display: none; /* Hide the old button */
 }
 
 .event-info-banner {
@@ -517,6 +585,13 @@ watch(eventSearchQuery, (newVal, oldVal) => {
 .create-process-banner-btn {
   background-color: #28a745; /* A green color for "create" */
   border-color: #28a745;
+  color: white;
+  padding: 8px 15px; /* Adjust padding for a smaller button in the banner */
+  font-size: 0.85em; /* Adjust font size */
+  border-radius: 6px;
+  display: flex; /* To align icon and text */
+  align-items: center;
+  gap: 5px;
 }
 
 .create-process-banner-btn:hover {
@@ -574,6 +649,15 @@ watch(eventSearchQuery, (newVal, oldVal) => {
   margin-bottom: 15px;
 }
 
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto; /* Pushes action buttons to the bottom */
+  margin-bottom: 15px;
+  gap: 10px;
+}
+
 .templates-button {
   background-color: #007bff;
   color: white;
@@ -586,13 +670,30 @@ watch(eventSearchQuery, (newVal, oldVal) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: auto; /* Pushes the button to the bottom */
-  margin-bottom: 15px;
+  flex-grow: 1; /* Allow it to take available space */
   transition: background-color 0.2s;
 }
 
 .templates-button:hover {
   background-color: #0056b3;
+}
+
+.btn-edit-process {
+  background-color: #ffc107; /* Yellow for edit */
+  color: #333;
+  border: none;
+  padding: 10px 12px; /* Smaller padding for icon button */
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.btn-edit-process:hover {
+  background-color: #e0a800;
 }
 
 .event-description {
@@ -658,8 +759,11 @@ watch(eventSearchQuery, (newVal, oldVal) => {
     align-items: stretch;
   }
 
-  .search-input-wrapper {
+  .autocomplete-wrapper {
     max-width: 100%;
+  }
+  .search-input-wrapper {
+    max-width: 100%; /* Ensure both inputs take full width when stacked */
   }
 
   .event-info-banner {
