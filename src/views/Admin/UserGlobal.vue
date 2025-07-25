@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios' // Keep axios for direct calls if needed, though store abstracts it
+import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
@@ -11,9 +11,11 @@ import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 // import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'; // Not needed for global users yet
 // import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'; // Not needed for global users yet
-import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'
+// import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'; // REMOVED
 
-import { useGlobalUsersStore } from '@/stores/globalUsers' // Import the new global user store
+import EditGlobalUserModal from '@/components/Admin/Usuarios/EditGlobalUserModal.vue' // NEW: Import the new edit modal
+
+import { useGlobalUsersStore } from '@/stores/globalUsers' // Import the global user store
 
 const store = useGlobalUsersStore()
 const loading = computed(() => store.loading)
@@ -62,8 +64,8 @@ let userToChangeStatusCurrentState = null
 
 const handleDeleteConfirmed = async () => {
   if (userToChangeStatusId) {
-    // For global users, "delete" means deactivating
-    const success = await store.updateUserStatus(userToChangeStatusId, 'Inactivo') // Assuming 'Inactivo' is the status for deactivated
+    // For global users, "delete" means deactivating by setting 'Inactivo' status
+    const success = await store.updateUserStatus(userToChangeStatusId, 'Inactivo')
     if (success) {
       okModalMessage.value = `Usuario ${userToChangeStatusName} desactivado con éxito!`
       showOkModal.value = true
@@ -89,28 +91,27 @@ const searchResults = ref([])
 const isSearching = ref(false)
 
 const performSearch = async () => {
-  store.error = null // Clear previous errors
+  store.error = null
 
   if (!searchQuery.value.trim()) {
     isSearching.value = false
     searchResults.value = []
     store.setCurrentPage(1)
-    store.fetchUsers() // Re-fetch all users if search is cleared
+    store.fetchUsers()
     return
   }
 
   isSearching.value = true
-  searchResults.value = [] // Clear previous search results
+  searchResults.value = []
 
   const user = await store.searchUserByIdentificacion(searchQuery.value.trim())
 
   if (user) {
-    searchResults.value = [user] // If found, add to search results
+    searchResults.value = [user]
   } else {
     searchResults.value = []
-    // The store.error will already be set by searchUserByIdentificacion if not found
   }
-  store.setCurrentPage(1) // Reset pagination for search results
+  store.setCurrentPage(1)
 }
 
 const clearSearch = () => {
@@ -119,7 +120,7 @@ const clearSearch = () => {
   searchResults.value = []
   store.setCurrentPage(1)
   store.error = null
-  store.fetchUsers() // Re-fetch all users when search is cleared
+  store.fetchUsers()
 }
 
 // Displayed users for the table (handles search and pagination)
@@ -129,13 +130,10 @@ const displayedUsers = computed(() => {
   if (isSearching.value && searchQuery.value.trim()) {
     usersToPaginate = searchResults.value
   } else {
-    usersToPaginate = store.users // Use all users from the store
+    usersToPaginate = store.users
   }
 
-  // Apply any filtering if needed (currently no filters implemented for global users)
-  // For now, no filtering logic here, but it would go here if you add it later.
-
-  store.totalUsersCount = usersToPaginate.length // Update total count for pagination
+  store.totalUsersCount = usersToPaginate.length
 
   const startIndex = (store.currentPage - 1) * store.itemsPerPage
   const endIndex = startIndex + store.itemsPerPage
@@ -150,15 +148,42 @@ const handlePageChange = (page) => {
   store.setCurrentPage(page)
 }
 
-// Action buttons (edit/deactivate/activate)
-const editUser = (user) => {
-  // Logic for editing a global user
-  // This will likely open a modal similar to AddUserModal but for global user details
-  console.log('Edit user:', user)
-  errorMessage.value = 'Funcionalidad de edición de usuario global no implementada aún.'
-  showErrorModal.value = true
+// Edit User Modal Logic
+const showEditUserModal = ref(false)
+const editUserInitialData = ref(null)
+
+const availableRolesOptions = computed(() =>
+  store.roles.map((role) => ({ id: role.id, nombre: role.nombre })),
+)
+
+const editUser = async (user) => {
+  editUserInitialData.value = { ...user }
+  await store.fetchRoles() // Fetch roles before opening modal
+  if (store.error) {
+    errorMessage.value = store.error
+    showErrorModal.value = true
+  } else {
+    showEditUserModal.value = true
+  }
 }
 
+const handleEditUserConfirmed = async (payload) => {
+  const success = await store.updateUser(payload.id, {
+    email: payload.email,
+    rol_id: payload.rol_id,
+  })
+
+  if (success) {
+    okModalMessage.value = `Usuario ${editUserInitialData.value.nombre} ${editUserInitialData.value.apellido} actualizado con éxito!`
+    showOkModal.value = true
+    clearSearch() // Clear search and re-fetch all users to see changes
+  } else {
+    errorMessage.value = store.error || 'Error desconocido al actualizar el usuario.'
+    showErrorModal.value = true
+  }
+}
+
+// Deactivate/Activate User
 const deactivateUser = (userId, userName) => {
   userToChangeStatusId = userId
   userToChangeStatusName = userName
@@ -186,29 +211,6 @@ const activateUser = (userId, userName) => {
       }
     },
   })
-}
-
-const showManageRolesModal = ref(false)
-const openManageRolesModal = () => {
-  showManageRolesModal.value = true
-  store.fetchRoles().then((success) => {
-    if (!success) {
-      errorMessage.value = store.error || 'Error al cargar roles para gestión.'
-      showErrorModal.value = true
-    }
-  })
-}
-
-const handleRoleOperationSuccess = ({ message }) => {
-  okModalMessage.value = message
-  showOkModal.value = true
-  store.fetchRoles() // Re-fetch roles
-  store.fetchUsers() // Re-fetch users to update roles in table
-}
-
-const handleRoleOperationError = ({ message }) => {
-  errorMessage.value = message
-  showErrorModal.value = true
 }
 
 onMounted(() => {
@@ -246,17 +248,6 @@ onMounted(() => {
                 &times;
               </button>
             </div>
-            <!-- Filter button can be added later if global user filters are needed -->
-            <!-- <button class="btn btn-filter" @click="openFilterModal">
-              <i class="fas fa-filter"></i> Filters
-            </button> -->
-            <button class="btn btn-secondary manage-roles-btn" @click="openManageRolesModal">
-              <i class="fas fa-user-tag"></i> Gestionar Roles
-            </button>
-            <!-- Add user button can be added later if global user creation is needed -->
-            <!-- <button class="btn btn-primary add-user-btn" @click="openAddUserModal">
-              <i class="fas fa-plus"></i> Añadir usuario
-            </button> -->
           </div>
         </div>
 
@@ -282,7 +273,6 @@ onMounted(() => {
               <div class="user-details">
                 <div class="user-name">{{ user.nombre }} {{ user.apellido }}</div>
                 <div class="user-email">{{ user.usuario }}</div>
-                <!-- Displaying 'usuario' as email for now based on sample -->
               </div>
             </div>
             <div class="user-identificacion">{{ user.identificacion }}</div>
@@ -357,12 +347,12 @@ onMounted(() => {
 
   <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 
-  <ManageRolesModal
-    :show="showManageRolesModal"
-    :roles="store.roles"
-    @close="showManageRolesModal = false"
-    @success="handleRoleOperationSuccess"
-    @error="handleRoleOperationError"
+  <EditGlobalUserModal
+    :show="showEditUserModal"
+    :initialData="editUserInitialData"
+    :rolesOptions="availableRolesOptions"
+    @close="showEditUserModal = false"
+    @edit-user="handleEditUserConfirmed"
   />
 </template>
 
@@ -619,7 +609,15 @@ onMounted(() => {
   background-color: #e0f2f7;
   color: #17a2b8;
 }
-/* Add more roles as needed */
+/* Add more roles as needed from your /api/rol endpoint */
+.access-badge.SuperAdmin {
+  background-color: #ffe0b2; /* A shade of orange/amber */
+  color: #ff8f00;
+}
+.access-badge.superjuanjo {
+  background-color: #e1bee7; /* A shade of purple */
+  color: #9c27b0;
+}
 
 .user-estado {
   font-size: 0.9em;

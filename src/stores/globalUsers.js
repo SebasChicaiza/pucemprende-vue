@@ -10,7 +10,7 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
         currentPage: 1,
         itemsPerPage: 10, // Default items per page
         totalUsersCount: 0,
-        roles: [], // To store global roles if needed later
+        roles: [], // To store global roles for the edit modal
     }),
     getters: {
         totalPages: (state) => Math.ceil(state.totalUsersCount / state.itemsPerPage),
@@ -36,9 +36,8 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                // Assuming the API returns an array of user objects directly
                 this.users = Array.isArray(response.data) ? response.data : [];
-                this.totalUsersCount = this.users.length; // Update total count
+                this.totalUsersCount = this.users.length;
                 return true;
             } catch (err) {
                 console.error('Error fetching global users:', err.response?.data || err.message);
@@ -69,7 +68,6 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                // Assuming the API returns an array, even for a single result
                 return Array.isArray(response.data) && response.data.length > 0 ? response.data[0] : null;
             } catch (err) {
                 console.error('Error searching user by identificacion:', err.response?.data || err.message);
@@ -84,6 +82,71 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
             }
         },
 
+        async updateUser(userId, payload) {
+            this.loading = true;
+            this.error = null;
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                this.error = 'Token de autenticación no encontrado.';
+                this.loading = false;
+                return false;
+            }
+
+            try {
+                const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId}`, payload, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                // Assuming success means we should refresh the user list
+                await this.fetchUsers();
+                return true;
+            } catch (err) {
+                console.error('Error updating user:', err.response?.data || err.message);
+                this.error = `Error al actualizar usuario: ${err.response?.data?.message || err.message}`;
+                return false;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // This action will handle both deactivation and activation
+        async updateUserStatus(userId, newStatus) {
+            this.loading = true;
+            this.error = null;
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                this.error = 'Token de autenticación no encontrado.';
+                this.loading = false;
+                return false;
+            }
+
+            try {
+                // For deactivation/activation, we might need a specific endpoint or to send the whole user object.
+                // Assuming for now it's a PUT request to the same /api/usuario/{id} endpoint with a payload containing status.
+                // If there's a specific "toggle status" endpoint, we would use that instead.
+                // Based on previous understanding, 'estado' field is used for active/inactive.
+                const payload = { estado: newStatus }; // The API might expect more fields
+                const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId}`, payload, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                await this.fetchUsers(); // Refresh the list after status change
+                return true;
+            } catch (err) {
+                console.error('Error updating user status:', err.response?.data || err.message);
+                this.error = `Error al cambiar estado del usuario: ${err.response?.data?.message || err.message}`;
+                return false;
+            } finally {
+                this.loading = false;
+            }
+        },
+
         setCurrentPage(page) {
             this.currentPage = page;
         },
@@ -93,19 +156,8 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
             this.currentPage = 1; // Reset to first page when items per page changes
         },
 
-        // Placeholder for future API calls (e.g., update user status)
-        async updateUserStatus(userId, newStatus) {
-            // This will be implemented later
-            console.log(`Simulating update for user ${userId} to status ${newStatus}`);
-            // In a real scenario, you'd make a PUT/PATCH request here
-            // For now, we'll simulate success and re-fetch users
-            await this.fetchUsers();
-            return true;
-        },
-
         async fetchRoles() {
-            this.loading = true;
-            this.error = null;
+            this.loading = true; // Use a separate loading state if roles are fetched frequently
             const token = localStorage.getItem('token');
 
             if (!token) {
@@ -130,7 +182,7 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                 this.roles = [];
                 return false;
             } finally {
-                this.loading = false;
+                this.loading = false; // Reset loading state
             }
         },
     },
