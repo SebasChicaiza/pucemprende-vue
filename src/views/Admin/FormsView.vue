@@ -38,9 +38,9 @@ const showOkModal = ref(false)
 const okModalMessage = ref('')
 const universalDeleteModalRef = ref(null)
 const modalTitle = ref('')
-const modalMessage = ref('')
-const modalWarning = ref('')
-const modalConfirmText = ref('')
+const modalMessage = ''
+const modalWarning = ''
+const modalConfirmText = ''
 
 const showCreateProcessModal = ref(false)
 const currentProcessToEdit = ref(null)
@@ -128,13 +128,21 @@ const handleCreateProcessModalClose = () => {
 }
 
 const handleNewProcessCreated = async (payload) => {
+  // First, re-fetch processes and wait for it to complete (loader will show/hide)
+  await fetchProcesosEvaluacion()
+
+  // Then, show the OkModal
   if (payload.type === 'create') {
     okModalMessage.value = `Proceso "${payload.data.titulo}" creado exitosamente.`
+    // NEW: Clear the event filter after a create operation
+    selectedEventForFilter.value = null
+    eventSearchQuery.value = ''
   } else if (payload.type === 'edit') {
     okModalMessage.value = `Proceso "${payload.data.titulo}" actualizado exitosamente.`
+    selectedEventForFilter.value = null
+    eventSearchQuery.value = ''
   }
   showOkModal.value = true
-  await fetchProcesosEvaluacion()
 }
 
 async function fetchProcesosEvaluacion() {
@@ -308,7 +316,15 @@ watch(processSearchQuery, () => {
       <PageHeaderRoute />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <div class="forms-header">
-          <h1>Crear formularios para calificar proyecto diversos eventos</h1>
+          <div class="d-flex align-items-baseline flex-wrap">
+            <h1 class="main-title">
+              Crear formularios para calificar diversos proyectos de eventos
+            </h1>
+            <p class="info-text">
+              Para iniciar, por favor, busque y seleccione un evento existente. Una vez
+              seleccionado, podrá asignarle un nombre a este nuevo proceso de evaluación.
+            </p>
+          </div>
           <div class="search-and-create-section">
             <div class="autocomplete-wrapper" id="event-autocomplete-wrapper">
               <div class="search-input-wrapper">
@@ -466,16 +482,24 @@ watch(processSearchQuery, () => {
   margin-bottom: 30px;
 }
 
-.forms-header h1 {
-  font-size: 2rem;
+.forms-header h1.main-title {
+  font-size: 1.5rem; /* Updated font size to 1.5rem */
   color: #333;
   margin-bottom: 0;
+}
+
+.forms-header .info-text {
+  font-size: 0.95em;
+  color: #666;
+  line-height: 1.4;
+  margin-top: 5px;
+  /* Removed ms-3 as requested */
 }
 
 .search-and-create-section {
   display: flex;
   align-items: center;
-  gap: 60px; /* Updated gap */
+  gap: 60px;
   flex-wrap: wrap;
 }
 
@@ -489,7 +513,7 @@ watch(processSearchQuery, () => {
   position: relative;
   display: flex;
   align-items: center;
-  width: 350px; /* Updated width */
+  width: 350px;
 }
 
 .search-input {
@@ -594,7 +618,7 @@ watch(processSearchQuery, () => {
 }
 
 .section-title {
-  font-size: 1.7rem;
+  font-size: 1.3rem; /* Updated font size to 1.3rem */
   color: #333;
   margin-bottom: 25px;
   border-bottom: 1px solid #eee;
@@ -603,21 +627,21 @@ watch(processSearchQuery, () => {
 
 .evaluation-process-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
   margin-bottom: 30px;
-  align-items: stretch; /* Ensures cards stretch to equal height */
+  align-items: stretch;
 }
 
 .evaluation-card {
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  padding: 25px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  height: 100%; /* Occupy full height of grid cell */
-  position: relative; /* For absolute positioning of pencil icon */
+  height: 100%;
+  position: relative;
   transition: transform 0.2s ease-in-out;
 }
 
@@ -627,17 +651,17 @@ watch(processSearchQuery, () => {
 
 .card-header-top-right {
   position: absolute;
-  top: 15px;
-  right: 15px;
-  z-index: 2; /* Ensure it's above other content */
+  top: 10px;
+  right: 10px;
+  z-index: 2;
 }
 
 .btn-edit-process-corner {
   background-color: transparent;
   border: none;
-  color: #6c757d; /* Gray color */
-  padding: 5px;
-  font-size: 1em; /* Smaller size */
+  color: #6c757d;
+  padding: 0;
+  font-size: 0.9em;
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -645,31 +669,29 @@ watch(processSearchQuery, () => {
 }
 
 .btn-edit-process-corner:hover {
-  color: #333; /* Darker gray on hover */
+  color: #333;
   transform: translateY(-1px);
 }
 
 .process-title {
-  font-size: 1.4rem; /* Adjusted from h3 default to keep a consistent visual size */
+  font-size: 1.1rem; /* Updated font size to 1.1rem */
   font-weight: 700;
   color: #174384;
   margin-bottom: 10px;
 }
 
 .event-name {
-  font-size: 1.1rem;
+  font-size: 1em;
   font-weight: 600;
   color: #555;
   margin-bottom: 8px;
 }
 
 .event-dates {
-  font-size: 0.95em;
+  font-size: 0.9em;
   color: #777;
   margin-bottom: 15px;
 }
-
-/* Removed .card-actions as templates-button is now directly in card */
 
 .templates-button {
   background-color: #007bff;
@@ -683,8 +705,8 @@ watch(processSearchQuery, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%; /* Ensures it spans the card width */
-  margin-top: auto; /* Pushes the button to the bottom */
+  width: 100%;
+  margin-top: auto;
   transition: background-color 0.2s;
 }
 
@@ -693,12 +715,12 @@ watch(processSearchQuery, () => {
 }
 
 .event-description {
-  font-size: 0.9em;
+  font-size: 0.85em;
   color: #666;
   line-height: 1.5;
   text-align: justify;
-  flex-grow: 1; /* Allows description to take available space and push button down */
-  margin-bottom: 15px; /* Space before the button */
+  flex-grow: 1;
+  margin-bottom: 15px;
 }
 
 .pagination-controls {
@@ -747,8 +769,11 @@ watch(processSearchQuery, () => {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .forms-header h1 {
-    font-size: 1.5rem;
+  .forms-header h1.main-title {
+    font-size: 1.3rem;
+  }
+  .forms-header .info-text {
+    font-size: 0.8em;
   }
 
   .search-and-create-section {
@@ -775,15 +800,15 @@ watch(processSearchQuery, () => {
   }
 
   .evaluation-card {
-    padding: 20px;
+    padding: 15px;
   }
 
   .process-title {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
   }
 
   .event-name {
-    font-size: 1em;
+    font-size: 0.9em;
   }
 
   .templates-button {
