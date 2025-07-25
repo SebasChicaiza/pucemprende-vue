@@ -14,6 +14,7 @@ import CrearProyectosView from '@/views/Admin/CrearProyectosView.vue'
 import UsersView from '@/views/Admin/UsersView.vue'
 import UserGlobal from '@/views/Admin/UserGlobal.vue'
 import UserEvent from '@/views/Admin/UserEvent.vue'
+import FormsView from '@/views/Admin/FormsView.vue'
 
 
 const router = createRouter({
@@ -121,6 +122,15 @@ const router = createRouter({
       component: UserEvent,
       meta: {
         title: 'Usuarios - Usuarios de Eventos',
+      },
+    },
+
+    {
+      path: '/admin/formularios',
+      name: 'Formularios',
+      component: FormsView,
+      meta: {
+        title: 'Formularios',
       },
     },
     /* EJEMPLO LAZY LOADING

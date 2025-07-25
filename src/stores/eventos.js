@@ -1,3 +1,4 @@
+// stores/eventos.js
 import { defineStore } from 'pinia';
 import axios from 'axios';
 
@@ -11,6 +12,9 @@ export const useEventosStore = defineStore('eventos', {
         itemsPerPage: 20,
         searchQuery: '',
         currentEventToEdit: null,
+        allEventsList: [], // NEW: To store all events for filtering/autocomplete
+        loadingAllEvents: false, // NEW: Loading state for fetching all events
+        allEventsError: null, // NEW: Error state for fetching all events
     }),
     getters: {
         totalPages: (state) => Math.ceil(state.totalEvents / state.itemsPerPage),
@@ -66,6 +70,38 @@ export const useEventosStore = defineStore('eventos', {
                 this.totalEvents = 0;
             } finally {
                 this.loading = false;
+            }
+        },
+
+        // NEW ACTION: Fetch all events without pagination
+        async fetchAllEventsForFilter() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                this.allEventsError = 'Token de autenticación no encontrado.';
+                this.loadingAllEvents = false;
+                this.allEventsList = [];
+                return;
+            }
+
+            this.loadingAllEvents = true;
+            this.allEventsError = null;
+
+            try {
+                // Assuming /api/eventos returns all events without pagination by default
+                // If your backend requires a specific parameter for "all", adjust here.
+                const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                this.allEventsList = Array.isArray(response.data) ? response.data : [];
+            } catch (err) {
+                console.error('Error fetching all events for filter:', err.response?.data || err.message);
+                this.allEventsError = `Error al cargar todos los eventos: ${err.response?.data?.message || err.message}`;
+                this.allEventsList = [];
+            } finally {
+                this.loadingAllEvents = false;
             }
         },
 

@@ -10,7 +10,7 @@ import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'
 import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
-import Pagination from '@/components/Admin/Usuarios/PaginationComponent.vue'
+import Pagination from '@/components/Admin/PaginationComponent.vue'
 import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'
 import { useEventUsersStore } from '@/stores/eventUsers' // UPDATED: Import the store from its new file
 
