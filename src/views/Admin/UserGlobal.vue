@@ -11,6 +11,7 @@ import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 
 import EditGlobalUserModal from '@/components/Admin/Usuarios/EditGlobalUserModal.vue'
+import GlobalFilterModal from '@/components/Admin/Usuarios/GlobalFilterModal.vue'
 
 import { useGlobalUsersStore } from '@/stores/globalUsers'
 
@@ -82,57 +83,138 @@ const handleErrorModalClose = (msg = '') => {
   errorMessage.value = msg
 }
 
-const searchQuery = ref('')
+// Search by Identificacion (Enter key)
+const identificacionSearchQuery = ref('')
+// Search by Name/Apellido (as you type)
+const nameSearchQuery = ref('')
+
 const searchResults = ref([])
-const isSearching = ref(false)
+const activeSearchType = ref(null) // 'identificacion', 'name', or null
 
-const performSearch = async () => {
+const performIdentificacionSearch = async () => {
   store.error = null
+  activeSearchType.value = null // Clear previous search type
+  searchResults.value = [] // Clear previous search results
 
-  if (!searchQuery.value.trim()) {
-    isSearching.value = false
-    searchResults.value = []
-    store.setCurrentPage(1)
-    store.fetchUsers()
-    return
-  }
-
-  isSearching.value = true
-  searchResults.value = []
-
-  const user = await store.searchUserByIdentificacion(searchQuery.value.trim())
-
-  if (user) {
-    searchResults.value = [user]
+  if (identificacionSearchQuery.value.trim()) {
+    activeSearchType.value = 'identificacion'
+    const user = await store.searchUserByIdentificacion(identificacionSearchQuery.value.trim())
+    if (user) {
+      searchResults.value = [user]
+    } else {
+      store.error =
+        store.error ||
+        `No se encontró ningún usuario con la identificación: ${identificacionSearchQuery.value.trim()}`
+      searchResults.value = []
+    }
   } else {
-    searchResults.value = []
+    // If identification search is cleared, reset to no active search
+    activeSearchType.value = null
+    store.fetchUsers() // Re-fetch all users
+  }
+  store.setCurrentPage(1)
+}
+
+const performNameSearch = () => {
+  store.error = null
+  activeSearchType.value = null // Clear previous search type
+  searchResults.value = [] // Clear previous search results
+
+  if (nameSearchQuery.value.trim()) {
+    activeSearchType.value = 'name'
+    const query = nameSearchQuery.value.trim().toLowerCase()
+    searchResults.value = store.users.filter(
+      (user) =>
+        (user.nombre && user.nombre.toLowerCase().includes(query)) ||
+        (user.apellido && user.apellido.toLowerCase().includes(query)),
+    )
+    if (searchResults.value.length === 0) {
+      store.error = `No se encontraron usuarios con el nombre/apellido: ${nameSearchQuery.value.trim()}`
+    }
+  } else {
+    // If name search is cleared, reset to no active search
+    activeSearchType.value = null
+    store.fetchUsers() // Re-fetch all users
   }
   store.setCurrentPage(1)
 }
 
 const clearSearch = () => {
-  searchQuery.value = ''
-  isSearching.value = false
+  identificacionSearchQuery.value = ''
+  nameSearchQuery.value = ''
+  activeSearchType.value = null
   searchResults.value = []
   store.setCurrentPage(1)
   store.error = null
-  store.fetchUsers()
+  store.fetchUsers() // Re-fetch all users when search is cleared
 }
 
-const displayedUsers = computed(() => {
-  let usersToPaginate = []
+// Filter Modal Logic
+const showFilterModal = ref(false)
+const currentFilters = computed(() => store.currentFilters)
 
-  if (isSearching.value && searchQuery.value.trim()) {
-    usersToPaginate = searchResults.value
+const openFilterModal = async () => {
+  await store.fetchRoles() // Ensure roles are fetched before opening filter modal
+  if (store.error) {
+    errorMessage.value = store.error
+    showErrorModal.value = true
   } else {
-    usersToPaginate = store.users
+    showFilterModal.value = true
+  }
+}
+
+const handleApplyFilters = (newFilters) => {
+  store.setFilters(newFilters)
+  store.setCurrentPage(1)
+  showFilterModal.value = false
+}
+
+const handleClearFilters = () => {
+  store.setFilters({ role: '', status: '' })
+  store.setCurrentPage(1)
+  showFilterModal.value = false
+}
+
+const uniqueRoles = computed(() => {
+  // Use store.roles for the filter options, as it's the master list from the API
+  return store.roles.map((role) => role.nombre).sort()
+})
+
+const statusOptions = ref(['Activo', 'Inactivo'])
+
+// Displayed users for the table (handles search, filtering, and pagination)
+const displayedUsers = computed(() => {
+  let usersToProcess = []
+
+  if (activeSearchType.value) {
+    usersToProcess = searchResults.value
+  } else {
+    usersToProcess = store.users
   }
 
-  store.totalUsersCount = usersToPaginate.length
+  let filtered = usersToProcess.filter((user) => {
+    let matches = true
+
+    // Apply role filter
+    if (store.currentFilters.role && user.rol !== store.currentFilters.role) {
+      matches = false
+    }
+
+    // Apply status filter based on estado_borrado
+    if (store.currentFilters.status) {
+      const userActualStatus = user.estado_borrado ? 'Inactivo' : 'Activo'
+      if (userActualStatus !== store.currentFilters.status) {
+        matches = false
+      }
+    }
+    return matches
+  })
+
+  store.totalUsersCount = filtered.length
 
   const startIndex = (store.currentPage - 1) * store.itemsPerPage
   const endIndex = startIndex + store.itemsPerPage
-  return usersToPaginate.slice(startIndex, endIndex)
+  return filtered.slice(startIndex, endIndex)
 })
 
 const totalPages = computed(() => {
@@ -227,13 +309,33 @@ onMounted(() => {
                 type="text"
                 placeholder="Buscar por identificación"
                 class="search-input"
-                v-model="searchQuery"
-                @keyup.enter="performSearch"
+                v-model="identificacionSearchQuery"
+                @keyup.enter="performIdentificacionSearch"
               />
-              <button v-if="searchQuery" @click="clearSearch" class="clear-search-button">
+              <button
+                v-if="identificacionSearchQuery"
+                @click="clearSearch"
+                class="clear-search-button"
+              >
                 &times;
               </button>
             </div>
+            <div class="search-input-wrapper">
+              <i class="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Buscar por nombre o apellido"
+                class="search-input"
+                v-model="nameSearchQuery"
+                @input="performNameSearch"
+              />
+              <button v-if="nameSearchQuery" @click="clearSearch" class="clear-search-button">
+                &times;
+              </button>
+            </div>
+            <button class="btn btn-filter" @click="openFilterModal">
+              <i class="fas fa-filter"></i> Filtros
+            </button>
           </div>
         </div>
 
@@ -264,7 +366,6 @@ onMounted(() => {
             <div class="user-identificacion">{{ user.identificacion }}</div>
             <div class="user-email-col">{{ user.email }}</div>
             <div class="user-access">
-              <!-- Safely access user.rol and provide fallback -->
               <span class="access-badge" :class="user.rol?.replace(/\s/g, '') || ''">{{
                 user.rol
               }}</span>
@@ -343,6 +444,16 @@ onMounted(() => {
     @edit-user="handleEditUserConfirmed"
     @error="handleErrorModalClose"
   />
+
+  <GlobalFilterModal
+    :show="showFilterModal"
+    :rolesOptions="uniqueRoles"
+    :statusOptions="statusOptions"
+    :initialFilters="currentFilters"
+    @close="showFilterModal = false"
+    @apply-filters="handleApplyFilters"
+    @clear-filters="handleClearFilters"
+  />
 </template>
 
 <style scoped>
@@ -393,12 +504,16 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap; /* Allow wrapping for responsiveness */
 }
 
 .search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex-grow: 1; /* Allow inputs to grow */
+  min-width: 180px; /* Minimum width for search inputs */
+  max-width: 250px; /* Max width for search inputs */
 }
 
 .search-input {
@@ -406,9 +521,8 @@ onMounted(() => {
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 0.9em;
-  width: 200px;
+  width: 100%; /* Take full width of its wrapper */
   transition: border-color 0.2s;
-  flex-grow: 1;
 }
 
 .search-input:focus {

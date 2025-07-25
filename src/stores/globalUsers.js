@@ -10,7 +10,11 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
         currentPage: 1,
         itemsPerPage: 10, // Default items per page
         totalUsersCount: 0,
-        roles: [], // To store global roles for the edit modal
+        roles: [], // To store global roles for the edit modal and filter modal
+        currentFilters: { // New state for filters
+            role: '',
+            status: '',
+        },
     }),
     getters: {
         totalPages: (state) => Math.ceil(state.totalUsersCount / state.itemsPerPage),
@@ -100,7 +104,6 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                // Assuming success means we should refresh the user list
                 await this.fetchUsers();
                 return true;
             } catch (err) {
@@ -112,7 +115,6 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
             }
         },
 
-        // This action will handle both deactivation and activation
         async updateUserStatus(userId, newStatus) {
             this.loading = true;
             this.error = null;
@@ -125,18 +127,16 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
             }
 
             try {
-                // For deactivation/activation, we might need a specific endpoint or to send the whole user object.
-                // Assuming for now it's a PUT request to the same /api/usuario/{id} endpoint with a payload containing status.
-                // If there's a specific "toggle status" endpoint, we would use that instead.
-                // Based on previous understanding, 'estado' field is used for active/inactive.
-                const payload = { estado: newStatus }; // The API might expect more fields
+                const estadoBorradoValue = (newStatus === 'Inactivo');
+                const payload = { estado_borrado: estadoBorradoValue };
+
                 const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId}`, payload, {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                await this.fetchUsers(); // Refresh the list after status change
+                await this.fetchUsers();
                 return true;
             } catch (err) {
                 console.error('Error updating user status:', err.response?.data || err.message);
@@ -153,11 +153,11 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
 
         setItemsPerPage(perPage) {
             this.itemsPerPage = perPage;
-            this.currentPage = 1; // Reset to first page when items per page changes
+            this.currentPage = 1;
         },
 
         async fetchRoles() {
-            this.loading = true; // Use a separate loading state if roles are fetched frequently
+            this.loading = true;
             const token = localStorage.getItem('token');
 
             if (!token) {
@@ -182,8 +182,12 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                 this.roles = [];
                 return false;
             } finally {
-                this.loading = false; // Reset loading state
+                this.loading = false;
             }
+        },
+
+        setFilters(filters) {
+            this.currentFilters = { ...filters };
         },
     },
 });
