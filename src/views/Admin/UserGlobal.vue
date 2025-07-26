@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
-import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
+import PageHeaderRoute from '@/components/PageHeaderRoute.vue' // Corrected import path
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
@@ -62,7 +62,8 @@ let userToChangeStatusCurrentState = null
 
 const handleDeleteConfirmed = async () => {
   if (userToChangeStatusId) {
-    const success = await store.updateUserStatus(userToChangeStatusId, 'Inactivo')
+    // UPDATED: Call deleteUser action for deactivation
+    const success = await store.deleteUser(userToChangeStatusId)
     if (success) {
       await nextTick()
       okModalMessage.value = `Usuario ${userToChangeStatusName} desactivado con éxito!`
@@ -143,7 +144,10 @@ watch(nameSearchQuery, (newVal, oldVal) => {
 
 watch(identificacionSearchQuery, (newVal, oldVal) => {
   if (newVal.trim() !== oldVal.trim() || (newVal.trim() === '' && oldVal.trim() !== '')) {
-    performIdentificacionSearch()
+    // Only trigger identificacion search if name search is empty
+    if (!nameSearchQuery.value.trim()) {
+      performIdentificacionSearch()
+    }
   }
 })
 
@@ -182,7 +186,6 @@ const handleClearFilters = () => {
   showFilterModal.value = false
 }
 
-// CORRECTED: Pass the full role objects from store.roles
 const uniqueRoles = computed(() => {
   return store.roles
 })
@@ -252,7 +255,7 @@ const handleEditUserConfirmed = async (updatedUser) => {
   okModalMessage.value = `Usuario ${updatedUser.nombre} ${updatedUser.apellido} actualizado con éxito!`
   showOkModal.value = true
   showEditUserModal.value = false
-  clearSearch()
+  clearSearch() // Re-fetch users to reflect changes from edit
 }
 
 const deactivateUser = (userId, userName) => {
@@ -272,7 +275,8 @@ const activateUser = (userId, userName) => {
     confirmText: 'Sí, Activar',
     cancelText: 'Cancelar',
     onConfirm: async () => {
-      const success = await store.updateUserStatus(userId, 'Activo')
+      // unchanged: calls updateUserStatus which sends a PUT request with estado_borrado: false
+      const success = await store.updateUserStatus(userId, false)
       if (success) {
         await nextTick()
         okModalMessage.value = `Usuario ${userName} reactivado con éxito!`

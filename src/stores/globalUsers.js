@@ -8,10 +8,10 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
         loading: false,
         error: null,
         currentPage: 1,
-        itemsPerPage: 10, // Default items per page
+        itemsPerPage: 10,
         totalUsersCount: 0,
-        roles: [], // To store global roles for the edit modal and filter modal
-        currentFilters: { // New state for filters
+        roles: [],
+        currentFilters: {
             role: '',
             status: '',
         },
@@ -104,11 +104,40 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                await this.fetchUsers();
+                await this.fetchUsers(); // Re-fetch all users to reflect changes
                 return true;
             } catch (err) {
                 console.error('Error updating user:', err.response?.data || err.message);
                 this.error = `Error al actualizar usuario: ${err.response?.data?.message || err.message}`;
+                return false;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // NEW ACTION: For deleting/deactivating a user via DELETE request
+        async deleteUser(userId) {
+            this.loading = true;
+            this.error = null;
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                this.error = 'Token de autenticación no encontrado.';
+                this.loading = false;
+                return false;
+            }
+
+            try {
+                await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                await this.fetchUsers(); // Re-fetch all users to reflect changes
+                return true;
+            } catch (err) {
+                console.error('Error deleting user:', err.response?.data || err.message);
+                this.error = `Error al desactivar usuario: ${err.response?.data?.message || err.message}`;
                 return false;
             } finally {
                 this.loading = false;
@@ -127,7 +156,7 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
             }
 
             try {
-                const estadoBorradoValue = (newStatus === 'Inactivo');
+                const estadoBorradoValue = newStatus; // True if 'Inactivo', False if 'Activo'
                 const payload = { estado_borrado: estadoBorradoValue };
 
                 const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId}`, payload, {
@@ -136,7 +165,7 @@ export const useGlobalUsersStore = defineStore('globalUsers', {
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-                await this.fetchUsers();
+                await this.fetchUsers(); // Re-fetch all users to reflect changes
                 return true;
             } catch (err) {
                 console.error('Error updating user status:', err.response?.data || err.message);
