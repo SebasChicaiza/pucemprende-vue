@@ -83,18 +83,16 @@ const handleErrorModalClose = (msg = '') => {
   errorMessage.value = msg
 }
 
-// Search by Identificacion (Enter key)
 const identificacionSearchQuery = ref('')
-// Search by Name/Apellido (as you type)
 const nameSearchQuery = ref('')
 
 const searchResults = ref([])
-const activeSearchType = ref(null) // 'identificacion', 'name', or null
+const activeSearchType = ref(null)
 
 const performIdentificacionSearch = async () => {
   store.error = null
-  activeSearchType.value = null // Clear previous search type
-  searchResults.value = [] // Clear previous search results
+  activeSearchType.value = null
+  searchResults.value = []
 
   if (identificacionSearchQuery.value.trim()) {
     activeSearchType.value = 'identificacion'
@@ -108,17 +106,16 @@ const performIdentificacionSearch = async () => {
       searchResults.value = []
     }
   } else {
-    // If identification search is cleared, reset to no active search
     activeSearchType.value = null
-    store.fetchUsers() // Re-fetch all users
+    store.fetchUsers()
   }
   store.setCurrentPage(1)
 }
 
 const performNameSearch = () => {
   store.error = null
-  activeSearchType.value = null // Clear previous search type
-  searchResults.value = [] // Clear previous search results
+  activeSearchType.value = null
+  searchResults.value = []
 
   if (nameSearchQuery.value.trim()) {
     activeSearchType.value = 'name'
@@ -132,12 +129,23 @@ const performNameSearch = () => {
       store.error = `No se encontraron usuarios con el nombre/apellido: ${nameSearchQuery.value.trim()}`
     }
   } else {
-    // If name search is cleared, reset to no active search
     activeSearchType.value = null
-    store.fetchUsers() // Re-fetch all users
+    store.fetchUsers()
   }
   store.setCurrentPage(1)
 }
+
+watch(nameSearchQuery, (newVal, oldVal) => {
+  if (newVal.trim() !== oldVal.trim() || (newVal.trim() === '' && oldVal.trim() !== '')) {
+    performNameSearch()
+  }
+})
+
+watch(identificacionSearchQuery, (newVal, oldVal) => {
+  if (newVal.trim() !== oldVal.trim() || (newVal.trim() === '' && oldVal.trim() !== '')) {
+    performIdentificacionSearch()
+  }
+})
 
 const clearSearch = () => {
   identificacionSearchQuery.value = ''
@@ -146,15 +154,14 @@ const clearSearch = () => {
   searchResults.value = []
   store.setCurrentPage(1)
   store.error = null
-  store.fetchUsers() // Re-fetch all users when search is cleared
+  store.fetchUsers()
 }
 
-// Filter Modal Logic
 const showFilterModal = ref(false)
 const currentFilters = computed(() => store.currentFilters)
 
 const openFilterModal = async () => {
-  await store.fetchRoles() // Ensure roles are fetched before opening filter modal
+  await store.fetchRoles()
   if (store.error) {
     errorMessage.value = store.error
     showErrorModal.value = true
@@ -175,14 +182,13 @@ const handleClearFilters = () => {
   showFilterModal.value = false
 }
 
+// CORRECTED: Pass the full role objects from store.roles
 const uniqueRoles = computed(() => {
-  // Use store.roles for the filter options, as it's the master list from the API
-  return store.roles.map((role) => role.nombre).sort()
+  return store.roles
 })
 
 const statusOptions = ref(['Activo', 'Inactivo'])
 
-// Displayed users for the table (handles search, filtering, and pagination)
 const displayedUsers = computed(() => {
   let usersToProcess = []
 
@@ -195,12 +201,10 @@ const displayedUsers = computed(() => {
   let filtered = usersToProcess.filter((user) => {
     let matches = true
 
-    // Apply role filter
     if (store.currentFilters.role && user.rol !== store.currentFilters.role) {
       matches = false
     }
 
-    // Apply status filter based on estado_borrado
     if (store.currentFilters.status) {
       const userActualStatus = user.estado_borrado ? 'Inactivo' : 'Activo'
       if (userActualStatus !== store.currentFilters.status) {

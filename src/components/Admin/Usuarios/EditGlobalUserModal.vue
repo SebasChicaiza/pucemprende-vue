@@ -1,39 +1,39 @@
+<!-- components/Admin/Usuarios/EditGlobalUserModal.vue -->
 <script setup>
 import { ref, watch, defineEmits, defineProps, onMounted, onUnmounted, nextTick } from 'vue'
-import { Modal } from 'bootstrap' // Assuming Bootstrap's Modal JS is used
-import axios from 'axios' // Import axios for the PUT request
-import LoaderComponent from '@/components/LoaderComponent.vue' // Import LoaderComponent
+import { Modal } from 'bootstrap'
+import axios from 'axios'
+import LoaderComponent from '@/components/LoaderComponent.vue'
 
 const props = defineProps({
   show: Boolean,
-  initialData: Object, // The user object to edit, renamed to userData in template for clarity
-  rolesOptions: Array, // Array of roles from the API
+  initialData: Object,
+  rolesOptions: Array,
 })
 
-const emit = defineEmits(['close', 'edit-user', 'error']) // Added 'error' emit
+const emit = defineEmits(['close', 'edit-user', 'error'])
 
 const editUserModalRef = ref(null)
-let bsModal = null // Declare bsModal outside watch to persist its instance
+let bsModal = null
 
 const userId = ref(null)
-const userData = ref(null) // Holds the full user data passed from parent
+const userData = ref(null)
 const editedEmail = ref('')
 const editedRoleId = ref(null)
-const modalLoading = ref(false) // Internal loading state for the modal
-const modalError = ref('') // Internal error message for the modal
+const editedClave = ref('') // NEW: For the password field
+const modalLoading = ref(false)
+const modalError = ref('')
 
 onMounted(() => {
-  // Initialize Bootstrap Modal once the component is mounted and ref is available
   if (editUserModalRef.value) {
     bsModal = new Modal(editUserModalRef.value, { backdrop: 'static', keyboard: false })
-    // Listen for Bootstrap's 'hidden.bs.modal' event to emit 'close'
     editUserModalRef.value.addEventListener('hidden.bs.modal', () => {
       emit('close')
-      // Reset data when modal is truly hidden to prevent stale data on next open
       userId.value = null
       userData.value = null
       editedEmail.value = ''
       editedRoleId.value = null
+      editedClave.value = '' // Reset password field
       modalLoading.value = false
       modalError.value = ''
     })
@@ -41,7 +41,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Clean up the Bootstrap Modal instance when the component is unmounted
   if (bsModal) {
     bsModal.dispose()
     bsModal = null
@@ -52,30 +51,27 @@ watch(
   () => props.show,
   (newVal) => {
     if (newVal) {
-      // Show the modal via Bootstrap's JS method
       bsModal?.show()
-      modalError.value = '' // Clear previous errors on open
+      modalError.value = ''
       if (props.initialData) {
-        userData.value = { ...props.initialData } // Copy initial data
+        userData.value = { ...props.initialData }
         userId.value = props.initialData.id
         editedEmail.value = props.initialData.email
         editedRoleId.value = props.initialData.rol_id
+        editedClave.value = '' // Password field should always be empty on open for security
       }
     } else {
-      // Hide the modal via Bootstrap's JS method
       bsModal?.hide()
     }
   },
 )
 
 const closeModal = () => {
-  // This will trigger the watch(props.show) and then the 'hidden.bs.modal' event listener
   emit('close')
 }
 
 const saveChanges = async () => {
   if (!editedEmail.value.trim() || editedRoleId.value === null) {
-    // Check for null explicitly
     modalError.value = 'El email y el rol son campos obligatorios.'
     return
   }
@@ -97,6 +93,11 @@ const saveChanges = async () => {
       rol_id: editedRoleId.value,
     }
 
+    // Only add clave to payload if it's not empty
+    if (editedClave.value.trim()) {
+      payload.clave = editedClave.value.trim()
+    }
+
     const response = await axios.put(
       `${import.meta.env.VITE_URL_BACKEND}/api/usuario/${userId.value}`,
       payload,
@@ -108,12 +109,11 @@ const saveChanges = async () => {
       },
     )
 
-    emit('edit-user', response.data) // Emit the updated user data
-    // closeModal() is handled by the 'hidden.bs.modal' event listener after bsModal.hide() is called
+    emit('edit-user', response.data)
   } catch (err) {
     console.error('Error updating user:', err.response?.data || err.message)
     modalError.value = `Error al guardar cambios: ${err.response?.data?.message || err.message}`
-    emit('error', modalError.value) // Emit error to parent
+    emit('error', modalError.value)
   } finally {
     modalLoading.value = false
   }
@@ -122,8 +122,6 @@ const saveChanges = async () => {
 
 <template>
   <teleport to="body">
-    <!-- Bootstrap's main modal structure. The 'show' prop on this div is not directly used for visibility,
-         but rather the 'show' prop on the component triggers Bootstrap's JS methods. -->
     <div
       class="modal fade"
       tabindex="-1"
@@ -139,7 +137,6 @@ const saveChanges = async () => {
           </div>
 
           <div class="modal-body-custom">
-            <!-- Loader inside the modal body -->
             <LoaderComponent v-if="modalLoading" />
             <div v-else-if="userData">
               <div class="user-info-section mb-4 p-3 rounded">
@@ -183,6 +180,21 @@ const saveChanges = async () => {
                   {{ modalError }}
                 </div>
               </div>
+
+              <!-- NEW: Clave (Password) field -->
+              <div class="form-group mb-3">
+                <label for="userClave" class="form-label">Nueva Contraseña (opcional):</label>
+                <input
+                  type="password"
+                  class="form-control"
+                  id="userClave"
+                  v-model="editedClave"
+                  placeholder="Dejar vacío para no cambiar"
+                />
+                <div v-if="modalError" class="invalid-feedback d-block">
+                  <!-- Add specific validation for password if needed -->
+                </div>
+              </div>
             </div>
             <p v-else-if="!modalLoading && modalError" class="text-danger">{{ modalError }}</p>
             <p v-else-if="!modalLoading">No se pudo cargar la información del usuario.</p>
@@ -219,10 +231,8 @@ const saveChanges = async () => {
 </template>
 
 <style scoped>
-/* No custom modal-overlay needed, Bootstrap handles it */
-
 .modal-header {
-  background-color: #174384; /* Header background color */
+  background-color: #174384;
   color: white;
   padding: 18px 25px;
   font-size: 1.5rem;
@@ -234,58 +244,42 @@ const saveChanges = async () => {
   border-top-right-radius: 12px;
 }
 
-/* Ensure Bootstrap's close button is styled correctly */
 .btn-close {
   background: transparent
     url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23fff'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e")
     center / 1em auto no-repeat;
   border: 0;
   border-radius: 0.375rem;
-  opacity: 0.8; /* Adjust opacity for visibility on dark background */
+  opacity: 0.8;
   transition: opacity 0.2s ease-in-out;
-  font-size: 1.25rem; /* Standard Bootstrap size for close button */
-  padding: 0.5rem; /* Standard Bootstrap padding for close button */
+  font-size: 1.25rem;
+  padding: 0.5rem;
 }
 
 .btn-close:hover {
   opacity: 1;
 }
 
-/* Custom close button icon replacement (if using font-awesome directly) */
-/* If you want to use font-awesome 'xmark' instead of Bootstrap's SVG, uncomment this and remove the .btn-close background properties above */
-/*
-.close-modal-button {
-  cursor: pointer;
-  font-size: 1.8rem;
-  color: white; // Ensure it's white on the dark header
-  transition: color 0.2s ease;
-}
-
-.close-modal-button:hover {
-  color: #f0f0f0;
-}
-*/
-
 .modal-content {
-  background-color: #fff; /* Solid white background */
+  background-color: #fff;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
   width: 90%;
-  max-width: 550px; /* Adjust max-width as needed */
+  max-width: 550px;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Ensures content stays within rounded corners */
+  overflow: hidden;
 }
 
 .modal-body-custom {
   padding: 25px;
-  flex-grow: 1; /* Allows content to take available space */
-  overflow-y: auto; /* Enable scrolling for content if it overflows */
-  position: relative; /* For LoaderComponent positioning */
+  flex-grow: 1;
+  overflow-y: auto;
+  position: relative;
 }
 
 .user-info-section {
-  background-color: #f8f9fa; /* Light grey background */
+  background-color: #f8f9fa;
   border: 1px solid #e2e6ea;
   color: #343a40;
   padding: 15px;
@@ -312,7 +306,7 @@ const saveChanges = async () => {
 .form-label {
   font-weight: 600;
   margin-bottom: 0.5rem;
-  display: block; /* Ensure label takes full width */
+  display: block;
 }
 
 .form-control {
@@ -348,7 +342,7 @@ const saveChanges = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  background-color: #f8f8f8; /* Light background for footer */
+  background-color: #f8f8f8;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
 }
@@ -396,7 +390,4 @@ const saveChanges = async () => {
   opacity: 0.6;
   cursor: not-allowed;
 }
-
-/* Animations (Bootstrap handles fade and slide for .modal and .modal-dialog) */
-/* If you want custom animations, you'd need to override Bootstrap's or use Vue transitions */
 </style>
