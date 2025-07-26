@@ -12,7 +12,7 @@ const loading = ref(false)
 const searchQuery = ref('')
 const orden = ref('alfabetico')
 const currentPage = ref(1)
-const pageSize = 6
+const pageSize = 8
 
 // Simulación de nombres de equipos (puedes reemplazar por llamada real)
 const equiposMock = [
@@ -116,7 +116,9 @@ onMounted(fetchProyectos)
           </div>
           <div v-else class="text-center text-muted mt-5">Cargando proyectos...</div>
         </div>
-        <div class="pagination">
+        <div class="pagination justify-content-center">
+          <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">‹</button>
+
           <button
             v-for="page in totalPages"
             :key="page"
@@ -124,6 +126,10 @@ onMounted(fetchProyectos)
             @click="currentPage = page"
           >
             {{ page }}
+          </button>
+
+          <button class="page-btn" :disabled="currentPage === totalPages" @click="currentPage++">
+            ›
           </button>
         </div>
       </div>

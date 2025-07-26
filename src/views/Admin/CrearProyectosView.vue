@@ -163,22 +163,13 @@ async function submitForm() {
   }
 
   try {
-    // 1. Generar fechas
-    const fechaInicio = new Date().toISOString().split('T')[0]
-    const fechaFin = new Date()
-    fechaFin.setDate(fechaFin.getDate() + 42)
-    const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
-
-    // 2. Crear el proyecto
+    // 1. Crear el proyecto
     const { data: proyectoCreado } = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
       {
         titulo: titulo.value,
         descripcion: descripcion.value,
         equipo_id: selectedEquipo.value,
-        estado: 'ACTIVO',
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFinFormatted,
       },
       { headers: { Authorization: `Bearer ${token}` } },
     )
@@ -316,11 +307,7 @@ function handleGuardarEquipo() {
                     <td>{{ miembro.persona?.email }}</td>
 
                     <td>
-                      <select
-                        v-model="miembro.rol_id"
-                        @change="actualizarRol(miembro)"
-                        class="form-select form-select-sm"
-                      >
+                      <select v-model="miembro.rol_id" class="form-select form-select-sm">
                         <option :value="1">Líder</option>
                         <option :value="2">Integrante</option>
                       </select>

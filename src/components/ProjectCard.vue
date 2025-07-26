@@ -1,26 +1,30 @@
 <template>
   <div class="project-card">
-    <div class="project-header">
-      <h3 class="project-title">{{ proyecto.titulo }}</h3>
-      <span class="project-dot"></span>
+    <div class="project-scroll-content">
+      <div class="project-header">
+        <h3 class="project-title">{{ proyecto.titulo }}</h3>
+        <span class="project-dot"></span>
+      </div>
+      <div class="project-subtitle">
+        <span>Equipo: {{ equipoNombre || 'Sin equipo' }}</span>
+      </div>
+      <div class="project-logo">
+        <span class="logo-placeholder">Logo</span>
+      </div>
+      <div class="project-description">
+        <strong>Descripción</strong>
+        <p>{{ proyecto.descripcion }}</p>
+      </div>
+      <div class="project-dates">
+        <small>
+          <b>Inicio:</b> {{ formatDate(proyecto.fecha_inicio) }}<br />
+          <b>Fin:</b> {{ formatDate(proyecto.fecha_fin) }}
+        </small>
+      </div>
+      <button class="details-btn" @click="$router.push(`/admin/proyectos/${proyecto.id}`)">
+        Ver Detalles
+      </button>
     </div>
-    <div class="project-subtitle">
-      <span>Equipo: {{ equipoNombre || 'Sin equipo' }}</span>
-    </div>
-    <div class="project-logo">
-      <span class="logo-placeholder">Logo</span>
-    </div>
-    <div class="project-description">
-      <strong>Descripción</strong>
-      <p>{{ proyecto.descripcion }}</p>
-    </div>
-    <div class="project-dates">
-      <small>
-        <b>Inicio:</b> {{ formatDate(proyecto.fecha_inicio) }}<br />
-        <b>Fin:</b> {{ formatDate(proyecto.fecha_fin) }}
-      </small>
-    </div>
-    <button class="details-btn" @click="$emit('ver-detalles', proyecto)">Ver Detalles</button>
   </div>
 </template>
 
@@ -44,13 +48,15 @@ function formatDate(dateStr) {
   border-radius: 12px;
   padding: 1.2rem 1rem 1rem 1rem;
   width: 240px;
-  min-height: 340px;
+  min-height: 360px;
+  max-height: 360px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   box-shadow: 0 2px 8px #0001;
   margin: 0.5rem;
   position: relative;
+  overflow: hidden;
 }
 .project-header {
   display: flex;
@@ -123,5 +129,10 @@ function formatDate(dateStr) {
   background: #174384;
   color: #fff;
   border: 1px solid #fff;
+}
+.project-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 0.8rem;
 }
 </style>

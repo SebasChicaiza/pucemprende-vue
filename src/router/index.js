@@ -133,6 +133,14 @@ const router = createRouter({
         title: 'Formularios',
       },
     },
+    {
+      path: '/admin/proyectos/:id',
+      name: 'ProyectoDetalle',
+      component: () => import('@/views/Admin/ProyectoDetalleView.vue'),
+      meta: {
+        title: 'Proyecto Detalle',
+      },
+    }
     /* EJEMPLO LAZY LOADING
     {
       path: '/about',
