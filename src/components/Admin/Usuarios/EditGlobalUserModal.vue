@@ -4,6 +4,7 @@ import { ref, watch, defineEmits, defineProps, onMounted, onUnmounted, nextTick 
 import { Modal } from 'bootstrap'
 import axios from 'axios'
 import LoaderComponent from '@/components/LoaderComponent.vue'
+import ErrorModal from '@/components/ErrorModal.vue' // Import ErrorModal
 
 const props = defineProps({
   show: Boolean,
@@ -16,16 +17,21 @@ const emit = defineEmits(['close', 'edit-user', 'error'])
 const editUserModalRef = ref(null)
 let bsModal = null
 
+// Reactive state variables
 const userId = ref(null)
 const userData = ref(null)
 const editedEmail = ref('')
 const editedRoleId = ref(null)
-const editedClave = ref('') // NEW: For the password field
+const editedClave = ref('')
 const modalLoading = ref(false)
-const modalError = ref('')
 
-onMounted(() => {
-  if (editUserModalRef.value) {
+// ErrorModal specific states
+const showErrorModal = ref(false)
+const errorMessage = ref('')
+
+// Function to initialize the Bootstrap Modal
+const initializeModal = () => {
+  if (editUserModalRef.value && !bsModal) {
     bsModal = new Modal(editUserModalRef.value, { backdrop: 'static', keyboard: false })
     editUserModalRef.value.addEventListener('hidden.bs.modal', () => {
       emit('close')
@@ -33,11 +39,16 @@ onMounted(() => {
       userData.value = null
       editedEmail.value = ''
       editedRoleId.value = null
-      editedClave.value = '' // Reset password field
+      editedClave.value = ''
       modalLoading.value = false
-      modalError.value = ''
+      errorMessage.value = '' // Clear error message on full close
+      showErrorModal.value = false // Ensure error modal is hidden
     })
   }
+}
+
+onMounted(() => {
+  initializeModal()
 })
 
 onUnmounted(() => {
@@ -50,40 +61,65 @@ onUnmounted(() => {
 watch(
   () => props.show,
   (newVal) => {
-    if (newVal) {
-      bsModal?.show()
-      modalError.value = ''
-      if (props.initialData) {
-        userData.value = { ...props.initialData }
-        userId.value = props.initialData.id
-        editedEmail.value = props.initialData.email
-        editedRoleId.value = props.initialData.rol_id
-        editedClave.value = '' // Password field should always be empty on open for security
+    nextTick(() => {
+      if (newVal) {
+        if (!bsModal) {
+          initializeModal()
+        }
+        bsModal?.show()
+        errorMessage.value = '' // Clear previous errors when modal opens
+        showErrorModal.value = false // Hide error modal when main modal opens
+        if (props.initialData) {
+          userData.value = { ...props.initialData }
+          userId.value = props.initialData.id
+          editedEmail.value = props.initialData.email
+          editedRoleId.value = props.initialData.rol_id
+          editedClave.value = '' // Password field should always be empty on open for security
+        }
+      } else {
+        bsModal?.hide()
       }
-    } else {
-      bsModal?.hide()
-    }
+    })
   },
+  { immediate: true },
 )
+
+// Function to handle error display
+const displayError = (message) => {
+  errorMessage.value = message
+  showErrorModal.value = true
+  emit('error', message) // Still emit to parent if needed
+}
+
+const handleErrorModalClose = () => {
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
 
 const closeModal = () => {
   emit('close')
 }
 
 const saveChanges = async () => {
-  if (!editedEmail.value.trim() || editedRoleId.value === null) {
-    modalError.value = 'El email y el rol son campos obligatorios.'
+  // Client-side validation
+  if (!editedEmail.value.trim()) {
+    displayError('El email es un campo obligatorio.')
+    return
+  }
+  if (editedRoleId.value === null || editedRoleId.value === '') {
+    displayError('El rol es un campo obligatorio.')
     return
   }
 
   modalLoading.value = true
-  modalError.value = ''
+  errorMessage.value = '' // Clear error before API call
+  showErrorModal.value = false // Hide error modal before API call
+
   const token = localStorage.getItem('token')
 
   if (!token) {
-    modalError.value = 'Token de autenticación no encontrado.'
+    displayError('Token de autenticación no encontrado.')
     modalLoading.value = false
-    emit('error', 'Token de autenticación no encontrado.')
     return
   }
 
@@ -93,7 +129,6 @@ const saveChanges = async () => {
       rol_id: editedRoleId.value,
     }
 
-    // Only add clave to payload if it's not empty
     if (editedClave.value.trim()) {
       payload.clave = editedClave.value.trim()
     }
@@ -112,8 +147,34 @@ const saveChanges = async () => {
     emit('edit-user', response.data)
   } catch (err) {
     console.error('Error updating user:', err.response?.data || err.message)
-    modalError.value = `Error al guardar cambios: ${err.response?.data?.message || err.message}`
-    emit('error', modalError.value)
+    let errorToDisplay = 'Error desconocido al guardar cambios.'
+
+    if (err.response && err.response.data) {
+      // Check for validation errors object
+      if (err.response.data.errors) {
+        const errors = err.response.data.errors
+        // Check for 'clave' specific error
+        if (errors.clave && errors.clave.length > 0) {
+          errorToDisplay = errors.clave[0] // Take the first message for 'clave'
+        } else {
+          // If other validation errors exist, concatenate them
+          const allErrors = Object.values(errors).flat()
+          if (allErrors.length > 0) {
+            errorToDisplay = allErrors.join('; ')
+          } else if (err.response.data.message) {
+            errorToDisplay = err.response.data.message
+          }
+        }
+      } else if (err.response.data.message) {
+        // Fallback to a general message if no 'errors' object but a 'message' exists
+        errorToDisplay = err.response.data.message
+      }
+    } else if (err.message) {
+      // Fallback to generic error message from the error object
+      errorToDisplay = err.message
+    }
+
+    displayError(`Error al guardar cambios: ${errorToDisplay}`)
   } finally {
     modalLoading.value = false
   }
@@ -155,33 +216,20 @@ const saveChanges = async () => {
                   class="form-control"
                   id="userEmail"
                   v-model="editedEmail"
-                  :class="{ 'is-invalid': modalError }"
                   placeholder="ejemplo@correo.com"
                 />
-                <div v-if="modalError" class="invalid-feedback d-block">
-                  {{ modalError }}
-                </div>
               </div>
 
               <div class="form-group mb-3">
                 <label for="userRole" class="form-label">Rol:</label>
-                <select
-                  class="form-control"
-                  id="userRole"
-                  v-model="editedRoleId"
-                  :class="{ 'is-invalid': modalError }"
-                >
+                <select class="form-control" id="userRole" v-model="editedRoleId">
                   <option :value="null" disabled>Seleccione un rol</option>
                   <option v-for="role in rolesOptions" :key="role.id" :value="role.id">
                     {{ role.nombre }}
                   </option>
                 </select>
-                <div v-if="modalError" class="invalid-feedback d-block">
-                  {{ modalError }}
-                </div>
               </div>
 
-              <!-- NEW: Clave (Password) field -->
               <div class="form-group mb-3">
                 <label for="userClave" class="form-label">Nueva Contraseña (opcional):</label>
                 <input
@@ -191,12 +239,14 @@ const saveChanges = async () => {
                   v-model="editedClave"
                   placeholder="Dejar vacío para no cambiar"
                 />
-                <div v-if="modalError" class="invalid-feedback d-block">
-                  <!-- Add specific validation for password if needed -->
-                </div>
               </div>
             </div>
-            <p v-else-if="!modalLoading && modalError" class="text-danger">{{ modalError }}</p>
+            <p v-else-if="!modalLoading && errorMessage" class="text-danger">
+              <!-- This paragraph will only show if userData is null and there's an error,
+                   e.g., if initial data fetch failed. Actual form validation errors
+                   and API errors will now go to ErrorModal. -->
+              {{ errorMessage }}
+            </p>
             <p v-else-if="!modalLoading">No se pudo cargar la información del usuario.</p>
           </div>
 
@@ -228,6 +278,14 @@ const saveChanges = async () => {
       </div>
     </div>
   </teleport>
+
+  <!-- Error Modal for displaying messages -->
+  <ErrorModal
+    :show="showErrorModal"
+    :message="errorMessage"
+    @close="handleErrorModalClose"
+    style="z-index: 2000"
+  />
 </template>
 
 <style scoped>
