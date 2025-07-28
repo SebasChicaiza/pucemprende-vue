@@ -8,17 +8,16 @@ import LoaderComponent from '@/components/LoaderComponent.vue'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ScrollBar from '@/components/ScrollBar.vue';
-import ConfirmationModal from '@/components/ConfirmationModal.vue'; // Corrected import path if needed
+import ConfirmationModal from '@/components/ConfirmationModal.vue';
 import ErrorModal from '@/components/ErrorModal.vue';
 
 const route = useRoute()
-const router = useRouter() // Initialize useRouter
+const router = useRouter()
 const loading = ref(false)
 
 const showErrorModal = ref(false);
 const errorMessage = ref('');
 
-// Modals state (initialize these if they are used in the template, even if not fully implemented here)
 const showOkModal = ref(false);
 const okModalMessage = ref('');
 const showReactivateConfirmModal = ref(false);
@@ -26,27 +25,53 @@ const modalTitle = ref('');
 const modalMessage = ref('');
 const modalWarning = ref('');
 const modalConfirmText = ref('');
-const universalDeleteModalRef = ref(null); // Ref for DeleteModal
+const universalDeleteModalRef = ref(null);
 
-// Placeholder functions for modals (if they are called in the template)
 const handleOkModalClose = () => { showOkModal.value = false; };
 const handleErrorModalClose = () => { showErrorModal.value = false; errorMessage.value = ''; };
 const handleReactivateConfirm = () => { /* Logic to reactivate */ showReactivateConfirmModal.value = false; okModalMessage.value = 'Evento reactivado con éxito (simulado)!'; showOkModal.value = true; };
 const handleReactivateCancel = () => { showReactivateConfirmModal.value = false; };
 const handleDeleteConfirmed = () => { /* Logic to delete */ universalDeleteModalRef.value.hide(); okModalMessage.value = 'Elemento eliminado con éxito (simulado)!'; showOkModal.value = true; };
 
+// Reactive variable to store the user's role ID
+const userRoleId = ref(null);
 
-// Function to navigate based on user selection
+onMounted(() => {
+  // Retrieve user data from localStorage
+  const userDataString = localStorage.getItem('user');
+  if (userDataString) {
+    try {
+      const userData = JSON.parse(userDataString);
+      userRoleId.value = userData.rol_id;
+    } catch (e) {
+      console.error('Error parsing user data from localStorage:', e);
+      // Handle error, e.g., set a default role or redirect
+      userRoleId.value = null; // Or a default role if desired
+    }
+  } else {
+    // Handle case where user data is not in localStorage, e.g., redirect to login
+    console.warn('User data not found in localStorage.');
+    userRoleId.value = null; // Or a default role
+  }
+});
+
+// Computed property to determine if General System Users option should be shown
+const showGeneralUsersOption = computed(() => {
+  return userRoleId.value === 8; // Show if rol_id is 8
+});
+
+// Computed property to determine if Event Users option should be shown
+const showEventUsersOption = computed(() => {
+  return userRoleId.value === 8 || userRoleId.value === 1; // Show if rol_id is 8 OR 1
+});
+
 const selectUserManagementOption = (option) => {
   if (option === 'general') {
-    // Navigate to the general user management route
-    router.push("/admin/usuarios/generales"); // Replace 'AdminGeneralUsers' with your actual route name
+    router.push("/admin/usuarios/generales");
   } else if (option === 'events') {
-    // Navigate to the event user management route
-    router.push("/admin/usuarios/eventos"); // Replace 'AdminEventUsers' with your actual route name
+    router.push("/admin/usuarios/eventos");
   }
 };
-
 </script>
 
 <template>
@@ -64,8 +89,8 @@ const selectUserManagementOption = (option) => {
             </p>
 
             <div class="row g-4 justify-content-center">
-              <!-- Option 1: General System Users -->
-              <div class="col-12 col-md-6 col-lg-5">
+              <!-- Option 1: General System Users (Conditionally rendered) -->
+              <div class="col-12 col-md-6 col-lg-5" v-if="showGeneralUsersOption">
                 <div class="user-option-card" @click="selectUserManagementOption('general')">
                   <div class="icon-wrapper mb-3">
                     <i class="fas fa-users fa-3x option-icon"></i>
@@ -82,8 +107,8 @@ const selectUserManagementOption = (option) => {
                 </div>
               </div>
 
-              <!-- Option 2: Event Users -->
-              <div class="col-12 col-md-6 col-lg-5">
+              <!-- Option 2: Event Users (Conditionally rendered) -->
+              <div class="col-12 col-md-6 col-lg-5" v-if="showEventUsersOption">
                 <div class="user-option-card" @click="selectUserManagementOption('events')">
                   <div class="icon-wrapper mb-3">
                     <i class="fas fa-user-tag fa-3x option-icon"></i>
@@ -91,13 +116,18 @@ const selectUserManagementOption = (option) => {
                   <h3 class="option-title">Editar Usuarios de Eventos</h3>
                   <p class="option-description">
                     Gestiona los usuarios específicamente asociados a eventos, como Staff, Jurado, Miembro, Mentor, Gestor y administradores
-                     de eventos.
+                    de eventos.
                     Enfocado en la administración de roles y datos relacionados con eventos específicos.
                   </p>
                   <button class="btn btn-outline-primary mt-3">
                     Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
                   </button>
                 </div>
+              </div>
+
+              <!-- Message if no options are available -->
+              <div v-if="!showGeneralUsersOption && !showEventUsersOption" class="col-12">
+                <p class="text-center text-muted">No tienes permisos para gestionar usuarios.</p>
               </div>
             </div>
           </div>
@@ -129,7 +159,7 @@ const selectUserManagementOption = (option) => {
 .section-main-title {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #174384; /* Deep blue for main title */
+  color: #174384;
 }
 
 .section-description {
@@ -147,7 +177,7 @@ const selectUserManagementOption = (option) => {
   padding: 2.5rem;
   transition: all 0.3s ease;
   cursor: pointer;
-  height: 100%; /* Ensure cards have equal height */
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -157,16 +187,16 @@ const selectUserManagementOption = (option) => {
 .user-option-card:hover {
   transform: translateY(-8px);
   box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
-  border: 1px solid #174384; /* Highlight border on hover */
+  border: 1px solid #174384;
 }
 
 .icon-wrapper {
-  color: #174384; /* Icon color */
+  color: #174384;
   margin-bottom: 1.5rem;
 }
 
 .option-icon {
-  font-size: 4rem; /* Larger icons */
+  font-size: 4rem;
 }
 
 .option-title {
@@ -180,7 +210,7 @@ const selectUserManagementOption = (option) => {
   font-size: 0.95rem;
   color: #6c757d;
   line-height: 1.5;
-  flex-grow: 1; /* Allow description to take available space */
+  flex-grow: 1;
 }
 
 .btn-outline-primary {
@@ -188,17 +218,16 @@ const selectUserManagementOption = (option) => {
   color: #174384;
   font-weight: 600;
   padding: 0.75rem 1.5rem;
-  border-radius: 50px; /* Pill shape */
+  border-radius: 50px;
   transition: all 0.3s ease;
 }
 
 .btn-outline-primary:hover {
   background-color: #174384;
   color: #ffffff;
-  transform: scale(1.05); /* Subtle grow effect */
+  transform: scale(1.05);
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .section-main-title {
     font-size: 2rem;
