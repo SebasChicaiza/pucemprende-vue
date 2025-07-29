@@ -142,6 +142,64 @@ export const useEventosStore = defineStore('eventos', {
 
         clearCurrentEventToEdit() {
             this.currentEventToEdit = null;
+        },
+
+        // NUEVA ACCIÓN: Obtener los últimos eventos para la página de inicio
+        async fetchUltimosEventos() {
+            this.loadingAllEvents = true;
+            this.allEventsError = null;
+
+            try {
+                // Usar el endpoint específico que ya tienes creado
+                const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/ultimos`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                console.log('Últimos eventos obtenidos:', response.data);
+
+                // Guardar los eventos en allEventsList para mantener consistencia con el store
+                this.allEventsList = Array.isArray(response.data) ? response.data : [];
+                return this.allEventsList;
+            } catch (err) {
+                console.error('Error fetching últimos eventos:', err.response?.data || err.message);
+                this.allEventsError = `Error al cargar los últimos eventos: ${err.response?.data?.message || err.message}`;
+                this.allEventsList = [];
+                return [];
+            } finally {
+                this.loadingAllEvents = false;
+            }
+        },
+
+        // NUEVA ACCIÓN: Obtener los próximos eventos para la página de eventos
+        async fetchProximosEventos() {
+            this.loading = true;
+            this.error = null;
+
+            try {
+                // Usar el endpoint específico para próximos eventos
+                const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/proximos`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                console.log('Próximos eventos obtenidos:', response.data);
+                
+                // Guardar los eventos en events para la vista de eventos
+                this.events = Array.isArray(response.data) ? response.data : [];
+                this.totalEvents = this.events.length;
+                return this.events;
+            } catch (err) {
+                console.error('Error fetching próximos eventos:', err.response?.data || err.message);
+                this.error = `Error al cargar los próximos eventos: ${err.response?.data?.message || err.message}`;
+                this.events = [];
+                this.totalEvents = 0;
+                return [];
+            } finally {
+                this.loading = false;
+            }
         }
     }
 });
