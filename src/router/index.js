@@ -15,6 +15,7 @@ import UsersView from '@/views/Admin/UsersView.vue'
 import UserGlobal from '@/views/Admin/UserGlobal.vue'
 import UserEvent from '@/views/Admin/UserEvent.vue'
 import FormsView from '@/views/Admin/FormsView.vue'
+import UserManagement from '@/views/Admin/UserManagement.vue'
 
 
 const router = createRouter({
@@ -140,7 +141,15 @@ const router = createRouter({
       meta: {
         title: 'Proyecto Detalle',
       },
-    }
+    },
+    {
+      path: '/admin/usuario',
+      name: 'Usuario',
+      component: UserManagement,
+      meta: {
+        title: 'Usuario',
+      },
+    },
 
   ],
 })
