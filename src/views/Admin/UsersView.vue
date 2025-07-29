@@ -7,71 +7,86 @@ import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
-import ScrollBar from '@/components/ScrollBar.vue';
-import ConfirmationModal from '@/components/ConfirmationModal.vue';
-import ErrorModal from '@/components/ErrorModal.vue';
+import ScrollBar from '@/components/ScrollBar.vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import ErrorModal from '@/components/ErrorModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 
-const showErrorModal = ref(false);
-const errorMessage = ref('');
+const showErrorModal = ref(false)
+const errorMessage = ref('')
 
-const showOkModal = ref(false);
-const okModalMessage = ref('');
-const showReactivateConfirmModal = ref(false);
-const modalTitle = ref('');
-const modalMessage = ref('');
-const modalWarning = ref('');
-const modalConfirmText = ref('');
-const universalDeleteModalRef = ref(null);
+const showOkModal = ref(false)
+const okModalMessage = ref('')
+const showReactivateConfirmModal = ref(false)
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalWarning = ref('')
+const modalConfirmText = ref('')
+const universalDeleteModalRef = ref(null)
 
-const handleOkModalClose = () => { showOkModal.value = false; };
-const handleErrorModalClose = () => { showErrorModal.value = false; errorMessage.value = ''; };
-const handleReactivateConfirm = () => { /* Logic to reactivate */ showReactivateConfirmModal.value = false; okModalMessage.value = 'Evento reactivado con éxito (simulado)!'; showOkModal.value = true; };
-const handleReactivateCancel = () => { showReactivateConfirmModal.value = false; };
-const handleDeleteConfirmed = () => { /* Logic to delete */ universalDeleteModalRef.value.hide(); okModalMessage.value = 'Elemento eliminado con éxito (simulado)!'; showOkModal.value = true; };
+const handleOkModalClose = () => {
+  showOkModal.value = false
+}
+const handleErrorModalClose = () => {
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
+const handleReactivateConfirm = () => {
+  /* Logic to reactivate */ showReactivateConfirmModal.value = false
+  okModalMessage.value = 'Evento reactivado con éxito (simulado)!'
+  showOkModal.value = true
+}
+const handleReactivateCancel = () => {
+  showReactivateConfirmModal.value = false
+}
+const handleDeleteConfirmed = () => {
+  /* Logic to delete */ universalDeleteModalRef.value.hide()
+  okModalMessage.value = 'Elemento eliminado con éxito (simulado)!'
+  showOkModal.value = true
+}
 
 // Reactive variable to store the user's role ID
-const userRoleId = ref(null);
+const userRoleId = ref(null)
 
 onMounted(() => {
   // Retrieve user data from localStorage
-  const userDataString = localStorage.getItem('user');
+  const userDataString = localStorage.getItem('user')
   if (userDataString) {
     try {
-      const userData = JSON.parse(userDataString);
-      userRoleId.value = userData.rol_id;
+      const userData = JSON.parse(userDataString)
+      userRoleId.value = userData.rol_id
     } catch (e) {
-      console.error('Error parsing user data from localStorage:', e);
+      console.error('Error parsing user data from localStorage:', e)
       // Handle error, e.g., set a default role or redirect
-      userRoleId.value = null; // Or a default role if desired
+      userRoleId.value = null // Or a default role if desired
     }
   } else {
     // Handle case where user data is not in localStorage, e.g., redirect to login
-    console.warn('User data not found in localStorage.');
-    userRoleId.value = null; // Or a default role
+    console.warn('User data not found in localStorage.')
+    userRoleId.value = null // Or a default role
   }
-});
+})
 
 // Computed property to determine if General System Users option should be shown
 const showGeneralUsersOption = computed(() => {
-  return userRoleId.value === 8; // Show if rol_id is 8
-});
+  return userRoleId.value === 8 // Show if rol_id is 8
+})
 
 // Computed property to determine if Event Users option should be shown
 const showEventUsersOption = computed(() => {
-  return userRoleId.value === 8 || userRoleId.value === 1; // Show if rol_id is 8 OR 1
-});
+  return userRoleId.value === 8 || userRoleId.value === 1 // Show if rol_id is 8 OR 1
+})
 
 const selectUserManagementOption = (option) => {
   if (option === 'general') {
-    router.push("/admin/usuarios/generales");
+    router.push('/admin/usuarios/generales')
   } else if (option === 'events') {
-    router.push("/admin/usuarios/eventos");
+    router.push('/admin/usuarios/eventos')
   }
-};
+}
 </script>
 
 <template>
@@ -79,71 +94,89 @@ const selectUserManagementOption = (option) => {
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute/>
-        <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-          <div class="user-management-container">
-            <h2 class="section-main-title mb-4">Gestión de Usuarios</h2>
-            <p class="section-description mb-5">
-              En esta sección, puedes administrar los diferentes tipos de usuarios del sistema.
-              Selecciona una opción a continuación para empezar a editar o visualizar la información de los usuarios.
-            </p>
+      <PageHeaderRoute />
+      <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
+        <div class="user-management-container">
+          <h2 class="section-main-title mb-4">Gestión de Usuarios</h2>
+          <p class="section-description mb-5">
+            En esta sección, puedes administrar los diferentes tipos de usuarios del sistema.
+            Selecciona una opción a continuación para empezar a editar o visualizar la información
+            de los usuarios.
+          </p>
 
-            <div class="row g-4 justify-content-center">
-              <!-- Option 1: General System Users (Conditionally rendered) -->
-              <div class="col-12 col-md-6 col-lg-5" v-if="showGeneralUsersOption">
-                <div class="user-option-card" @click="selectUserManagementOption('general')">
-                  <div class="icon-wrapper mb-3">
-                    <i class="fas fa-users fa-3x option-icon"></i>
-                  </div>
-                  <h3 class="option-title">Editar Usuarios Generales del Sistema</h3>
-                  <p class="option-description">
-                    Administra todos los usuarios registrados en la plataforma, incluyendo su información básica, roles y permisos globales.
-                    Ideal para la gestión de administradores, moderadores y usuarios estándar del sistema.
-                  </p>
-
-                  <button class="btn btn-outline-primary mt-3">
-                    Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
-                  </button>
+          <div class="row g-4 justify-content-center">
+            <!-- Option 1: General System Users (Conditionally rendered) -->
+            <div class="col-12 col-md-6 col-lg-5" v-if="showGeneralUsersOption">
+              <div class="user-option-card" @click="selectUserManagementOption('general')">
+                <div class="icon-wrapper mb-3">
+                  <i class="fas fa-users fa-3x option-icon"></i>
                 </div>
-              </div>
+                <h3 class="option-title">Editar Usuarios Generales del Sistema</h3>
+                <p class="option-description">
+                  Administra todos los usuarios registrados en la plataforma, incluyendo su
+                  información básica, roles y permisos globales. Ideal para la gestión de
+                  administradores, moderadores y usuarios estándar del sistema.
+                </p>
 
-              <!-- Option 2: Event Users (Conditionally rendered) -->
-              <div class="col-12 col-md-6 col-lg-5" v-if="showEventUsersOption">
-                <div class="user-option-card" @click="selectUserManagementOption('events')">
-                  <div class="icon-wrapper mb-3">
-                    <i class="fas fa-user-tag fa-3x option-icon"></i>
-                  </div>
-                  <h3 class="option-title">Editar Usuarios de Eventos</h3>
-                  <p class="option-description">
-                    Gestiona los usuarios específicamente asociados a eventos, como Staff, Jurado, Miembro, Mentor, Gestor y administradores
-                    de eventos.
-                    Enfocado en la administración de roles y datos relacionados con eventos específicos.
-                  </p>
-                  <button class="btn btn-outline-primary mt-3">
-                    Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
-                  </button>
+                <button class="btn btn-outline-primary mt-3">
+                  Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Option 2: Event Users (Conditionally rendered) -->
+            <div class="col-12 col-md-6 col-lg-5" v-if="showEventUsersOption">
+              <div class="user-option-card" @click="selectUserManagementOption('events')">
+                <div class="icon-wrapper mb-3">
+                  <i class="fas fa-user-tag fa-3x option-icon"></i>
                 </div>
+                <h3 class="option-title">Editar Usuarios de Eventos</h3>
+                <p class="option-description">
+                  Gestiona los usuarios específicamente asociados a eventos, como Staff, Jurado,
+                  Miembro, Mentor, Gestor y administradores de eventos. Enfocado en la
+                  administración de roles y datos relacionados con eventos específicos.
+                </p>
+                <button class="btn btn-outline-primary mt-3">
+                  Gestionar Usuarios <i class="fas fa-arrow-right ms-2"></i>
+                </button>
               </div>
+            </div>
 
-              <!-- Message if no options are available -->
-              <div v-if="!showGeneralUsersOption && !showEventUsersOption" class="col-12">
-                <p class="text-center text-muted">No tienes permisos para gestionar usuarios.</p>
-              </div>
+            <!-- Message if no options are available -->
+            <div v-if="!showGeneralUsersOption && !showEventUsersOption" class="col-12">
+              <p class="text-center text-muted">No tienes permisos para gestionar usuarios.</p>
             </div>
           </div>
         </div>
+      </div>
     </div>
   </div>
 
-  <OkModal :show="showOkModal" :message="okModalMessage" :duration="1000" @close="handleOkModalClose" />
+  <OkModal
+    :show="showOkModal"
+    :message="okModalMessage"
+    :duration="1000"
+    @close="handleOkModalClose"
+  />
 
-  <ConfirmationModal :show="showReactivateConfirmModal" title="Reactivar Evento"
+  <ConfirmationModal
+    :show="showReactivateConfirmModal"
+    title="Reactivar Evento"
     message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
-    confirmText="Sí, Reactivar" cancelText="Cancelar" @confirm="handleReactivateConfirm"
-    @cancel="handleReactivateCancel" />
+    confirmText="Sí, Reactivar"
+    cancelText="Cancelar"
+    @confirm="handleReactivateConfirm"
+    @cancel="handleReactivateCancel"
+  />
 
-  <DeleteModal ref="universalDeleteModalRef" :title="modalTitle" :message="modalMessage" :warning="modalWarning"
-    :confirmButtonText="modalConfirmText" @confirmed="handleDeleteConfirmed" />
+  <DeleteModal
+    ref="universalDeleteModalRef"
+    :title="modalTitle"
+    :message="modalMessage"
+    :warning="modalWarning"
+    :confirmButtonText="modalConfirmText"
+    @confirmed="handleDeleteConfirmed"
+  />
 
   <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 </template>
