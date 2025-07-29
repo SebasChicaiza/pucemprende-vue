@@ -336,7 +336,7 @@ onMounted(fetchOrganizadores)
 
 /* --- Organizations Table --- */
 .organizations-table-container {
-  width: 90%;
+  width: 100%;
   background-color: #ffffff;
   border-radius: 1rem;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07); /* Clearer shadow for table */
@@ -353,7 +353,7 @@ onMounted(fetchOrganizadores)
   width: 100%;
   border-collapse: separate; /* Allows for border-spacing */
   border-spacing: 0; /* Remove default spacing */
-  font-size: 0.95rem;
+  font-size: 0.7rem;
   min-width: 1000px; /* Ensure table doesn't get too squished on smaller screens */
 }
 
@@ -451,7 +451,7 @@ onMounted(fetchOrganizadores)
   border-radius: 1rem; /* Rounded pill shape */
   font-weight: 600;
   font-size: 0.85rem;
-  color: #fff;
+  color: black;
   white-space: nowrap;
   text-transform: capitalize; /* Capitalize the first letter of the role */
 }
