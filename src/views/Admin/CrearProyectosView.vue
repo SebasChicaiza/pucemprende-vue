@@ -154,6 +154,10 @@ async function submitForm() {
     alert('Por favor completa todos los campos.')
     return
   }
+  if (descripcion.value.trim().length > 40) {
+    alert('La descripción no puede contener más de 45 caracteres.')
+    return
+  }
 
   // Validar que haya al menos un líder en el equipo (opcional si lo haces antes)
   const tieneLider = miembrosEquipo.value.some((m) => m.rol_id === 1)
