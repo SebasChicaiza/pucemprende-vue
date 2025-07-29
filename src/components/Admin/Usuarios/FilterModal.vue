@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, defineEmits, defineProps, computed } from 'vue'; // Added 'computed'
+import { ref, watch, defineEmits, defineProps, computed } from 'vue';
 
 const props = defineProps({
   show: {
@@ -18,9 +18,13 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  alumniOptions: { // Prop for alumni filter options
+    type: Array,
+    default: () => []
+  },
   initialFilters: { // To pre-populate filters if they are already applied
     type: Object,
-    default: () => ({ event: '', role: '', status: '' })
+    default: () => ({ event: '', role: '', status: '', alumni: '' }) // Add alumni to initialFilters
   }
 });
 
@@ -29,8 +33,9 @@ const emit = defineEmits(['close', 'apply-filters', 'clear-filters']);
 // For 'Rol en el Evento' and 'Estado' (remain as simple selects)
 const selectedRole = ref('');
 const selectedStatus = ref('');
+const selectedAlumni = ref(''); // Ref for alumni filter
 
-// NEW: For 'Filtrar por Evento' (autocomplete input)
+// For 'Filtrar por Evento' (autocomplete input)
 const eventSearchQuery = ref('');
 const showEventSuggestions = ref(false); // Controls visibility of the suggestion list
 
@@ -39,9 +44,10 @@ watch(() => props.initialFilters, (newFilters) => {
   eventSearchQuery.value = newFilters.event; // Initialize input with current filter
   selectedRole.value = newFilters.role;
   selectedStatus.value = newFilters.status;
+  selectedAlumni.value = newFilters.alumni; // Initialize selectedAlumni
 }, { immediate: true }); // Run immediately on component mount
 
-// NEW: Computed property to filter event suggestions based on user input
+// Computed property to filter event suggestions based on user input
 const filteredEventOptions = computed(() => {
   if (!eventSearchQuery.value) {
     return props.eventsOptions; // If input is empty, show all options
@@ -50,7 +56,7 @@ const filteredEventOptions = computed(() => {
   return props.eventsOptions.filter(event => event.toLowerCase().includes(query));
 });
 
-// NEW: Event handlers for the autocomplete input
+// Event handlers for the autocomplete input
 const onEventInput = () => {
   showEventSuggestions.value = true;
 };
@@ -70,7 +76,6 @@ const onEventFocus = () => {
 };
 
 // Use a click-outside listener to close suggestions when clicking elsewhere
-// (This is a simplified approach; for complex cases, consider a custom directive)
 const onClickOutsideEventAutocomplete = (event) => {
   const autocompleteWrapper = document.getElementById('event-autocomplete-wrapper');
   if (autocompleteWrapper && !autocompleteWrapper.contains(event.target)) {
@@ -92,7 +97,8 @@ const applyFilters = () => {
   emit('apply-filters', {
     event: eventSearchQuery.value, // Use eventSearchQuery as the filter value
     role: selectedRole.value,
-    status: selectedStatus.value
+    status: selectedStatus.value,
+    alumni: selectedAlumni.value // Include alumni in applied filters
   });
   closeModal();
 };
@@ -101,6 +107,7 @@ const clearFilters = () => {
   eventSearchQuery.value = ''; // Reset event filter
   selectedRole.value = '';
   selectedStatus.value = '';
+  selectedAlumni.value = ''; // Clear alumni filter
   emit('clear-filters');
   closeModal();
 };
@@ -111,12 +118,12 @@ const closeModal = () => {
 };
 
 // Reset selections when the modal is opened/closed to reflect initialFilters
-// This watch should also update eventSearchQuery
 watch(() => props.show, (newVal) => {
   if (newVal) {
     eventSearchQuery.value = props.initialFilters.event;
     selectedRole.value = props.initialFilters.role;
     selectedStatus.value = props.initialFilters.status;
+    selectedAlumni.value = props.initialFilters.alumni; // Reset selectedAlumni on modal open
   }
 });
 </script>
@@ -174,6 +181,16 @@ watch(() => props.show, (newVal) => {
               <option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option>
             </select>
           </div>
+
+          <!-- Alumni Filter Group -->
+          <div class="filter-group">
+            <label for="filter-alumni">Filtrar por Alumni:</label>
+            <select id="filter-alumni" v-model="selectedAlumni">
+              <option value="">Todos</option>
+              <option v-for="option in alumniOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </div>
+
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="clearFilters">Limpiar Filtros</button>
@@ -259,7 +276,6 @@ watch(() => props.show, (newVal) => {
   font-size: 0.95em;
 }
 
-/* NEW: Styles for the Autocomplete */
 .autocomplete-wrapper {
   position: relative;
 }
@@ -278,7 +294,7 @@ watch(() => props.show, (newVal) => {
   font-size: 1em;
   background-color: #f8f8f8;
   transition: border-color 0.2s, box-shadow 0.2s;
-  padding-right: 30px; /* Make space for the clear button */
+  padding-right: 30px;
 }
 
 .filter-group input[type="text"]:focus {
@@ -289,7 +305,7 @@ watch(() => props.show, (newVal) => {
 
 .clear-button {
   position: absolute;
-  right: 8px; /* Position closer to the input */
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -297,7 +313,7 @@ watch(() => props.show, (newVal) => {
   font-size: 1.2em;
   color: #999;
   cursor: pointer;
-  padding: 0 5px; /* Add some padding for easier clicking */
+  padding: 0 5px;
   line-height: 1;
 }
 
@@ -307,18 +323,18 @@ watch(() => props.show, (newVal) => {
 
 .suggestions-list {
   position: absolute;
-  top: 100%; /* Position right below the input */
+  top: 100%;
   left: 0;
   right: 0;
   border: 1px solid #ddd;
   border-top: none;
   background-color: white;
-  z-index: 10; /* Ensure it's above other elements */
+  z-index: 10;
   max-height: 200px;
   overflow-y: auto;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
   border-radius: 0 0 8px 8px;
-  list-style: none; /* Remove default list bullets */
+  list-style: none;
   padding: 0;
   margin: 0;
 }
@@ -334,7 +350,6 @@ watch(() => props.show, (newVal) => {
   background-color: #f0f0f0;
 }
 
-/* Existing styles for select elements */
 .filter-group select {
   width: 100%;
   padding: 10px 12px;
@@ -397,7 +412,6 @@ watch(() => props.show, (newVal) => {
   border-color: #bbb;
 }
 
-/* Modal Transition Styles */
 .modal-fade-enter-active, .modal-fade-leave-active {
   transition: opacity 0.3s ease;
 }

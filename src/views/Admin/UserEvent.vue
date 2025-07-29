@@ -12,7 +12,7 @@ import FilterModal from '@/components/Admin/Usuarios/FilterModal.vue'
 import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'
-import { useEventUsersStore } from '@/stores/eventUsers' // UPDATED: Import the store from its new file
+import { useEventUsersStore } from '@/stores/eventUsers'
 
 const store = useEventUsersStore()
 const loading = computed(() => store.loading)
@@ -84,6 +84,7 @@ const currentFilters = ref({
   event: '',
   role: '',
   status: '',
+  alumni: '', // NEW: Add alumni to currentFilters
 })
 
 const openFilterModal = () => {
@@ -97,7 +98,7 @@ const handleApplyFilters = (newFilters) => {
 }
 
 const handleClearFilters = () => {
-  currentFilters.value = { event: '', role: '', status: '' }
+  currentFilters.value = { event: '', role: '', status: '', alumni: '' } // NEW: Clear alumni filter
   store.setCurrentPage(1)
   showFilterModal.value = false
 }
@@ -167,6 +168,13 @@ const displayedUsers = computed(() => {
       if (currentFilters.value.status && user.status !== currentFilters.value.status) {
         matches = false
       }
+      // NEW: Apply alumni filter
+      if (currentFilters.value.alumni !== '') {
+        const alumniFilterValue = currentFilters.value.alumni === 'true' // Convert string to boolean
+        if (user.persona && user.persona.alumni !== alumniFilterValue) {
+          matches = false
+        }
+      }
       return matches
     })
   }
@@ -197,6 +205,12 @@ const uniqueRoles = computed(() => {
 })
 
 const statusOptions = ref(['Activo', 'Inactivo'])
+
+// NEW: Alumni filter options
+const alumniOptions = ref([
+  { label: 'Sí', value: 'true' },
+  { label: 'No', value: 'false' },
+])
 
 const showAddUserModal = ref(false)
 const addUserModalMode = ref('add')
@@ -357,6 +371,7 @@ onMounted(() => {
           <div class="header-item">Usuario</div>
           <div class="header-item">Rol en el evento</div>
           <div class="header-item">Evento</div>
+          <div class="header-item">Alumni</div>
           <div class="header-item">Estado</div>
           <div class="header-item header-actions">Acciones</div>
         </div>
@@ -380,6 +395,13 @@ onMounted(() => {
               <span class="access-badge" :class="user.rol.replace(/\s/g, '')">{{ user.rol }}</span>
             </div>
             <div class="user-evento">{{ user.evento }}</div>
+            <div class="user-alumni">
+              <span
+                :class="{ 'alumni-yes': user.persona.alumni, 'alumni-no': !user.persona.alumni }"
+              >
+                {{ user.persona.alumni ? 'Sí' : 'No' }}
+              </span>
+            </div>
             <div
               class="user-estado"
               :class="{
@@ -451,6 +473,7 @@ onMounted(() => {
     :eventsOptions="uniqueEvents"
     :rolesOptions="uniqueRoles"
     :statusOptions="statusOptions"
+    :alumniOptions="alumniOptions"
     :initialFilters="currentFilters"
     @close="showFilterModal = false"
     @apply-filters="handleApplyFilters"
@@ -476,7 +499,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Keep existing styles as is */
 /* General Layout */
 .d-flex {
   display: flex;
@@ -625,7 +647,7 @@ onMounted(() => {
 /* User List Grid Header */
 .user-list-header {
   display: grid;
-  grid-template-columns: 1.8fr 1.2fr 2fr 0.8fr 100px;
+  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px; /* Added 0.8fr for Alumni */
   gap: 10px;
   padding: 12px 15px;
   background-color: #234e8f;
@@ -650,7 +672,7 @@ onMounted(() => {
 
 .user-item {
   display: grid;
-  grid-template-columns: 1.8fr 1.2fr 2fr 0.8fr 100px;
+  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px; /* Added 0.8fr for Alumni */
   gap: 10px;
   align-items: center;
   padding: 12px 15px;
@@ -725,10 +747,43 @@ onMounted(() => {
   background-color: #e0f2f7;
   color: #17a2b8;
 }
+.access-badge.Gestor {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+.access-badge.Mentor {
+  background-color: #e2e3e5;
+  color: #383d41;
+}
+.access-badge.Staff {
+  background-color: #fdeded;
+  color: #721c24;
+}
 
 .user-evento {
   font-size: 0.9em;
   color: #666;
+}
+
+/* Alumni Styling - Centered */
+.user-alumni {
+  font-size: 0.9em;
+  font-weight: 500;
+  text-align: left; /* Centering the content */
+}
+
+.user-alumni .alumni-yes {
+  color: #28a745;
+  background-color: #e6ffed;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.user-alumni .alumni-no {
+  color: #dc3545;
+  background-color: #fdeded;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 .user-estado {
