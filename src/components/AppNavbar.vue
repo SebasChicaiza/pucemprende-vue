@@ -77,7 +77,7 @@ function cerrarSesion() {
         <router-link to="/registro" class="btn-reg btn">Registrarse</router-link>
       </div>
       <div v-else-if="!isMobile && user" class="d-lg-flex">
-        <router-link to="/admin/eventos" class="btn-ini btn me-3">Mi Cuenta</router-link>
+        <router-link to="/admin/usuario" class="btn-ini btn me-3">Mi Cuenta</router-link>
         <button @click="logout" class="btn-reg btn">Cerrar Sesión</button>
       </div>
     </div>
@@ -111,7 +111,7 @@ function cerrarSesion() {
         <router-link to="/sobreNosotros" class="btn" @click="menuOpen = false"
           >Sobre Nosotros</router-link
         >
-        <router-link to="/cuenta" class="btn-ini btn" @click="menuOpen = false"
+        <router-link to="/admin/usuario" class="btn-ini btn" @click="menuOpen = false"
           >Mi Cuenta</router-link
         >
         <button class="btn-reg btn" @click="cerrarSesion">Cerrar Sesión</button>

@@ -46,7 +46,7 @@ const userProfile = ref({
   avatar: null,
   email_verified_at: null,
   created_at: null,
-  updated_at: null
+  updated_at: null,
 })
 
 // Datos extendidos de la persona desde la API
@@ -61,13 +61,13 @@ const personaData = ref({
   creado_en: null,
   actualizado_en: null,
   estado_borrado: null,
-  borrado_en: null
+  borrado_en: null,
 })
 
 const userStats = ref({
   projectsCount: 0,
   eventsCount: 0,
-  teamsCount: 0
+  teamsCount: 0,
 })
 
 // Placeholder functions for other modals
@@ -105,10 +105,10 @@ const checkAuth = async () => {
   try {
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/user`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
+        Accept: 'application/json',
+      },
     })
 
     if (!response.ok) {
@@ -140,12 +140,15 @@ const loadPersonaData = async () => {
     const token = localStorage.getItem('token')
 
     if (userProfile.value.id) {
-      const personaResponse = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userProfile.value.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      })
+      const personaResponse = await fetch(
+        `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userProfile.value.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        },
+      )
 
       if (personaResponse.ok) {
         const persona = await personaResponse.json()
@@ -154,7 +157,6 @@ const loadPersonaData = async () => {
         console.warn('No se encontraron datos de persona para este usuario')
       }
     }
-
   } catch (error) {
     console.error('Error cargando datos de persona:', error)
   }
@@ -165,12 +167,15 @@ const loadUserStats = async () => {
     const token = localStorage.getItem('token')
 
     // Usar la API específica de estadísticas del usuario
-    const statsResponse = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/usuario/estadisticas/${userProfile.value.id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    })
+    const statsResponse = await fetch(
+      `${import.meta.env.VITE_URL_BACKEND}/api/usuario/estadisticas/${userProfile.value.id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      },
+    )
 
     if (statsResponse.ok) {
       const response = await statsResponse.json()
@@ -179,7 +184,7 @@ const loadUserStats = async () => {
         userStats.value = {
           projectsCount: response.data.total_proyectos || 0,
           eventsCount: response.data.total_eventos || 0,
-          teamsCount: response.data.total_equipos || 0
+          teamsCount: response.data.total_equipos || 0,
         }
 
         console.log('Estadísticas cargadas:', userStats.value)
@@ -188,7 +193,7 @@ const loadUserStats = async () => {
         userStats.value = {
           projectsCount: 0,
           eventsCount: 0,
-          teamsCount: 0
+          teamsCount: 0,
         }
       }
     } else {
@@ -196,17 +201,16 @@ const loadUserStats = async () => {
       userStats.value = {
         projectsCount: 0,
         eventsCount: 0,
-        teamsCount: 0
+        teamsCount: 0,
       }
     }
-
   } catch (error) {
     console.error('Error cargando estadísticas:', error)
     // Fallback: mantener valores en cero
     userStats.value = {
       projectsCount: 0,
       eventsCount: 0,
-      teamsCount: 0
+      teamsCount: 0,
     }
   }
 }
@@ -244,14 +248,17 @@ const resendVerification = async () => {
   sendingVerification.value = true
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/email/verification-notification`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    })
+    const response = await fetch(
+      `${import.meta.env.VITE_URL_BACKEND}/api/email/verification-notification`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      },
+    )
 
     if (response.ok) {
       okModalMessage.value = 'Email de verificación enviado!'
@@ -282,7 +289,7 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString('es-ES', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   })
 }
 
@@ -318,7 +325,6 @@ onMounted(async () => {
               </div>
 
               <div class="header-actions">
-
                 <button class="btn-logout" @click="logout">
                   <i class="fas fa-sign-out-alt"></i>
                   Cerrar Sesión
@@ -352,7 +358,9 @@ onMounted(async () => {
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Identificación:</span>
-                    <span class="detail-value">{{ personaData.identificacion || 'No disponible' }}</span>
+                    <span class="detail-value">{{
+                      personaData.identificacion || 'No disponible'
+                    }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Teléfono:</span>
@@ -361,14 +369,19 @@ onMounted(async () => {
                   <div class="detail-item">
                     <span class="detail-label">Género:</span>
                     <span class="detail-value">{{
-                      personaData.genero === 'M' ? 'Masculino' :
-                      personaData.genero === 'F' ? 'Femenino' :
-                      'No especificado'
+                      personaData.genero === 'M'
+                        ? 'Masculino'
+                        : personaData.genero === 'F'
+                          ? 'Femenino'
+                          : 'No especificado'
                     }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Alumni:</span>
-                    <span class="detail-value badge" :class="personaData.alumni ? 'badge-success' : 'badge-secondary'">
+                    <span
+                      class="detail-value badge"
+                      :class="personaData.alumni ? 'badge-success' : 'badge-secondary'"
+                    >
                       {{ personaData.alumni ? 'Sí' : 'No' }}
                     </span>
                   </div>
@@ -384,11 +397,24 @@ onMounted(async () => {
               </div>
 
               <!-- Mensaje si no hay datos de persona -->
-              <div v-else class="no-persona-data" style="padding: 16px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; margin: 16px 0;">
-                <p><i class="fas fa-exclamation-triangle"></i> No se encontraron datos adicionales de persona para este usuario.</p>
+              <div
+                v-else
+                class="no-persona-data"
+                style="
+                  padding: 16px;
+                  background: #fff3cd;
+                  border: 1px solid #ffeaa7;
+                  border-radius: 8px;
+                  margin: 16px 0;
+                "
+              >
+                <p>
+                  <i class="fas fa-exclamation-triangle"></i> No se encontraron datos adicionales de
+                  persona para este usuario.
+                </p>
               </div>
 
-              <div style="margin: 20px 0; text-align: center; color: #6b7280; font-weight: 500;">
+              <div style="margin: 20px 0; text-align: center; color: #6b7280; font-weight: 500">
                 Has participado en:
               </div>
 
@@ -409,7 +435,6 @@ onMounted(async () => {
               </div>
 
               <!-- Sección de verificación de email si no está verificado -->
-
             </div>
           </div>
         </div>
@@ -635,7 +660,8 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.btn-replace, .btn-remove {
+.btn-replace,
+.btn-remove {
   padding: 8px 16px;
   border: 1px solid #d1d5db;
   background: white;
@@ -750,7 +776,8 @@ onMounted(async () => {
   background: #f9fafb;
 }
 
-.btn-primary:hover, .btn-replace:hover {
+.btn-primary:hover,
+.btn-replace:hover {
   background: #1f2937;
 }
 
@@ -812,6 +839,18 @@ onMounted(async () => {
   color: #374151;
 }
 
+.btn-logout {
+  padding: 8px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 /* Responsive para detalles */
 @media (max-width: 768px) {
   .details-grid {
