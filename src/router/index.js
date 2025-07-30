@@ -150,6 +150,15 @@ const router = createRouter({
         title: 'Usuario',
       },
     },
+    {
+      path: '/admin/proyectos/:id/editar',
+      name: 'ProyectoEditar',
+      component: () => import('@/views/Admin/ProyectoFormulario.vue'),
+      meta: {
+        title: 'Editar Proyecto',
+      },
+    },
+
 
   ],
 })

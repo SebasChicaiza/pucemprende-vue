@@ -14,6 +14,7 @@ const miembros = ref([])
 const personas = ref([])
 const logoUrl = ref('')
 const loading = ref(true)
+const dynamicTitle = ref('Cargando...')
 
 onMounted(async () => {
   const token = localStorage.getItem('token')
@@ -27,6 +28,10 @@ onMounted(async () => {
     const foundProyecto = proyectosRes.data.find((p) => p.id === proyectoId)
     if (!foundProyecto) return
     proyecto.value = foundProyecto
+
+    dynamicTitle.value = proyecto.value.titulo || 'Proyecto Detalle'
+
+    document.title = `PUCEmprende – ${proyecto.value.titulo || 'Proyecto Detalle'}`
 
     // 2. Obtener el equipo correspondiente
     const equiposRes = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
@@ -50,25 +55,27 @@ onMounted(async () => {
     })
     personas.value = personasRes.data
 
-    // 5. Obtener el logo del proyecto (archivos-evento → archivo → url)
-    const [archivosEventoRes, archivosRes] = await Promise.all([
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`, {
+    // 5. Obtener el logo del proyecto desde archivos-proyecto
+    const [archivosProyectoRes, archivosRes] = await Promise.all([
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
       axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
     ])
-    console.log('Archivos Evento:', archivosEventoRes.data)
-    const archivoEvento = archivosEventoRes.data.find(
-      (ae) => ae.evento_id === foundProyecto.evento_id,
-    )
-    console.log('Archivo Evento:', archivoEvento)
 
-    if (archivoEvento) {
-      const archivo = archivosRes.data.find((a) => a.id === archivoEvento.archivo_id)
-      logoUrl.value = archivo?.url || ''
-    }
+    // Filtrar relaciones de este proyecto
+    const relaciones = archivosProyectoRes.data.filter(
+      (rel) => rel.proyecto_id === foundProyecto.id,
+    )
+
+    // Buscar archivo de tipo imagen (jpg/jpeg/png)
+    const archivoLogo = relaciones
+      .map((rel) => archivosRes.data.find((a) => a.id === rel.archivo_id && !a.estado_borrado))
+      .find((a) => ['jpg', 'jpeg', 'png'].includes(a?.tipo?.toLowerCase()))
+
+    logoUrl.value = archivoLogo?.url || ''
   } catch (err) {
     console.error('Error cargando detalles del proyecto', err)
   } finally {
@@ -86,7 +93,7 @@ function getPersonaCompleta(personaId) {
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute />
+      <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'Proyecto Detalle'" />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <div v-if="loading" class="text-center text-muted">Cargando...</div>
         <div v-else-if="proyecto" class="card shadow-lg p-4">

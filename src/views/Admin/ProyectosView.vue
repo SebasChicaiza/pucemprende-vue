@@ -13,16 +13,30 @@ const searchQuery = ref('')
 const orden = ref('alfabetico')
 const currentPage = ref(1)
 const pageSize = 8
+const equipos = ref([])
 
-// Simulación de nombres de equipos (puedes reemplazar por llamada real)
-const equiposMock = [
-  { id: 1, nombre: 'PucEmprende Dev Team' },
-  { id: 2, nombre: 'Innovadores Salud' },
-]
+async function fetchEquipos() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    equipos.value = response.data
+  } catch (e) {
+    console.error('Error cargando equipos', e)
+  }
+}
+const equipoMap = computed(() =>
+  equipos.value.reduce((map, equipo) => {
+    map[equipo.id] = equipo.nombre
+    return map
+  }, {}),
+)
 
 function getEquipoNombre(equipoId) {
-  const equipo = equiposMock.find((e) => e.id === equipoId)
-  return equipo ? equipo.nombre : 'Sin equipo'
+  return equipoMap.value[equipoId] || 'Sin equipo'
 }
 
 const filteredProyectos = computed(() =>
@@ -48,15 +62,41 @@ async function fetchProyectos() {
   const token = localStorage.getItem('token')
   if (!token) {
     error.value = 'Token de autenticación no encontrado.'
-    loading.value = false
     return
   }
+
   loading.value = true
   try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const [proyRes, archivosProyectoRes, archivosRes] = await Promise.all([
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+
+    const archivosProyecto = archivosProyectoRes.data
+    const archivos = archivosRes.data
+
+    proyectos.value = proyRes.data.map((p) => {
+      const archivosRelacionados = archivosProyecto
+        .filter((rel) => rel.proyecto_id === p.id)
+        .map((rel) => archivos.find((a) => a.id === rel.archivo_id && !a.estado_borrado))
+
+      const logo = archivosRelacionados.find((a) =>
+        ['jpg', 'jpeg', 'png'].includes(a?.tipo?.toLowerCase()),
+      )
+
+      return {
+        ...p,
+        logoUrl: logo?.url || null,
+      }
     })
-    proyectos.value = response.data
+
     error.value = ''
   } catch (e) {
     error.value = 'Error al cargar proyectos. Intente más tarde.'
@@ -70,7 +110,10 @@ function verDetalles(proyecto) {
   alert(`Ver detalles de: ${proyecto.titulo}`)
 }
 
-onMounted(fetchProyectos)
+onMounted(async () => {
+  await fetchEquipos()
+  await fetchProyectos()
+})
 </script>
 
 <template>
@@ -91,13 +134,12 @@ onMounted(fetchProyectos)
             <option value="alfabetico">Ordenar: Alfabéticamente</option>
             <option value="fecha">Ordenar: Fecha de inicio</option>
           </select>
-          <!-- Puedes agregar aquí un botón de filtros si lo necesitas -->
         </div>
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
-          <div class="row" v-if="!loading">
+          <div class="row g-1" v-if="!loading">
             <div
-              class="col-12 col-sm-12 col-md-6 col-lg-3 mb-3"
+              class="col-12 col-sm-12 col-md-6 col-lg-3 mb-1"
               v-for="proyecto in proyectosOrdenados"
               :key="proyecto.id"
             >
