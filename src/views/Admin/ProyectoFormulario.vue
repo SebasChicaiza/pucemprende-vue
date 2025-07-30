@@ -4,6 +4,7 @@ import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,23 @@ const loading = ref(true)
 const error = ref('')
 const dynamicTitle = ref('Editar Proyecto')
 const estado = ref('ACTIVO') // default
+const guardando = ref(false)
+
+const showConfirmDialog = ref(false)
+const confirmDialogMessage = ref('')
+const onConfirmAction = ref(null)
+
+const toastMensaje = ref('')
+const showToast = ref(false)
+
+function mostrarToast(mensaje) {
+  toastMensaje.value = mensaje
+  showToast.value = true
+  setTimeout(() => {
+    showToast.value = false
+    toastMensaje.value = ''
+  }, 2500)
+}
 
 onMounted(async () => {
   const token = localStorage.getItem('token')
@@ -78,7 +96,8 @@ function onLogoChange(event) {
 async function subirLogoProyecto(file, proyectoId) {
   const token = localStorage.getItem('token')
   if (!token) {
-    alert('Token no encontrado')
+    mostrarToast('Token no encontrado')
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     return null
   }
 
@@ -129,15 +148,21 @@ async function subirLogoProyecto(file, proyectoId) {
     }
   } catch (err) {
     console.error('Error al subir y vincular el logo:', err.response?.data || err.message)
-    alert('Error al subir el logo del proyecto.')
+    mostrarToast('Error al subir el logo del proyecto.')
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
+
     return null
   }
 }
 
 async function submitEdicion() {
+  if (guardando.value) return // Previene doble clic
+  guardando.value = true
+
   const token = localStorage.getItem('token')
   if (!titulo.value || !descripcion.value || !selectedEquipo.value) {
-    alert('Todos los campos son obligatorios.')
+    mostrarToast('Todos los campos son obligatorios.')
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     return
   }
 
@@ -202,53 +227,57 @@ async function submitEdicion() {
       }
     }
 
-    alert('Proyecto actualizado correctamente')
+    mostrarToast('Proyecto actualizado correctamente')
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
+
     router.push(`/admin/proyectos/${proyectoId}`)
   } catch (err) {
     console.error('Error completo:', err)
     console.error('Respuesta del servidor:', err.response?.data)
 
     if (err.response?.status === 403) {
-      alert('No tienes permisos para actualizar este proyecto')
+      mostrarToast('No tienes permisos para actualizar este proyecto')
+      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     } else if (err.response?.status === 404) {
-      alert('Proyecto no encontrado')
+      mostrarToast('Proyecto no encontrado')
+      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     } else {
-      alert('Error actualizando proyecto: ' + (err.response?.data?.message || err.message))
+      mostrarToast('Error actualizando proyecto: ' + (err.response?.data?.message || err.message))
+      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     }
   } finally {
     loading.value = false
+    guardando.value = false
   }
 }
-async function eliminarProyecto() {
-  const confirmacion = confirm(
-    '¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer.',
-  )
+function eliminarProyecto() {
+  confirmDialogMessage.value =
+    '¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer.'
+  onConfirmAction.value = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      mostrarToast('Token no encontrado.')
+      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
 
-  if (!confirmacion) return
+      return
+    }
 
-  const token = localStorage.getItem('token')
-  if (!token) {
-    alert('Token no encontrado')
-    return
+    try {
+      loading.value = true
+      await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      mostrarToast('Proyecto eliminado correctamente.')
+      setTimeout(() => router.push('/admin/proyectos'), 2000)
+    } catch (err) {
+      console.error('Error eliminando proyecto:', err.response?.data || err.message)
+      mostrarToast('No se pudo eliminar el proyecto.')
+    } finally {
+      loading.value = false
+    }
   }
-
-  try {
-    loading.value = true
-
-    await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
-    alert('Proyecto eliminado correctamente.')
-    router.push('/admin/proyectos')
-  } catch (err) {
-    console.error('Error eliminando proyecto:', err.response?.data || err.message)
-    alert('No se pudo eliminar el proyecto.')
-  } finally {
-    loading.value = false
-  }
+  showConfirmDialog.value = true
 }
 </script>
 
@@ -290,16 +319,49 @@ async function eliminarProyecto() {
               <option value="INACTIVO">Inactivo</option>
             </select>
           </div>
-
-          <button class="btn btn-primary" @click="submitEdicion">Guardar Cambios</button>
+          <button class="btn btn-primary" @click="submitEdicion" :disabled="guardando">
+            <span v-if="guardando">
+              <i class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></i>
+              Guardando...
+            </span>
+            <span v-else>Guardar equipo</span>
+          </button>
         </div>
       </div>
     </div>
+  </div>
+  <ConfirmationDialog
+    :visible="showConfirmDialog"
+    :message="confirmDialogMessage"
+    @confirm="
+      () => {
+        showConfirmDialog = false
+        onConfirmAction?.()
+      }
+    "
+    @cancel="
+      () => {
+        showConfirmDialog = false
+      }
+    "
+  />
+
+  <div v-if="showToast" class="toast-modal-custom position-fixed bottom-0 end-0 m-4">
+    {{ toastMensaje }}
   </div>
 </template>
 <style scoped>
 .btn-danger {
   margin-bottom: 1rem;
   width: 20rem;
+}
+.toast-modal-custom {
+  background-color: #198754;
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1100;
 }
 </style>
