@@ -30,7 +30,7 @@ const itemsPerPage = ref(6)
 
 const eventSearchQuery = ref('')
 const showEventSuggestions = ref(false)
-const selectedEventForFilter = ref(null)
+const selectedEventForFilter = ref(null) // This will now hold the full event object, including hayFormulario
 
 const processSearchQuery = ref('')
 
@@ -77,15 +77,24 @@ const handleDynamicCancel = () => {
 }
 
 const openCreateProcessModal = () => {
-  if (selectedEventForFilter.value) {
-    isEditing.value = false
-    currentProcessToEdit.value = null
-    showCreateProcessModal.value = true
-  } else {
+  if (!selectedEventForFilter.value) {
     errorMessage.value =
       'Por favor, seleccione un evento primero para crear un proceso de evaluación.'
     showErrorModal.value = true
+    return
   }
+
+  // Check the hayFormulario field
+  if (!selectedEventForFilter.value.hayFormulario) {
+    errorMessage.value =
+      'Este evento no admite formularios. Edite el evento para habilitar la creación de formularios.'
+    showErrorModal.value = true
+    return
+  }
+
+  isEditing.value = false
+  currentProcessToEdit.value = null
+  showCreateProcessModal.value = true
 }
 
 const openEditProcessModal = async (processId) => {
@@ -109,7 +118,7 @@ const openEditProcessModal = async (processId) => {
       },
     )
     currentProcessToEdit.value = response.data
-    selectedEventForFilter.value = response.data.evento
+    selectedEventForFilter.value = response.data.evento // Ensure the full event object is set
     isEditing.value = true
     showCreateProcessModal.value = true
   } catch (err) {
@@ -134,7 +143,7 @@ const handleNewProcessCreated = async (payload) => {
   // Then, show the OkModal
   if (payload.type === 'create') {
     okModalMessage.value = `Proceso "${payload.data.titulo}" creado exitosamente.`
-    // NEW: Clear the event filter after a create operation
+    // Clear the event filter after a create operation
     selectedEventForFilter.value = null
     eventSearchQuery.value = ''
   } else if (payload.type === 'edit') {
@@ -190,7 +199,7 @@ const onEventInput = () => {
 
 const selectEventSuggestion = (event) => {
   eventSearchQuery.value = event.nombre
-  selectedEventForFilter.value = event
+  selectedEventForFilter.value = event // Store the full event object
   showEventSuggestions.value = false
   currentPage.value = 1
 }
@@ -266,19 +275,42 @@ const bannerContent = computed(() => {
     const event = selectedEventForFilter.value
     const startDate = formatShortDateWithSlashes(event.fecha_inicio)
     const endDate = formatShortDateWithSlashes(event.fecha_fin)
-    return {
-      title: `Evento encontrado: ${event.nombre}`,
-      dates: `${startDate} - ${endDate}`,
-      showCreateButton: true,
+
+    if (event.hayFormulario) {
+      return {
+        title: `Evento seleccionado: ${event.nombre}`,
+        dates: `${startDate} - ${endDate}`,
+        showCreateButton: true,
+        showWarning: false,
+        eventId: event.id,
+      }
+    } else {
+      return {
+        title: `Este evento no admite formularios.`,
+        dates: null,
+        showCreateButton: false,
+        showWarning: true,
+        warningMessage:
+          'Para crear un proceso de evaluación, habilite la opción de formularios en la edición del evento.',
+        eventId: event.id,
+      }
     }
   } else {
     return {
       title: 'Seleccione un evento para crear su proceso de evaluación',
       dates: null,
       showCreateButton: false,
+      showWarning: false,
+      eventId: null,
     }
   }
 })
+
+const redirectToEditEvent = () => {
+  if (bannerContent.value.eventId) {
+    router.push(`/admin/eventos/${bannerContent.value.eventId}`)
+  }
+}
 
 onMounted(() => {
   fetchProcesosEvaluacion()
@@ -298,6 +330,7 @@ const onClickOutsideEventSearch = (event) => {
 }
 
 watch(eventSearchQuery, (newVal, oldVal) => {
+  // Clear selectedEventForFilter if the user types something new that doesn't match the current selection
   if (selectedEventForFilter.value && newVal !== selectedEventForFilter.value.nombre) {
     selectedEventForFilter.value = null
   }
@@ -373,7 +406,10 @@ watch(processSearchQuery, () => {
           </div>
         </div>
 
-        <div class="event-info-banner">
+        <div
+          class="event-info-banner"
+          :class="{ 'event-info-banner-warning': bannerContent.showWarning }"
+        >
           <span><i class="fas fa-info-circle me-2"></i>{{ bannerContent.title }}</span>
           <span v-if="bannerContent.dates" class="d-flex align-items-center">
             <i class="fas fa-calendar-alt me-2"></i>{{ bannerContent.dates }}
@@ -383,6 +419,18 @@ watch(processSearchQuery, () => {
               @click="openCreateProcessModal"
             >
               <i class="fas fa-plus-circle me-2"></i>Crear un proceso de evaluación
+            </button>
+          </span>
+          <span
+            v-else-if="bannerContent.showWarning"
+            class="d-flex align-items-center flex-wrap gap-2"
+          >
+            <i class="fas fa-exclamation-triangle me-2"></i>{{ bannerContent.warningMessage }}
+            <button
+              class="btn btn-warning btn-sm ms-3 edit-event-banner-btn"
+              @click="redirectToEditEvent"
+            >
+              <i class="fas fa-edit me-2"></i>Editar el evento
             </button>
           </span>
         </div>
@@ -428,7 +476,7 @@ watch(processSearchQuery, () => {
         <Pagination
           :currentPage="currentPage"
           :totalPages="totalPages"
-          :maxVisibleButtons="5"
+          :maxVisibleButtons="12"
           @page-changed="handlePageChange"
         />
       </div>
@@ -483,7 +531,7 @@ watch(processSearchQuery, () => {
 }
 
 .forms-header h1.main-title {
-  font-size: 1.5rem; /* Updated font size to 1.5rem */
+  font-size: 1.5rem;
   color: #333;
   margin-bottom: 0;
 }
@@ -493,7 +541,6 @@ watch(processSearchQuery, () => {
   color: #666;
   line-height: 1.4;
   margin-top: 5px;
-  /* Removed ms-3 as requested */
 }
 
 .search-and-create-section {
@@ -600,6 +647,12 @@ watch(processSearchQuery, () => {
   gap: 10px;
 }
 
+.event-info-banner-warning {
+  background-color: #fff3cd; /* Light yellow for warning */
+  color: #856404; /* Darker yellow for text */
+  border: 1px solid #ffeeba;
+}
+
 .create-process-banner-btn {
   background-color: #28a745;
   border-color: #28a745;
@@ -617,8 +670,25 @@ watch(processSearchQuery, () => {
   border-color: #1e7e34;
 }
 
+.edit-event-banner-btn {
+  background-color: #ffc107; /* Yellow for edit button */
+  border-color: #ffc107;
+  color: #212529; /* Dark text for contrast */
+  padding: 8px 15px;
+  font-size: 0.85em;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.edit-event-banner-btn:hover {
+  background-color: #e0a800;
+  border-color: #d39e00;
+}
+
 .section-title {
-  font-size: 1.3rem; /* Updated font size to 1.3rem */
+  font-size: 1.3rem;
   color: #333;
   margin-bottom: 25px;
   border-bottom: 1px solid #eee;
@@ -674,7 +744,7 @@ watch(processSearchQuery, () => {
 }
 
 .process-title {
-  font-size: 1.1rem; /* Updated font size to 1.1rem */
+  font-size: 1.1rem;
   font-weight: 700;
   color: #174384;
   margin-bottom: 10px;
