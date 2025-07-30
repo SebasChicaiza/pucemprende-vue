@@ -87,9 +87,11 @@ async function fetchProyectos() {
         .filter((rel) => rel.proyecto_id === p.id)
         .map((rel) => archivos.find((a) => a.id === rel.archivo_id && !a.estado_borrado))
 
-      const logo = archivosRelacionados.find((a) =>
-        ['jpg', 'jpeg', 'png'].includes(a?.tipo?.toLowerCase()),
-      )
+      const imagenesValidas = archivosRelacionados
+        .filter((a) => a && ['jpg', 'jpeg', 'png'].includes(a?.tipo?.toLowerCase()))
+        .sort((a, b) => b.id - a.id)
+
+      const logo = imagenesValidas[0]
 
       return {
         ...p,
