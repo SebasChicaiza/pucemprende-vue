@@ -263,6 +263,16 @@ const startEditingPlantillaName = (plantillaId, currentName) => {
 }
 
 const savePlantillaName = (plantilla) => {
+  // Guard clause: only proceed if this specific plantilla is still in editing mode
+  // This prevents blur event from re-triggering save after enter key has already handled it
+  if (editingPlantillaNameId.value !== plantilla.id) {
+    return
+  }
+
+  console.log('Attempting to save plantilla name.')
+  console.log('tempPlantillaName.value:', tempPlantillaName.value)
+  console.log('tempPlantillaName.value.trim():', tempPlantillaName.value.trim())
+
   if (!tempPlantillaName.value.trim()) {
     displayError('El nombre de la plantilla no puede estar vacío.')
     return
@@ -543,7 +553,7 @@ const displayError = (message) => {
                             @blur="savePlantillaName(plantilla)"
                             :ref="
                               (el) => {
-                                if (el) inPlaceEditInputRef = el
+                                inPlaceEditInputRef = el
                               }
                             "
                             tabindex="0"
@@ -734,8 +744,8 @@ const displayError = (message) => {
 <style scoped>
 .modal-dialog {
   max-width: 1200px;
-  width: 95%; /* Adjust as needed */
-  max-height: 90vh; /* Limit modal height to viewport height */
+  width: 95%;
+  height: 90vh; /* Set a fixed height for the dialog */
   display: flex;
   align-items: center;
 }
@@ -748,7 +758,7 @@ const displayError = (message) => {
   height: 100%; /* Fill the constrained modal-dialog height */
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Important for containing content and allowing inner scrolling */
+  overflow: hidden;
 }
 
 .modal-header {
@@ -762,7 +772,7 @@ const displayError = (message) => {
   align-items: center;
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
-  flex-shrink: 0; /* Prevent header from shrinking */
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -788,8 +798,8 @@ const displayError = (message) => {
 
 .modal-body-custom {
   padding: 1.5rem;
-  flex-grow: 1; /* Allows body to take remaining space */
-  overflow: hidden; /* Crucial: hides overflow of the body itself, letting ScrollBar manage it */
+  flex-grow: 1;
+  overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -935,7 +945,7 @@ const displayError = (message) => {
   background-color: #f8f8f8;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
-  flex-shrink: 0; /* Prevent footer from shrinking */
+  flex-shrink: 0;
 }
 
 .btn {
