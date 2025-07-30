@@ -219,6 +219,37 @@ async function submitEdicion() {
     loading.value = false
   }
 }
+async function eliminarProyecto() {
+  const confirmacion = confirm(
+    '¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer.',
+  )
+
+  if (!confirmacion) return
+
+  const token = localStorage.getItem('token')
+  if (!token) {
+    alert('Token no encontrado')
+    return
+  }
+
+  try {
+    loading.value = true
+
+    await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    alert('Proyecto eliminado correctamente.')
+    router.push('/admin/proyectos')
+  } catch (err) {
+    console.error('Error eliminando proyecto:', err.response?.data || err.message)
+    alert('No se pudo eliminar el proyecto.')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -228,6 +259,7 @@ async function submitEdicion() {
       <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'ProyectoEditar'" />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <h3 class="mb-4">Editar Proyecto</h3>
+        <button class="btn btn-danger" @click="eliminarProyecto">Eliminar Proyecto</button>
         <div class="card p-4">
           <div class="mb-3 text-center">
             <img v-if="logoImage.url" :src="logoImage.url" class="rounded-circle" width="80" />
@@ -265,3 +297,9 @@ async function submitEdicion() {
     </div>
   </div>
 </template>
+<style scoped>
+.btn-danger {
+  margin-bottom: 1rem;
+  width: 20rem;
+}
+</style>

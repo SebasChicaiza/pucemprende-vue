@@ -40,8 +40,10 @@ function getEquipoNombre(equipoId) {
 }
 
 const filteredProyectos = computed(() =>
-  proyectos.value.filter((proyecto) =>
-    proyecto.titulo.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  proyectos.value.filter(
+    (proyecto) =>
+      proyecto.estado !== 'BORRADO' &&
+      proyecto.titulo.toLowerCase().includes(searchQuery.value.toLowerCase()),
   ),
 )
 
