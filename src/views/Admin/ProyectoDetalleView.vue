@@ -37,8 +37,16 @@ onMounted(async () => {
     const equiposRes = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    const equipo = equiposRes.data.find((e) => e.id === foundProyecto.equipo_id)
-    equipoNombre.value = equipo ? equipo.nombre : 'Equipo no encontrado'
+    const equipo = equiposRes.data.find(
+      (e) => e.id === foundProyecto.equipo_id && e.estado_borrado !== true,
+    )
+
+    equipoNombre.value = equipo ? equipo.nombre : 'Equipo eliminado o no disponible'
+
+    // Si el equipo está eliminado, limpia también los miembros
+    if (!equipo) {
+      miembros.value = []
+    }
 
     // 3. Obtener los miembros de ese equipo
     const miembrosRes = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`, {
@@ -114,29 +122,32 @@ function getPersonaCompleta(personaId) {
               <strong>Fin:</strong> {{ proyecto.fecha_fin.split('T')[0] }}
             </div>
 
-            <hr class="my-4" />
-            <h5 class="mb-3">Miembros del equipo</h5>
-            <div class="row">
-              <div
-                class="col-sm-6 col-md-4 col-lg-3 mb-4"
-                v-for="miembro in miembros"
-                :key="miembro.id"
-              >
-                <div class="card miembro-card">
-                  <div class="card-body text-center">
-                    <div class="icon-wrapper mb-2">
-                      <i class="bi bi-person-circle fs-1 text-primary"></i>
+            <!-- Miembros del equipo (solo si el equipo está disponible) -->
+            <div v-if="equipoNombre !== 'Equipo eliminado o no disponible' && miembros.length">
+              <hr class="my-4" />
+              <h5 class="mb-3">Miembros del equipo</h5>
+              <div class="row">
+                <div
+                  class="col-sm-6 col-md-4 col-lg-3 mb-4"
+                  v-for="miembro in miembros"
+                  :key="miembro.id"
+                >
+                  <div class="card miembro-card">
+                    <div class="card-body text-center">
+                      <div class="icon-wrapper mb-2">
+                        <i class="bi bi-person-circle fs-1 text-primary"></i>
+                      </div>
+                      <p class="mb-0 fw-bold">
+                        {{ getPersonaCompleta(miembro.persona_id)?.nombre }}
+                        {{ getPersonaCompleta(miembro.persona_id)?.apellido }}
+                      </p>
+                      <p class="text-muted small mb-0">
+                        {{ getPersonaCompleta(miembro.persona_id)?.email }}
+                      </p>
+                      <p class="text-muted small mb-0">
+                        {{ getPersonaCompleta(miembro.persona_id)?.telefono }}
+                      </p>
                     </div>
-                    <p class="mb-0 fw-bold">
-                      {{ getPersonaCompleta(miembro.persona_id)?.nombre }}
-                      {{ getPersonaCompleta(miembro.persona_id)?.apellido }}
-                    </p>
-                    <p class="text-muted small mb-0">
-                      {{ getPersonaCompleta(miembro.persona_id)?.email }}
-                    </p>
-                    <p class="text-muted small mb-0">
-                      {{ getPersonaCompleta(miembro.persona_id)?.telefono }}
-                    </p>
                   </div>
                 </div>
               </div>

@@ -36,7 +36,12 @@ const equipoMap = computed(() =>
 )
 
 function getEquipoNombre(equipoId) {
-  return equipoMap.value[equipoId] || 'Sin equipo'
+  const equipo = equipos.value.find((e) => e.id === equipoId)
+
+  if (!equipoId || !equipo) return 'Sin equipo'
+  if (equipo.estado_borrado === true) return 'Equipo eliminado'
+
+  return equipo.nombre
 }
 
 const filteredProyectos = computed(() =>

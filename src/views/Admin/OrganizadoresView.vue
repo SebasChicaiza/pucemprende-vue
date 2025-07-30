@@ -1,89 +1,11 @@
-<script setup>
-import Sidebar from '@/components/Admin/AdminSidebar.vue'
-import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
-import LoaderComponent from '@/components/LoaderComponent.vue'
-import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
-import FormOrganizadores from '@/components/Admin/FormOrganizadores.vue'
-
-const abrir = ref(false)
-const organizadores = ref([])
-const error = ref('')
-const loading = ref(false)
-const searchQuery = ref('')
-const currentPage = ref(1)
-const pageSize = 15
-const organizadorEdit = ref(null)
-
-const totalPages = computed(() => Math.ceil(filteredOrganizadores.value.length / pageSize))
-
-const filteredOrganizadores = computed(() =>
-  organizadores.value.filter(
-    (org) =>
-      org.org_nom?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.org_abreviatura?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.encar_nombre?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.encar_apellido?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.encar_identificacion?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.encar_rol?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.org_telf?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      org.org_email?.toLowerCase().includes(searchQuery.value.toLowerCase()),
-  ),
-)
-
-const paginatedOrganizadores = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredOrganizadores.value.slice(start, start + pageSize)
-})
-
-async function fetchOrganizadores() {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    error.value = 'Token de autenticación no encontrado.'
-    loading.value = false
-    return
-  }
-  loading.value = true
-  try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/organizaciones`, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    })
-    organizadores.value = response.data
-    error.value = ''
-  } catch (err) {
-    error.value = err.response?.data?.message || 'Error al cargar los organizadores'
-  } finally {
-    loading.value = false
-  }
-}
-
-function editarOrganizador(org) {
-  organizadorEdit.value = { ...org }
-  abrir.value = true
-}
-
-function eliminarOrganizador(org) {
-  if (confirm('¿Eliminar organizador?')) {
-    organizadores.value = organizadores.value.filter((o) => o.id !== org.id)
-  }
-}
-
-function abrirModalAgregar() {
-  abrir.value = true
-}
-
-onMounted(fetchOrganizadores)
-</script>
 <template>
   <LoaderComponent v-if="loading" />
   <div v-else class="d-flex admin-panel-layout">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column main-content-wrapper">
       <PageHeaderRoute />
-      <div class="content-area-scrollable">
+
+      <div v-if="isSuperAdmin" class="content-area-scrollable">
         <div class="organizations-dashboard-header">
           <h2 class="dashboard-title">Gestión de Organizadores</h2>
           <div class="action-bar">
@@ -99,6 +21,10 @@ onMounted(fetchOrganizadores)
             <button class="btn add-organizador-btn" @click="abrirModalAgregar">
               <i class="bi bi-plus-lg add-icon"></i>
               <span>Nuevo Organizador</span>
+            </button>
+            <button class="btn btn-primary send-email-btn" @click="showCorreoModal = true">
+              <i class="bi bi-envelope-fill"></i>
+              Enviar Correo Masivo
             </button>
           </div>
         </div>
@@ -123,20 +49,15 @@ onMounted(fetchOrganizadores)
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="paginatedOrganizadores.length === 0">
-                  <td colspan="8" class="text-center no-results-message">
-                    No se encontraron organizadores que coincidan con su búsqueda.
-                  </td>
-                </tr>
                 <tr v-for="org in paginatedOrganizadores" :key="org.id">
-                  <td class="org-name-cell">
+                  <td class="org-name-cell" data-label="Organización">
                     <i class="bi bi-building org-icon"></i>
                     {{ org.org_nom }}
                   </td>
-                  <td>{{ org.org_abreviatura }}</td>
-                  <td>{{ org.encar_nombre }} {{ org.encar_apellido }}</td>
-                  <td>{{ org.encar_identificacion }}</td>
-                  <td>
+                  <td data-label="Abreviatura">{{ org.org_abreviatura }}</td>
+                  <td data-label="Encargado">{{ org.encar_nombre }} {{ org.encar_apellido }}</td>
+                  <td data-label="Identificación">{{ org.encar_identificacion }}</td>
+                  <td data-label="Rol Interno">
                     <span
                       :class="[
                         'role-badge',
@@ -146,13 +67,15 @@ onMounted(fetchOrganizadores)
                       {{ org.encar_rol }}
                     </span>
                   </td>
-                  <td><i class="bi bi-telephone-fill contact-icon"></i> {{ org.org_telf }}</td>
-                  <td>
+                  <td data-label="Contacto">
+                    <i class="bi bi-telephone-fill contact-icon"></i> {{ org.org_telf }}
+                  </td>
+                  <td data-label="Correo Electrónico">
                     <a :href="`mailto:${org.org_email}`" class="email-link">
                       <i class="bi bi-envelope-fill contact-icon"></i> {{ org.org_email }}
                     </a>
                   </td>
-                  <td class="action-buttons-cell">
+                  <td class="action-buttons-cell" data-label="Acciones">
                     <button
                       class="action-btn edit-btn"
                       @click="editarOrganizador(org)"
@@ -162,7 +85,7 @@ onMounted(fetchOrganizadores)
                     </button>
                     <button
                       class="action-btn delete-btn"
-                      @click="eliminarOrganizador(org)"
+                      @click="confirmDeleteOrganizador(org)"
                       title="Eliminar Organizador"
                     >
                       <i class="bi bi-trash-fill"></i>
@@ -217,12 +140,271 @@ onMounted(fetchOrganizadores)
           "
         />
       </div>
+      <!-- Mass Email Modal -->
+      <div v-if="showCorreoModal" class="modal-backdrop-custom">
+        <div class="modal-content-custom">
+          <div class="modal-header-custom">
+            <h5>Enviar correo masivo</h5>
+            <button class="close-btn-custom" @click="cerrarModalCorreo">&times;</button>
+          </div>
+          <div class="modal-body-custom">
+            <label class="form-label">Asunto</label>
+            <input
+              v-model="correoAsunto"
+              type="text"
+              class="form-control mb-3"
+              placeholder="Asunto del correo"
+            />
+
+            <label class="form-label">Contenido</label>
+            <textarea
+              v-model="correoContenido"
+              class="form-control"
+              rows="6"
+              placeholder="Mensaje del correo"
+            ></textarea>
+
+            <p v-if="correoSuccess" class="text-success mt-3">{{ correoSuccess }}</p>
+            <p v-if="correoError" class="text-danger mt-3">{{ correoError }}</p>
+          </div>
+          <div class="modal-footer-custom">
+            <button class="btn btn-outline-secondary" @click="cerrarModalCorreo">Cancelar</button>
+            <button class="btn btn-primary" @click="enviarCorreo" :disabled="correoLoading">
+              <span v-if="correoLoading" class="spinner-border spinner-border-sm me-2"></span>
+              Enviar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Confirmation Dialog for deletion -->
+      <ConfirmationDialog
+        :visible="showConfirmDialog"
+        :message="confirmDialogMessage"
+        @confirm="executeDeleteOrganizador"
+        @cancel="cancelDeleteOrganizador"
+      />
     </div>
   </div>
 </template>
 
+<script setup>
+import Sidebar from '@/components/Admin/AdminSidebar.vue'
+import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
+import LoaderComponent from '@/components/LoaderComponent.vue'
+import { ref, onMounted, computed } from 'vue'
+import axios from 'axios'
+import FormOrganizadores from '@/components/Admin/FormOrganizadores.vue'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue' // Import the new confirmation dialog
+import { isSuperAdmin } from '@/stores/user'
+
+const abrir = ref(false)
+const organizadores = ref([])
+const error = ref('')
+const loading = ref(false)
+const searchQuery = ref('')
+const currentPage = ref(1)
+const pageSize = 15
+const organizadorEdit = ref(null)
+
+// State for Mass Email Modal
+const showCorreoModal = ref(false)
+const correoAsunto = ref('')
+const correoContenido = ref('')
+const correoLoading = ref(false)
+const correoSuccess = ref('')
+const correoError = ref('')
+
+// State for Confirmation Dialog
+const showConfirmDialog = ref(false)
+const confirmDialogMessage = ref('')
+const organizadorIdToDelete = ref(null) // To store the ID of the organizer to be deleted
+
+const totalPages = computed(() => Math.ceil(filteredOrganizadores.value.length / pageSize))
+
+const filteredOrganizadores = computed(() =>
+  organizadores.value.filter(
+    (org) =>
+      org.org_nom?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.org_abreviatura?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.encar_nombre?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.encar_apellido?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.encar_identificacion?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.encar_rol?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.org_telf?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      org.org_email?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  ),
+)
+
+const paginatedOrganizadores = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredOrganizadores.value.slice(start, start + pageSize)
+})
+
+async function fetchOrganizadores() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    error.value = 'Token de autenticación no encontrado.'
+    loading.value = false
+    return
+  }
+  loading.value = true
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/organizaciones`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    organizadores.value = response.data
+    error.value = ''
+  } catch (err) {
+    error.value = err.response?.data?.message || 'Error al cargar los organizadores'
+  } finally {
+    loading.value = false
+  }
+}
+
+function editarOrganizador(org) {
+  organizadorEdit.value = { ...org }
+  abrir.value = true
+}
+
+// Function to open the custom confirmation dialog
+function confirmDeleteOrganizador(org) {
+  organizadorIdToDelete.value = org.id
+  confirmDialogMessage.value = `¿Estás seguro de que quieres eliminar al organizador "${org.org_nom}"? Esta acción no se puede deshacer.`
+  showConfirmDialog.value = true
+}
+
+// Function to execute deletion after confirmation
+async function executeDeleteOrganizador() {
+  showConfirmDialog.value = false // Close the dialog
+  const token = localStorage.getItem('token')
+  if (!token) {
+    alert('No se encontró token de autenticación. Por favor, inicia sesión.')
+    return
+  }
+
+  try {
+    await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/organizaciones/${organizadorIdToDelete.value}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    alert('Organizador eliminado correctamente.') // Consider a custom modal for this too
+    fetchOrganizadores() // Re-fetch the list
+  } catch (err) {
+    console.error('Error al eliminar el organizador:', err)
+    alert(
+      err.response?.data?.message ||
+        'Ocurrió un error al eliminar el organizador. Intenta de nuevo.',
+    )
+  } finally {
+    organizadorIdToDelete.value = null // Clear the stored ID
+  }
+}
+
+// Function to cancel deletion
+function cancelDeleteOrganizador() {
+  showConfirmDialog.value = false
+  organizadorIdToDelete.value = null
+}
+
+function abrirModalAgregar() {
+  abrir.value = true
+}
+
+onMounted(fetchOrganizadores)
+
+function cerrarModalCorreo() {
+  showCorreoModal.value = false
+  correoAsunto.value = ''
+  correoContenido.value = ''
+  correoSuccess.value = ''
+  correoError.value = ''
+  correoLoading.value = false
+}
+
+async function enviarCorreo() {
+  correoLoading.value = true
+  correoError.value = ''
+  correoSuccess.value = ''
+  const token = localStorage.getItem('token')
+
+  try {
+    await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/organizaciones/enviar-correo`,
+      {
+        asunto: correoAsunto.value,
+        contenido: correoContenido.value,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    correoSuccess.value = 'Correos enviados exitosamente.'
+  } catch (err) {
+    correoError.value = err.response?.data?.message || 'Hubo un error al enviar los correos.'
+  } finally {
+    correoLoading.value = false
+  }
+}
+</script>
+
 <style scoped>
 /* --- General Layout & Page Structure --- */
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.modal-content-custom {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 500px;
+  max-width: 90%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header-custom,
+.modal-footer-custom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e0e6ec;
+  padding-bottom: 1rem;
+}
+
+.modal-footer-custom {
+  justify-content: flex-end;
+  border-top: 1px solid #e0e6ec;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-bottom: none; /* remove redundant border */
+}
+
+.close-btn-custom {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6c757d;
+  transition: color 0.2s ease;
+}
+.close-btn-custom:hover {
+  color: #343a40;
+}
+
 .admin-panel-layout {
   min-height: 100vh;
   background-color: #f5f7fa; /* Lighter, modern background */
@@ -235,12 +417,11 @@ onMounted(fetchOrganizadores)
   border-radius: 12px 0 0 12px;
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.03); /* Subtle shadow on the left edge */
   height: 100vh; /* Ensure it takes full height */
+  overflow-y: auto; /* Enable scrolling for the main content area */
 }
 
 .content-area-scrollable {
   padding: 2.5rem 3rem; /* Generous internal padding */
-  overflow-y: auto; /* Enable scrolling */
-  height: calc(100vh - 60px); /* Adjust for header */
 }
 
 /* --- Dashboard Header & Controls --- */
@@ -296,9 +477,7 @@ onMounted(fetchOrganizadores)
   outline: none;
 }
 
-.add-organizador-btn {
-  background-color: #28a745; /* Vibrant green for 'add' action */
-  color: #ffffff;
+.btn {
   padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
   font-weight: 600;
@@ -307,12 +486,34 @@ onMounted(fetchOrganizadores)
   gap: 8px;
   transition: all 0.2s ease;
   border: none;
+  cursor: pointer;
+}
+
+.add-organizador-btn {
+  background-color: #28a745; /* Vibrant green for 'add' action */
+  color: #ffffff;
   box-shadow: 0 4px 10px rgba(40, 167, 69, 0.2);
 }
 
 .add-organizador-btn:hover {
   background-color: #218838;
   box-shadow: 0 6px 15px rgba(40, 167, 69, 0.3);
+  transform: translateY(-2px);
+}
+
+.send-email-btn {
+  background-color: #007bff; /* Blue for 'send email' action */
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+  word-break: break-word;
+}
+.send-email-btn td {
+  word-break: break-word;
+}
+
+.send-email-btn:hover {
+  background-color: #0056b3;
+  box-shadow: 0 6px 15px rgba(0, 123, 255, 0.3);
   transform: translateY(-2px);
 }
 
@@ -353,8 +554,8 @@ onMounted(fetchOrganizadores)
   width: 100%;
   border-collapse: separate; /* Allows for border-spacing */
   border-spacing: 0; /* Remove default spacing */
-  font-size: 0.7rem;
-  min-width: 1000px; /* Ensure table doesn't get too squished on smaller screens */
+  font-size: 0.9rem; /* Slightly larger font for readability */
+  min-width: 800px; /* Adjusted min-width to be less aggressive */
 }
 
 .organizations-table thead th {
@@ -380,7 +581,10 @@ onMounted(fetchOrganizadores)
 
 .organizations-table tbody tr {
   background-color: #ffffff;
-  transition: background-color 0.2s ease-in-out;
+  transition:
+    background-color 0.2s ease-in-out,
+    transform 0.2s ease-in-out,
+    box-shadow 0.2s ease-in-out;
 }
 
 .organizations-table tbody tr:nth-child(even) {
@@ -396,11 +600,43 @@ onMounted(fetchOrganizadores)
 .organizations-table tbody td {
   padding: 1rem 1.2rem;
   border-bottom: 1px solid #eceff1; /* Light border between rows */
-  white-space: nowrap; /* Prevent text wrapping */
-  overflow: hidden;
-  text-overflow: ellipsis; /* Add ellipsis for overflow */
-  max-width: 200px; /* Control column width */
+  overflow: hidden; /* Still hide overflow if text is too long after wrapping */
+  max-width: 150px; /* Control column width for content */
+  vertical-align: top; /* Align text to the top when wrapping */
 }
+
+/* Specific column width adjustments for better fit and wrapping */
+.organizations-table .col-org {
+  max-width: 200px; /* Increased max-width for organization name */
+  white-space: normal; /* Allow wrapping */
+  word-break: break-word; /* Break long words */
+}
+.organizations-table .col-abbr {
+  max-width: 100px;
+}
+.organizations-table .col-encargado {
+  max-width: 180px; /* Increased max-width for encargado name */
+  white-space: normal; /* Allow wrapping */
+  word-break: break-word; /* Break long words */
+}
+.organizations-table .col-id {
+  max-width: 120px;
+}
+.organizations-table .col-rol {
+  max-width: 120px;
+}
+.organizations-table .col-contact {
+  max-width: 120px;
+}
+.organizations-table .col-email {
+  max-width: 220px; /* Increased max-width for email */
+  white-space: normal; /* Allow wrapping */
+  word-break: break-all; /* Break long email addresses */
+}
+.organizations-table .col-actions {
+  width: 100px;
+  min-width: 100px;
+} /* Fixed width for actions */
 
 .organizations-table tbody tr:last-child td {
   border-bottom: none; /* No border on the last row */
@@ -428,6 +664,7 @@ onMounted(fetchOrganizadores)
 .email-link {
   color: #007bff;
   text-decoration: none;
+  word-break: break-word;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -451,8 +688,7 @@ onMounted(fetchOrganizadores)
   border-radius: 1rem; /* Rounded pill shape */
   font-weight: 600;
   font-size: 0.85rem;
-  color: black;
-  white-space: nowrap;
+  color: #174384; /* Default to white text for badges */
   text-transform: capitalize; /* Capitalize the first letter of the role */
 }
 
@@ -468,8 +704,8 @@ onMounted(fetchOrganizadores)
 } /* Green */
 .role-colaborador {
   background-color: #ffc107;
-  color: #333;
-} /* Yellow (needs dark text) */
+  color: #333; /* Needs dark text for contrast */
+} /* Yellow */
 /* Add more as needed: .role-some-role { background-color: #your-color; } */
 
 /* --- Action Buttons --- */
@@ -550,6 +786,24 @@ onMounted(fetchOrganizadores)
 }
 
 /* --- Responsive Adjustments --- */
+@media (max-width: 1200px) {
+  .organizations-table {
+    min-width: 700px; /* Reduced min-width further for slightly smaller desktops/large tablets */
+  }
+  .organizations-table tbody td {
+    max-width: 120px; /* Further restrict max-width of cells */
+  }
+  .organizations-table .col-email {
+    max-width: 180px;
+  }
+  .organizations-table .col-org {
+    max-width: 150px;
+  }
+  .organizations-table .col-encargado {
+    max-width: 150px;
+  } /* Ensure this also adjusts */
+}
+
 @media (max-width: 992px) {
   .content-area-scrollable {
     padding: 2rem;
@@ -557,11 +811,12 @@ onMounted(fetchOrganizadores)
   .dashboard-title {
     font-size: 2rem;
   }
-  .add-organizador-btn {
+  .add-organizador-btn,
+  .send-email-btn {
     padding: 0.6rem 1.2rem;
   }
   .organizations-table {
-    min-width: 800px; /* Allow horizontal scroll earlier */
+    min-width: 600px; /* Allow horizontal scroll earlier, but try to fit more */
   }
   .organizations-table thead th,
   .organizations-table tbody td {
@@ -569,28 +824,123 @@ onMounted(fetchOrganizadores)
     font-size: 0.9rem;
   }
   .org-icon,
-  .meta-item-icon {
+  .contact-icon {
     font-size: 1rem;
   }
   .action-btn {
     font-size: 1rem;
     padding: 0.4rem 0.5rem;
   }
+  .organizations-table .col-id,
+  .organizations-table .col-rol {
+    display: none; /* Hide less critical columns on medium screens */
+  }
+  /* Ensure wrapping on smaller screens for visible columns */
+  .organizations-table .col-org,
+  .organizations-table .col-encargado,
+  .organizations-table .col-email {
+    white-space: normal;
+    word-break: break-word;
+  }
 }
 
 @media (max-width: 768px) {
   .action-bar {
     flex-direction: column;
-    align-items: stretch; /* Stretch search and button */
+    align-items: stretch;
   }
   .search-input-container {
-    max-width: 100%; /* Full width on small screens */
+    max-width: 100%;
   }
   .organizations-table-container {
     padding: 1rem;
   }
   .organizations-table {
-    min-width: 700px; /* Further reduce min-width if needed for very small screens */
+    min-width: unset; /* Remove min-width entirely for small screens */
+    display: block; /* Allows table to behave like a block element */
+    width: 100%;
+  }
+  .organizations-table thead {
+    display: none; /* Hide table header on very small screens */
+  }
+  .organizations-table tbody,
+  .organizations-table tr,
+  .organizations-table td {
+    display: block; /* Make table rows and cells behave like blocks */
+    width: 100%;
+  }
+  .organizations-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid #e0e6ec;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  .organizations-table tbody td {
+    text-align: right;
+    padding-left: 50%; /* Space for pseudo-element label */
+    position: relative;
+    border-bottom: 1px dashed #eceff1;
+    white-space: normal; /* Allow text to wrap */
+    max-width: unset; /* Remove max-width */
+    word-break: break-word; /* Ensure words break */
+  }
+  .organizations-table tbody td:last-child {
+    border-bottom: none;
+  }
+  .organizations-table tbody td::before {
+    content: attr(data-label); /* Use data-label for column names */
+    position: absolute;
+    left: 1rem;
+    width: calc(50% - 1rem);
+    padding-right: 10px;
+    white-space: nowrap;
+    text-align: left;
+    font-weight: 600;
+    color: #5d6d7e;
+  }
+
+  /* Assign data-label to each td */
+  .organizations-table tbody td:nth-of-type(1)::before {
+    content: 'Organización:';
+  }
+  .organizations-table tbody td:nth-of-type(2)::before {
+    content: 'Abreviatura:';
+  }
+  .organizations-table tbody td:nth-of-type(3)::before {
+    content: 'Encargado:';
+  }
+  .organizations-table tbody td:nth-of-type(4)::before {
+    content: 'Identificación:';
+  }
+  .organizations-table tbody td:nth-of-type(5)::before {
+    content: 'Rol Interno:';
+  }
+  .organizations-table tbody td:nth-of-type(6)::before {
+    content: 'Contacto:';
+  }
+  .organizations-table tbody td:nth-of-type(7)::before {
+    content: 'Correo Electrónico:';
+  }
+  .organizations-table tbody td:nth-of-type(8)::before {
+    content: 'Acciones:';
+  }
+
+  /* Hide columns that are now labels */
+  .organizations-table .col-id,
+  .organizations-table .col-rol {
+    display: block; /* Show them as part of the card */
+  }
+
+  .action-buttons-cell {
+    text-align: center;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .add-organizador-btn,
+  .send-email-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -605,13 +955,7 @@ onMounted(fetchOrganizadores)
   .action-bar {
     gap: 1rem;
   }
-  .add-organizador-btn {
-    width: 100%; /* Full width button */
-    justify-content: center; /* Center icon and text */
-  }
-  .organizations-table thead th,
   .organizations-table tbody td {
-    padding: 0.7rem 0.8rem;
     font-size: 0.85rem;
   }
   .pagination-page-btn,

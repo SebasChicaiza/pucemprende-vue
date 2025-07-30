@@ -7,17 +7,28 @@
       <div class="content-scroll-wrapper">
         <div class="equipos-header d-flex justify-content-between align-items-center mb-4">
           <h2 class="dashboard-title">Gestión de Equipos</h2>
+          <div
+            class="equipos-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4"
+          ></div>
+
           <!-- Button to open modal for creating a new team -->
           <button class="btn btn-primary" @click="openCreateEquipoModal">+ Nuevo equipo</button>
         </div>
-
+        <div class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto mt-3 mt-md-0">
+          <input
+            v-model="filtroTexto"
+            type="text"
+            class="form-control mb-3"
+            placeholder="Buscar por nombre o integrante..."
+          />
+        </div>
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
         <div v-if="equipos.length === 0" class="text-center text-muted mt-5">
           No hay equipos registrados aún.
         </div>
 
-        <div v-for="equipo in equipos" :key="equipo.id" class="card mb-4 shadow-sm">
+        <div v-for="equipo in equiposFiltrados" :key="equipo.id" class="card mb-4 shadow-sm">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="card-title">{{ equipo.nombre }}</h4>
@@ -38,7 +49,6 @@
                 </button>
               </div>
             </div>
-            <p><strong>Ranking:</strong> {{ equipo.ranking || 'N/A' }}</p>
 
             <p class="fw-bold mb-2">Integrantes:</p>
             <ul class="list-group">
@@ -91,13 +101,24 @@ import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import FormularioEquipoModal from '@/components/Admin/Proyectos/FormularioEquipoModal.vue' // Import the modal component
 import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue' // Import the new confirmation dialog
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const loading = ref(true)
 const error = ref('')
 const equipos = ref([])
+const filtroTexto = ref('')
 
+const equiposFiltrados = computed(() => {
+  const texto = filtroTexto.value.toLowerCase()
+  return equipos.value.filter((equipo) => {
+    const nombreEquipo = equipo.nombre?.toLowerCase() || ''
+    const nombresIntegrantes = equipo.integrantes
+      .map((i) => `${i.persona?.nombre || ''} ${i.persona?.apellido || ''}`.toLowerCase())
+      .join(' ')
+    return nombreEquipo.includes(texto) || nombresIntegrantes.includes(texto)
+  })
+})
 // State for the modals
 const showFormularioEquipoModal = ref(false)
 const currentEquipoForEdit = ref(null) // Holds the team data when editing
