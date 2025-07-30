@@ -15,7 +15,7 @@ import LoaderComponent from '@/components/LoaderComponent.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import ScrollBar from '@/components/ScrollBar.vue' // Import ScrollBar
+import ScrollBar from '@/components/ScrollBar.vue'
 
 const props = defineProps({
   show: {
@@ -60,10 +60,9 @@ const confirmDeleteCancelText = ref('Cancelar')
 const plantillaToDeleteId = ref(null)
 const plantillaToDeleteName = ref('')
 
-const showInlineEditNameModal = ref(false)
-const inlineEditPlantillaName = ref('')
-const inlineEditingPlantillaId = ref(null)
-const inlineEditInputRef = ref(null) // Ref for the inline edit input
+const editingPlantillaNameId = ref(null)
+const tempPlantillaName = ref('')
+const inPlaceEditInputRef = ref(null)
 
 const currentPlantilla = computed(() => {
   return allNewPlantillasInSession.value.find((p) => p.id === activeAccordionItem.value)
@@ -179,9 +178,8 @@ const resetModalState = () => {
   modalLoading.value = false
   plantillaToDeleteId.value = null
   plantillaToDeleteName.value = ''
-  showInlineEditNameModal.value = false
-  inlineEditPlantillaName.value = ''
-  inlineEditingPlantillaId.value = null
+  editingPlantillaNameId.value = null
+  tempPlantillaName.value = ''
 }
 
 const handleModalClose = () => {
@@ -253,52 +251,32 @@ const handleDeleteConfirmationCancelled = () => {
   plantillaToDeleteName.value = ''
 }
 
-const openInlineEditNameModal = (plantillaId, currentName) => {
-  if (!plantillaId || !currentName) {
-    console.error('No se pudo obtener la información de la plantilla para editar.')
-    displayError('No se pudo obtener la información de la plantilla para editar.')
-    return
-  }
-  inlineEditingPlantillaId.value = plantillaId
-  inlineEditPlantillaName.value = currentName
-  showInlineEditNameModal.value = true
-  // Ensure other modals are hidden when this one opens
-  showErrorModal.value = false
-  showOkModal.value = false
-  showDeleteConfirmation.value = false
-
+const startEditingPlantillaName = (plantillaId, currentName) => {
+  editingPlantillaNameId.value = plantillaId
+  tempPlantillaName.value = currentName
   nextTick(() => {
-    setTimeout(() => {
-      if (inlineEditInputRef.value) {
-        inlineEditInputRef.value.focus()
-        inlineEditInputRef.value.select()
-      }
-    }, 100)
+    if (inPlaceEditInputRef.value) {
+      inPlaceEditInputRef.value.focus()
+      inPlaceEditInputRef.value.select()
+    }
   })
 }
 
-const saveInlineEditedName = () => {
-  if (!inlineEditPlantillaName.value.trim()) {
+const savePlantillaName = (plantilla) => {
+  if (!tempPlantillaName.value.trim()) {
     displayError('El nombre de la plantilla no puede estar vacío.')
     return
   }
-  const plantilla = allNewPlantillasInSession.value.find(
-    (p) => p.id === inlineEditingPlantillaId.value,
-  )
-  if (plantilla) {
-    plantilla.nombre_plantilla = inlineEditPlantillaName.value.trim()
-  }
-  showInlineEditNameModal.value = false
-  inlineEditingPlantillaId.value = null
-  inlineEditPlantillaName.value = ''
+  plantilla.nombre_plantilla = tempPlantillaName.value.trim()
+  editingPlantillaNameId.value = null
+  tempPlantillaName.value = ''
   errorMessage.value = ''
   showErrorModal.value = false
 }
 
-const cancelInlineEditName = () => {
-  showInlineEditNameModal.value = false
-  inlineEditingPlantillaId.value = null
-  inlineEditPlantillaName.value = ''
+const cancelEditingPlantillaName = () => {
+  editingPlantillaNameId.value = null
+  tempPlantillaName.value = ''
   errorMessage.value = ''
   showErrorModal.value = false
 }
@@ -507,7 +485,10 @@ const displayError = (message) => {
                 <button
                   class="btn btn-info btn-sm"
                   @click="
-                    openInlineEditNameModal(currentPlantilla.id, currentPlantilla.nombre_plantilla)
+                    startEditingPlantillaName(
+                      currentPlantilla.id,
+                      currentPlantilla.nombre_plantilla,
+                    )
                   "
                   :disabled="!currentPlantilla"
                   title="Editar nombre de la plantilla actual"
@@ -552,9 +533,27 @@ const displayError = (message) => {
                         :aria-expanded="activeAccordionItem === plantilla.id ? 'true' : 'false'"
                         :aria-controls="`collapse${plantilla.id}`"
                       >
-                        <span class="accordion-title-text">
-                          {{ plantilla.nombre_plantilla }}
-                        </span>
+                        <template v-if="editingPlantillaNameId === plantilla.id">
+                          <input
+                            type="text"
+                            class="form-control form-control-sm accordion-title-input editing-input"
+                            v-model="tempPlantillaName"
+                            @keyup.enter="savePlantillaName(plantilla)"
+                            @keyup.esc="cancelEditingPlantillaName"
+                            @blur="savePlantillaName(plantilla)"
+                            :ref="
+                              (el) => {
+                                if (el) inPlaceEditInputRef = el
+                              }
+                            "
+                            tabindex="0"
+                          />
+                        </template>
+                        <template v-else>
+                          <span class="accordion-title-text">
+                            {{ plantilla.nombre_plantilla }}
+                          </span>
+                        </template>
                         <span class="ms-auto me-3 text-muted small"
                           >Total:
                           {{
@@ -729,38 +728,29 @@ const displayError = (message) => {
       @confirm="handleDeletePlantillaConfirmed"
       @cancel="handleDeleteConfirmationCancelled"
     />
-
-    <Transition name="fade">
-      <div v-show="showInlineEditNameModal" class="inline-edit-modal-overlay">
-        <div class="inline-edit-modal-content">
-          <h4>Editar Nombre de Plantilla</h4>
-          <div class="mb-3">
-            <label for="inlinePlantillaNameInput" class="form-label-sm">Nuevo Nombre:</label>
-            <input
-              type="text"
-              :readonly="false"
-              :disabled="false"
-              id="inlinePlantillaNameInput"
-              class="form-control form-control-sm editable-input"
-              v-model="inlineEditPlantillaName"
-              @keyup.enter="saveInlineEditedName"
-              :key="inlineEditingPlantillaId"
-              ref="inlineEditInputRef"
-              tabindex="0"
-              autofocus
-            />
-          </div>
-          <div class="d-flex justify-content-end gap-2">
-            <button class="btn btn-secondary btn-sm" @click="cancelInlineEditName">Cancelar</button>
-            <button class="btn btn-primary btn-sm" @click="saveInlineEditedName">Guardar</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
   </teleport>
 </template>
 
 <style scoped>
+.modal-dialog {
+  max-width: 1200px;
+  width: 95%; /* Adjust as needed */
+  max-height: 90vh; /* Limit modal height to viewport height */
+  display: flex;
+  align-items: center;
+}
+
+.modal-content {
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  height: 100%; /* Fill the constrained modal-dialog height */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Important for containing content and allowing inner scrolling */
+}
+
 .modal-header {
   background-color: #174384;
   color: white;
@@ -772,6 +762,7 @@ const displayError = (message) => {
   align-items: center;
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .modal-title {
@@ -795,24 +786,13 @@ const displayError = (message) => {
   opacity: 1;
 }
 
-.modal-content {
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 1200px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .modal-body-custom {
   padding: 1.5rem;
-  flex-grow: 1;
-  overflow: hidden; /* Changed to hidden, ScrollBar will manage overflow */
+  flex-grow: 1; /* Allows body to take remaining space */
+  overflow: hidden; /* Crucial: hides overflow of the body itself, letting ScrollBar manage it */
   position: relative;
-  display: flex; /* Added for flex layout */
-  flex-direction: column; /* Added for flex layout */
+  display: flex;
+  flex-direction: column;
 }
 
 .form-label {
@@ -847,10 +827,6 @@ const displayError = (message) => {
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
   border-radius: 5px;
-}
-.editable-input {
-  pointer-events: auto !important;
-  user-select: auto !important;
 }
 
 .form-control:focus,
@@ -959,6 +935,7 @@ const displayError = (message) => {
   background-color: #f8f8f8;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
+  flex-shrink: 0; /* Prevent footer from shrinking */
 }
 
 .btn {
@@ -1077,6 +1054,23 @@ const displayError = (message) => {
   color: inherit;
 }
 
+.accordion-title-input {
+  flex-grow: 1;
+  background-color: transparent;
+  border: 1px solid #ddd;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: inherit;
+  margin-left: 0.5rem;
+}
+
+.accordion-title-input.editing-input:focus {
+  border-color: #007bff;
+  background-color: white;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
 .accordion-body {
   padding: 1rem 1.5rem;
   border-top: 1px solid #dee2e6;
@@ -1089,50 +1083,5 @@ const displayError = (message) => {
 .row.g-3 {
   --bs-gutter-x: 0.75rem;
   --bs-gutter-y: 0.75rem;
-}
-
-.inline-edit-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1151;
-}
-
-.inline-edit-modal-content {
-  background: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  max-width: 350px;
-  width: 90%;
-  transform: translateY(-20px);
-  animation: slideIn 0.3s ease-out forwards;
-}
-
-.inline-edit-modal-content h4 {
-  color: #333;
-  margin-bottom: 20px;
-  font-size: 1.1em;
-}
-
-.inline-edit-modal-content .form-label-sm {
-  text-align: left;
-  margin-bottom: 5px;
-}
-
-.inline-edit-modal-content .form-control-sm {
-  margin-bottom: 15px;
-}
-
-.inline-edit-modal-overlay,
-.inline-edit-modal-content {
-  pointer-events: auto !important;
 }
 </style>
