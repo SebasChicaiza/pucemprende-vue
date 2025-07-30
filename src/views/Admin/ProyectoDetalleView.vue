@@ -70,10 +70,12 @@ onMounted(async () => {
       (rel) => rel.proyecto_id === foundProyecto.id,
     )
 
-    // Buscar archivo de tipo imagen (jpg/jpeg/png)
-    const archivoLogo = relaciones
+    const archivosRelacionados = relaciones
       .map((rel) => archivosRes.data.find((a) => a.id === rel.archivo_id && !a.estado_borrado))
-      .find((a) => ['jpg', 'jpeg', 'png'].includes(a?.tipo?.toLowerCase()))
+      .filter((a) => a && ['jpg', 'jpeg', 'png'].includes(a.tipo?.toLowerCase()))
+
+    // Ordenar por ID descendente para obtener el último subido
+    const archivoLogo = archivosRelacionados.sort((a, b) => b.id - a.id)[0]
 
     logoUrl.value = archivoLogo?.url || ''
   } catch (err) {

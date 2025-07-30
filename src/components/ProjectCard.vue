@@ -3,6 +3,15 @@
     <div class="project-scroll-content">
       <div class="project-header">
         <h3 class="project-title">{{ proyecto.titulo }}</h3>
+        <div class="project-logo">
+          <img
+            v-if="proyecto.logoUrl"
+            :src="proyecto.logoUrl"
+            alt="Logo del proyecto"
+            class="logo-img m-2"
+          />
+          <span v-else class="logo-placeholder">Logo</span>
+        </div>
 
         <div class="edit-icon" @click="$router.push(`/admin/proyectos/${proyecto.id}/editar`)">
           <i class="bi bi-pencil-square"></i>
@@ -10,15 +19,6 @@
       </div>
       <div class="project-subtitle">
         <span>Equipo: {{ equipoNombre || 'Sin equipo' }}</span>
-      </div>
-      <div class="project-logo">
-        <img
-          v-if="proyecto.logoUrl"
-          :src="proyecto.logoUrl"
-          alt="Logo del proyecto"
-          class="logo-img"
-        />
-        <span v-else class="logo-placeholder">Logo</span>
       </div>
 
       <div class="project-description">
@@ -66,8 +66,8 @@ function formatDate(dateStr) {
 }
 
 .logo-img {
-  width: 38px;
-  height: 38px;
+  width: 4rem;
+  height: 4rem;
   border-radius: 50%;
   object-fit: cover;
   background: #fff;
@@ -78,7 +78,7 @@ function formatDate(dateStr) {
   color: #fff;
   border-radius: 12px;
   padding: 1.2rem 1rem 1rem 1rem;
-  width: 250px;
+  width: 270px;
   min-height: 360px;
   max-height: 360px;
   display: flex;

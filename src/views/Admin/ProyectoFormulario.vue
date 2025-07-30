@@ -17,6 +17,7 @@ const logoImage = ref({ file: null, url: '', id: null })
 const loading = ref(true)
 const error = ref('')
 const dynamicTitle = ref('Editar Proyecto')
+const estado = ref('ACTIVO') // default
 
 onMounted(async () => {
   const token = localStorage.getItem('token')
@@ -51,6 +52,7 @@ onMounted(async () => {
     titulo.value = proyecto.titulo
     descripcion.value = proyecto.descripcion
     selectedEquipo.value = proyecto.equipo_id
+    estado.value = proyecto.estado
 
     // Logo
     const relacion = archivosProyecto.find((r) => r.proyecto_id === proyecto.id)
@@ -105,7 +107,7 @@ async function subirLogoProyecto(file, proyectoId) {
 
     const relacionData = {
       proyecto_id: proyectoId,
-      archivo_id: archivoId
+      archivo_id: archivoId,
     }
 
     const relacionResponse = await axios.post(
@@ -123,9 +125,8 @@ async function subirLogoProyecto(file, proyectoId) {
 
     return {
       archivo: uploadResponse.data.file,
-      relacion: relacionResponse.data
+      relacion: relacionResponse.data,
     }
-
   } catch (err) {
     console.error('Error al subir y vincular el logo:', err.response?.data || err.message)
     alert('Error al subir el logo del proyecto.')
@@ -150,46 +151,48 @@ async function submitEdicion() {
         titulo: titulo.value,
         descripcion: descripcion.value,
         equipo_id: selectedEquipo.value,
-        estado: 'ACTIVO',
+        estado: estado.value,
       },
       {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+          Accept: 'application/json',
+        },
       },
     )
 
-    // Subir nuevo logo si fue cambiado
     if (logoImage.value.file) {
-      // Si había un logo anterior, eliminar la relación anterior
-      if (logoImage.value.id) {
-        try {
-          // Buscar la relación existente para eliminarla
-          const relacionesResponse = await axios.get(
-            `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
+      try {
+        const relacionesResponse = await axios.get(
+          `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+
+        // Filtrar todas las relaciones de este proyecto
+        const relacionesProyecto = relacionesResponse.data.data?.filter(
+          (r) => r.proyecto_id === proyectoId,
+        )
+
+        for (const relacion of relacionesProyecto) {
+          // 1. Eliminar la relación
+          await axios.delete(
+            `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto/${relacion.id}`,
+            { headers: { Authorization: `Bearer ${token}` } },
           )
 
-          const relacionExistente = relacionesResponse.data.data?.find(
-            r => r.proyecto_id === proyectoId && r.archivo_id === logoImage.value.id
-          )
-
-          if (relacionExistente) {
+          // 2. Eliminar el archivo si existe
+          if (relacion.archivo_id) {
             await axios.delete(
-              `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto/${relacionExistente.id}`,
-              {
-                headers: { Authorization: `Bearer ${token}` }
-              }
+              `${import.meta.env.VITE_URL_BACKEND}/api/archivos/${relacion.archivo_id}`,
+              { headers: { Authorization: `Bearer ${token}` } },
             )
-            console.log('Relación anterior eliminada')
           }
-        } catch (deleteErr) {
-          console.warn('Error eliminando relación anterior:', deleteErr)
         }
+
+        console.log('Relaciones y archivos anteriores eliminados')
+      } catch (deleteErr) {
+        console.warn('Error eliminando logos anteriores:', deleteErr)
       }
 
       // Subir el nuevo logo y crear la nueva relación
@@ -246,6 +249,13 @@ async function submitEdicion() {
             <select v-model="selectedEquipo" class="form-select">
               <option value="" disabled>Selecciona un equipo</option>
               <option v-for="e in equipos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Estado</label>
+            <select v-model="estado" class="form-select">
+              <option value="ACTIVO">Activo</option>
+              <option value="INACTIVO">Inactivo</option>
             </select>
           </div>
 
