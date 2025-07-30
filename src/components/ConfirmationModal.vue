@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits } from 'vue'
 
 const props = defineProps({
   show: {
@@ -22,16 +22,16 @@ const props = defineProps({
     type: String,
     default: 'Cancelar',
   },
-});
+})
 
-const emit = defineEmits(['confirm', 'cancel']);
+const emit = defineEmits(['confirm', 'cancel'])
 
 function handleConfirm() {
-  emit('confirm');
+  emit('confirm')
 }
 
 function handleCancel() {
-  emit('cancel');
+  emit('cancel')
 }
 </script>
 
@@ -55,7 +55,6 @@ function handleCancel() {
 </template>
 
 <style scoped>
-
 .confirmation-modal-overlay {
   position: fixed;
   top: 0;
@@ -66,9 +65,8 @@ function handleCancel() {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 150;
+  z-index: 1100;
 }
-
 
 .confirmation-modal-content {
   background: white;
@@ -128,7 +126,6 @@ function handleCancel() {
 .btn-secondary:hover {
   background-color: #5a6268;
 }
-
 
 .fade-enter-active,
 .fade-leave-active {

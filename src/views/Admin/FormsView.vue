@@ -13,6 +13,7 @@ import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 import { useEventosStore } from '@/stores/eventos'
 import ModalProcesoEvaluacion from '@/components/Admin/Formularios/ModalProcesoEvaluacion.vue'
+import PlantillasEvaluacionModal from '@/components/Admin/Formularios/PlantillasEvaluacionModal.vue' // NEW: Import the new modal
 
 const route = useRoute()
 const router = useRouter()
@@ -51,6 +52,10 @@ const confirmModalTitle = ref('')
 const confirmModalMessage = ''
 const confirmModalConfirmText = ''
 const confirmModalCancelText = ref('Cancelar')
+
+const showPlantillasModal = ref(false) // NEW: State for the new PlantillasEvaluacionModal
+const currentProcesoIdForPlantillas = ref(null) // NEW: To pass the procesoId to the plantillas modal
+const currentProcesoTitleForPlantillas = ref('') // NEW: To pass the proceso title to the plantillas modal
 
 let onConfirmCallback = () => {}
 
@@ -312,6 +317,32 @@ const redirectToEditEvent = () => {
   }
 }
 
+// NEW: Handlers for PlantillasEvaluacionModal
+const openPlantillasModal = (procesoId, procesoTitle) => {
+  currentProcesoIdForPlantillas.value = procesoId
+  currentProcesoTitleForPlantillas.value = procesoTitle
+  showPlantillasModal.value = true
+}
+
+const handlePlantillasModalClose = () => {
+  showPlantillasModal.value = false
+  currentProcesoIdForPlantillas.value = null
+  currentProcesoTitleForPlantillas.value = ''
+  // Optionally re-fetch procesos if templates affect their display (unlikely, but good practice)
+  fetchProcesosEvaluacion()
+}
+
+const handlePlantillasSuccess = (payload) => {
+  okModalMessage.value = payload.message
+  showOkModal.value = true
+  // No need to close the main modal here, it's handled by handlePlantillasModalClose
+}
+
+const handlePlantillasError = (payload) => {
+  errorMessage.value = payload.message
+  showErrorModal.value = true
+}
+
 onMounted(() => {
   fetchProcesosEvaluacion()
   eventosStore.fetchAllEventsForFilter()
@@ -467,7 +498,10 @@ watch(processSearchQuery, () => {
                   : proceso.evento.descripcion
               }}
             </p>
-            <button class="btn btn-primary templates-button mt-auto">
+            <button
+              class="btn btn-primary templates-button mt-auto"
+              @click="openPlantillasModal(proceso.id, proceso.titulo)"
+            >
               <i class="fas fa-star me-2"></i>Plantillas de evaluacion
             </button>
           </div>
@@ -498,6 +532,15 @@ watch(processSearchQuery, () => {
     @close="handleCreateProcessModalClose"
     @submit="handleNewProcessCreated"
     @error="handleErrorModalClose"
+  />
+
+  <PlantillasEvaluacionModal
+    :show="showPlantillasModal"
+    :procesoId="currentProcesoIdForPlantillas"
+    :processTitle="currentProcesoTitleForPlantillas"
+    @close="handlePlantillasModalClose"
+    @success="handlePlantillasSuccess"
+    @error="handlePlantillasError"
   />
 
   <ConfirmationModal

@@ -1,0 +1,1138 @@
+<script setup>
+import {
+  ref,
+  watch,
+  defineEmits,
+  defineProps,
+  computed,
+  onMounted,
+  onUnmounted,
+  nextTick,
+} from 'vue'
+import { Modal } from 'bootstrap'
+import axios from 'axios'
+import LoaderComponent from '@/components/LoaderComponent.vue'
+import ErrorModal from '@/components/ErrorModal.vue'
+import OkModal from '@/components/OkModal.vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import ScrollBar from '@/components/ScrollBar.vue' // Import ScrollBar
+
+const props = defineProps({
+  show: {
+    type: Boolean,
+    default: false,
+  },
+  procesoId: {
+    type: Number,
+    required: true,
+  },
+  processTitle: {
+    type: String,
+    default: 'Proceso de Evaluación',
+  },
+})
+
+const emit = defineEmits(['close', 'success', 'error'])
+
+const plantillasModalRef = ref(null)
+let bsModal = null
+
+const allNewPlantillasInSession = ref([])
+const activeAccordionItem = ref(null)
+const nextPlantillaTempId = ref(1)
+
+const currentCriterioName = ref('')
+const currentCriterioDescription = ref('')
+const currentCriterioPeso = ref(0)
+const editingCriterioIndex = ref(null)
+
+const modalLoading = ref(false)
+const showErrorModal = ref(false)
+const errorMessage = ref('')
+const showOkModal = ref(false)
+const okModalMessage = ref('')
+
+const showDeleteConfirmation = ref(false)
+const confirmDeleteTitle = ref('')
+const confirmDeleteMessage = ref('')
+const confirmDeleteConfirmText = ref('')
+const confirmDeleteCancelText = ref('Cancelar')
+const plantillaToDeleteId = ref(null)
+const plantillaToDeleteName = ref('')
+
+const showInlineEditNameModal = ref(false)
+const inlineEditPlantillaName = ref('')
+const inlineEditingPlantillaId = ref(null)
+const inlineEditInputRef = ref(null) // Ref for the inline edit input
+
+const currentPlantilla = computed(() => {
+  return allNewPlantillasInSession.value.find((p) => p.id === activeAccordionItem.value)
+})
+
+const totalPeso = computed(() => {
+  if (!currentPlantilla.value) return 0
+  return currentPlantilla.value.criterios.reduce(
+    (sum, criterio) => sum + (Number(criterio.peso) || 0),
+    0,
+  )
+})
+
+const isAddCriterioValid = computed(() => {
+  return (
+    currentCriterioName.value.trim() !== '' &&
+    currentCriterioDescription.value.trim() !== '' &&
+    Number(currentCriterioPeso.value) > 0 &&
+    Number(currentCriterioPeso.value) <= 100
+  )
+})
+
+watch(currentCriterioName, () => {
+  if (errorMessage.value) errorMessage.value = ''
+})
+watch(currentCriterioDescription, () => {
+  if (errorMessage.value) errorMessage.value = ''
+})
+watch(currentCriterioPeso, () => {
+  if (errorMessage.value) errorMessage.value = ''
+})
+
+watch(activeAccordionItem, () => {
+  currentCriterioName.value = ''
+  currentCriterioDescription.value = ''
+  currentCriterioPeso.value = 0
+  editingCriterioIndex.value = null
+  errorMessage.value = ''
+  showErrorModal.value = false
+})
+
+const initializeModal = () => {
+  if (plantillasModalRef.value && !bsModal) {
+    bsModal = new Modal(plantillasModalRef.value, { backdrop: 'static', keyboard: false })
+    plantillasModalRef.value.addEventListener('hidden.bs.modal', () => {
+      emit('close')
+      resetModalState()
+    })
+
+    plantillasModalRef.value.addEventListener('shown.bs.collapse', (event) => {
+      activeAccordionItem.value = event.target.id.replace('collapse', '')
+    })
+    plantillasModalRef.value.addEventListener('hidden.bs.collapse', (event) => {
+      if (activeAccordionItem.value === event.target.id.replace('collapse', '')) {
+        activeAccordionItem.value = null
+      }
+    })
+  }
+}
+
+onMounted(() => {
+  initializeModal()
+})
+
+onUnmounted(() => {
+  if (bsModal) {
+    bsModal.dispose()
+    bsModal = null
+  }
+  if (plantillasModalRef.value) {
+    plantillasModalRef.value.removeEventListener('shown.bs.collapse', (event) => {
+      activeAccordionItem.value = event.target.id.replace('collapse', '')
+    })
+    plantillasModalRef.value.removeEventListener('hidden.bs.collapse', (event) => {
+      if (activeAccordionItem.value === event.target.id.replace('collapse', '')) {
+        activeAccordionItem.value = null
+      }
+    })
+  }
+})
+
+watch(
+  () => props.show,
+  (newVal) => {
+    nextTick(() => {
+      if (newVal) {
+        if (!bsModal) {
+          initializeModal()
+        }
+        bsModal?.show()
+        resetModalState()
+        addNewPlantillaSession()
+      } else {
+        bsModal?.hide()
+      }
+    })
+  },
+  { immediate: true },
+)
+
+const resetModalState = () => {
+  allNewPlantillasInSession.value = []
+  activeAccordionItem.value = null
+  nextPlantillaTempId.value = 1
+  currentCriterioName.value = ''
+  currentCriterioDescription.value = ''
+  currentCriterioPeso.value = 0
+  editingCriterioIndex.value = null
+  errorMessage.value = ''
+  showErrorModal.value = false
+  okModalMessage.value = ''
+  showOkModal.value = false
+  modalLoading.value = false
+  plantillaToDeleteId.value = null
+  plantillaToDeleteName.value = ''
+  showInlineEditNameModal.value = false
+  inlineEditPlantillaName.value = ''
+  inlineEditingPlantillaId.value = null
+}
+
+const handleModalClose = () => {
+  emit('close')
+}
+
+const handleOkModalClose = () => {
+  showOkModal.value = false
+  okModalMessage.value = ''
+}
+
+const handleErrorModalClose = () => {
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
+
+const addNewPlantillaSession = () => {
+  const newId = `temp-${nextPlantillaTempId.value++}`
+  const newPlantilla = {
+    id: newId,
+    nombre_plantilla: `Nueva Plantilla ${allNewPlantillasInSession.value.length + 1}`,
+    criterios: [],
+  }
+  allNewPlantillasInSession.value.push(newPlantilla)
+  activeAccordionItem.value = newId
+}
+
+const openDeletePlantillaConfirmation = (plantillaId, plantillaName) => {
+  if (!plantillaId || !plantillaName) {
+    console.error('No se pudo obtener la información de la plantilla para eliminar.')
+    displayError('No se pudo obtener la información de la plantilla para eliminar.')
+    return
+  }
+  plantillaToDeleteId.value = plantillaId
+  plantillaToDeleteName.value = plantillaName
+  confirmDeleteTitle.value = 'Confirmar Eliminación de Plantilla'
+  confirmDeleteMessage.value =
+    '¿Estás seguro de que quieres eliminar la plantilla? Esta acción no se puede deshacer.'
+  confirmDeleteConfirmText.value = 'Sí, Eliminar'
+  confirmDeleteCancelText.value = 'Cancelar'
+  showDeleteConfirmation.value = true
+}
+
+const handleDeletePlantillaConfirmed = () => {
+  if (plantillaToDeleteId.value) {
+    const idToDelete = plantillaToDeleteId.value
+    const indexToDelete = allNewPlantillasInSession.value.findIndex((p) => p.id === idToDelete)
+
+    if (indexToDelete !== -1) {
+      allNewPlantillasInSession.value.splice(indexToDelete, 1)
+      if (activeAccordionItem.value === idToDelete) {
+        activeAccordionItem.value =
+          allNewPlantillasInSession.value.length > 0
+            ? allNewPlantillasInSession.value[Math.max(0, indexToDelete - 1)].id
+            : null
+      }
+    }
+  }
+  plantillaToDeleteId.value = null
+  plantillaToDeleteName.value = ''
+  showDeleteConfirmation.value = false
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const handleDeleteConfirmationCancelled = () => {
+  showDeleteConfirmation.value = false
+  plantillaToDeleteId.value = null
+  plantillaToDeleteName.value = ''
+}
+
+const openInlineEditNameModal = (plantillaId, currentName) => {
+  if (!plantillaId || !currentName) {
+    console.error('No se pudo obtener la información de la plantilla para editar.')
+    displayError('No se pudo obtener la información de la plantilla para editar.')
+    return
+  }
+  inlineEditingPlantillaId.value = plantillaId
+  inlineEditPlantillaName.value = currentName
+  showInlineEditNameModal.value = true
+  // Ensure other modals are hidden when this one opens
+  showErrorModal.value = false
+  showOkModal.value = false
+  showDeleteConfirmation.value = false
+
+  nextTick(() => {
+    setTimeout(() => {
+      if (inlineEditInputRef.value) {
+        inlineEditInputRef.value.focus()
+        inlineEditInputRef.value.select()
+      }
+    }, 100)
+  })
+}
+
+const saveInlineEditedName = () => {
+  if (!inlineEditPlantillaName.value.trim()) {
+    displayError('El nombre de la plantilla no puede estar vacío.')
+    return
+  }
+  const plantilla = allNewPlantillasInSession.value.find(
+    (p) => p.id === inlineEditingPlantillaId.value,
+  )
+  if (plantilla) {
+    plantilla.nombre_plantilla = inlineEditPlantillaName.value.trim()
+  }
+  showInlineEditNameModal.value = false
+  inlineEditingPlantillaId.value = null
+  inlineEditPlantillaName.value = ''
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const cancelInlineEditName = () => {
+  showInlineEditNameModal.value = false
+  inlineEditingPlantillaId.value = null
+  inlineEditPlantillaName.value = ''
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const addOrUpdateCriterio = () => {
+  if (!currentPlantilla.value) {
+    displayError('Por favor, seleccione una plantilla primero.')
+    return
+  }
+  if (!isAddCriterioValid.value) {
+    displayError(
+      'Por favor, complete todos los campos del criterio y asegúrese de que el peso sea un número válido entre 1 y 100.',
+    )
+    return
+  }
+
+  const newPeso = Number(currentCriterioPeso.value)
+
+  if (editingCriterioIndex.value !== null) {
+    const oldPeso = currentPlantilla.value.criterios[editingCriterioIndex.value].peso
+    if (totalPeso.value - oldPeso + newPeso > 100) {
+      displayError(
+        `El peso total de los criterios no puede exceder 100%. Actualmente es ${totalPeso.value - oldPeso + newPeso}%.`,
+      )
+      return
+    }
+    currentPlantilla.value.criterios[editingCriterioIndex.value] = {
+      nombre: currentCriterioName.value.trim(),
+      descripcion: currentCriterioDescription.value.trim(),
+      peso: newPeso,
+    }
+  } else {
+    if (totalPeso.value + newPeso > 100) {
+      displayError(
+        `El peso total de los criterios no puede exceder 100%. Actualmente es ${totalPeso.value + newPeso}%.`,
+      )
+      return
+    }
+    currentPlantilla.value.criterios.push({
+      nombre: currentCriterioName.value.trim(),
+      descripcion: currentCriterioDescription.value.trim(),
+      peso: newPeso,
+    })
+  }
+
+  currentCriterioName.value = ''
+  currentCriterioDescription.value = ''
+  currentCriterioPeso.value = 0
+  editingCriterioIndex.value = null
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const editCriterio = (index) => {
+  if (!currentPlantilla.value) return
+  const criterio = currentPlantilla.value.criterios[index]
+  currentCriterioName.value = criterio.nombre
+  currentCriterioDescription.value = criterio.descripcion
+  currentCriterioPeso.value = criterio.peso
+  editingCriterioIndex.value = index
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const deleteCriterio = (index) => {
+  if (!currentPlantilla.value) return
+  currentPlantilla.value.criterios.splice(index, 1)
+  errorMessage.value = ''
+  showErrorModal.value = false
+}
+
+const submitAllPlantillas = async () => {
+  if (allNewPlantillasInSession.value.length === 0) {
+    displayError('Debe crear al menos una plantilla para guardar.')
+    return
+  }
+
+  for (const plantilla of allNewPlantillasInSession.value) {
+    if (!plantilla.nombre_plantilla.trim()) {
+      displayError(`La plantilla con ID temporal "${plantilla.id}" debe tener un nombre.`)
+      return
+    }
+    if (plantilla.criterios.length === 0) {
+      displayError(`La plantilla "${plantilla.nombre_plantilla}" debe tener al menos un criterio.`)
+      return
+    }
+    const currentPlantillaTotalPeso = plantilla.criterios.reduce(
+      (sum, c) => sum + (Number(c.peso) || 0),
+      0,
+    )
+    if (currentPlantillaTotalPeso !== 100) {
+      displayError(
+        `El peso total de los criterios para la plantilla "${plantilla.nombre_plantilla}" debe ser exactamente 100%. Actualmente es ${currentPlantillaTotalPeso}%.`,
+      )
+      return
+    }
+  }
+
+  modalLoading.value = true
+  errorMessage.value = ''
+  showErrorModal.value = false
+
+  const token = localStorage.getItem('token')
+  if (!token) {
+    displayError('Token de autenticación no encontrado.')
+    modalLoading.value = false
+    return
+  }
+
+  try {
+    for (const plantilla of allNewPlantillasInSession.value) {
+      const payload = {
+        proceso_id: props.procesoId,
+        nombre_plantilla: plantilla.nombre_plantilla.trim(),
+        criterios: plantilla.criterios.map((c) => ({
+          nombre: c.nombre,
+          descripcion: c.descripcion,
+          peso: Number(c.peso),
+        })),
+      }
+
+      await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    }
+
+    okModalMessage.value = `Todas las plantillas han sido creadas con éxito!`
+    showOkModal.value = true
+    emit('success', { message: okModalMessage.value })
+    handleModalClose()
+  } catch (err) {
+    console.error('Error creating plantillas:', err.response?.data || err.message)
+    let errorToDisplay = 'Error desconocido al crear las plantillas.'
+
+    if (err.response && err.response.data) {
+      if (err.response.data.errors) {
+        const errors = err.response.data.errors
+        const allErrors = Object.values(errors).flat()
+        if (allErrors.length > 0) {
+          errorToDisplay = allErrors.join('; ')
+        } else if (err.response.data.message) {
+          errorToDisplay = err.response.data.message
+        }
+      } else if (err.response.data.message) {
+        errorToDisplay = err.response.data.message
+      }
+    } else if (err.message) {
+      errorToDisplay = err.message
+    }
+    displayError(`Error al crear plantillas: ${errorToDisplay}`)
+  } finally {
+    modalLoading.value = false
+  }
+}
+
+const displayError = (message) => {
+  errorMessage.value = message
+  showErrorModal.value = true
+}
+</script>
+
+<template>
+  <teleport to="body">
+    <div
+      class="modal fade"
+      tabindex="-1"
+      aria-labelledby="plantillasEvaluacionModalLabel"
+      aria-hidden="true"
+      ref="plantillasModalRef"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="plantillasEvaluacionModalLabel">
+              Gestionar Plantillas de Evaluación para "{{ processTitle }}"
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              @click="handleModalClose"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body-custom">
+            <LoaderComponent v-if="modalLoading" />
+            <div v-else class="container-fluid d-flex flex-column h-100">
+              <ErrorModal
+                :show="showErrorModal"
+                :message="errorMessage"
+                @close="handleErrorModalClose"
+              />
+              <OkModal
+                :show="showOkModal"
+                :message="okModalMessage"
+                :duration="1000"
+                @close="handleOkModalClose"
+              />
+
+              <div class="d-flex justify-content-end mb-3 gap-2 flex-shrink-0">
+                <button class="btn btn-primary btn-sm" @click="addNewPlantillaSession">
+                  <i class="fas fa-plus me-2"></i>Añadir Nueva Plantilla
+                </button>
+                <button
+                  class="btn btn-info btn-sm"
+                  @click="
+                    openInlineEditNameModal(currentPlantilla.id, currentPlantilla.nombre_plantilla)
+                  "
+                  :disabled="!currentPlantilla"
+                  title="Editar nombre de la plantilla actual"
+                >
+                  <i class="fas fa-pencil-alt me-2"></i>Editar Nombre
+                </button>
+                <button
+                  class="btn btn-danger btn-sm"
+                  @click="
+                    openDeletePlantillaConfirmation(
+                      currentPlantilla.id,
+                      currentPlantilla.nombre_plantilla,
+                    )
+                  "
+                  :disabled="!currentPlantilla || allNewPlantillasInSession.length <= 1"
+                >
+                  <i class="fas fa-trash me-2"></i>Eliminar Actual
+                </button>
+              </div>
+
+              <ScrollBar class="flex-grow-1">
+                <div class="accordion" id="plantillasAccordion">
+                  <div
+                    v-if="allNewPlantillasInSession.length === 0"
+                    class="text-center text-muted py-4"
+                  >
+                    No hay plantillas creadas aún. Haga clic en "Añadir Nueva Plantilla" para
+                    empezar.
+                  </div>
+                  <div
+                    v-for="(plantilla, index) in allNewPlantillasInSession"
+                    :key="plantilla.id"
+                    class="accordion-item"
+                  >
+                    <h2 class="accordion-header" :id="`heading${plantilla.id}`">
+                      <button
+                        class="accordion-button"
+                        :class="{ collapsed: activeAccordionItem !== plantilla.id }"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        :data-bs-target="`#collapse${plantilla.id}`"
+                        :aria-expanded="activeAccordionItem === plantilla.id ? 'true' : 'false'"
+                        :aria-controls="`collapse${plantilla.id}`"
+                      >
+                        <span class="accordion-title-text">
+                          {{ plantilla.nombre_plantilla }}
+                        </span>
+                        <span class="ms-auto me-3 text-muted small"
+                          >Total:
+                          {{
+                            plantilla.criterios.reduce((sum, c) => sum + (Number(c.peso) || 0), 0)
+                          }}%</span
+                        >
+                      </button>
+                    </h2>
+                    <div
+                      :id="`collapse${plantilla.id}`"
+                      class="accordion-collapse collapse"
+                      :class="{ show: activeAccordionItem === plantilla.id }"
+                      :aria-labelledby="`heading${plantilla.id}`"
+                      data-bs-parent="#plantillasAccordion"
+                    >
+                      <div class="accordion-body">
+                        <h6 class="mb-3">
+                          Criterios de Evaluación para "{{ plantilla.nombre_plantilla }}"
+                        </h6>
+                        <div class="row g-2 mb-3 align-items-end">
+                          <div class="col-md-4">
+                            <label for="criterioName" class="form-label-sm"
+                              >Nombre del Criterio:</label
+                            >
+                            <input
+                              type="text"
+                              id="criterioName"
+                              class="form-control form-control-sm"
+                              v-model="currentCriterioName"
+                              placeholder="Ej: Innovación"
+                            />
+                          </div>
+                          <div class="col-md-5">
+                            <label for="criterioDescription" class="form-label-sm"
+                              >Descripción:</label
+                            >
+                            <input
+                              type="text"
+                              id="criterioDescription"
+                              class="form-control form-control-sm"
+                              v-model="currentCriterioDescription"
+                              placeholder="Ej: Originalidad y creatividad de la solución."
+                            />
+                          </div>
+                          <div class="col-md-2">
+                            <label for="criterioPeso" class="form-label-sm">Peso (%):</label>
+                            <input
+                              type="number"
+                              id="criterioPeso"
+                              class="form-control form-control-sm"
+                              v-model.number="currentCriterioPeso"
+                              min="0"
+                              max="100"
+                            />
+                          </div>
+                          <div class="col-md-1 d-flex align-items-center justify-content-end">
+                            <button
+                              class="btn btn-primary btn-sm btn-add-criterio"
+                              @click="addOrUpdateCriterio"
+                              :disabled="!isAddCriterioValid"
+                            >
+                              <i
+                                :class="
+                                  editingCriterioIndex !== null ? 'fas fa-save' : 'fas fa-plus'
+                                "
+                              ></i>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="table-responsive">
+                          <table class="table table-bordered table-striped table-sm">
+                            <thead>
+                              <tr>
+                                <th style="width: 25%">Nombre</th>
+                                <th style="width: 50%">Descripción</th>
+                                <th style="width: 15%">Peso (%)</th>
+                                <th style="width: 10%" class="text-center">Acciones</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr
+                                v-if="currentPlantilla && currentPlantilla.criterios.length === 0"
+                              >
+                                <td colspan="4" class="text-center text-muted">
+                                  No hay criterios añadidos aún.
+                                </td>
+                              </tr>
+                              <tr
+                                v-for="(criterio, idx) in currentPlantilla
+                                  ? currentPlantilla.criterios
+                                  : []"
+                                :key="idx"
+                              >
+                                <td>{{ criterio.nombre }}</td>
+                                <td>{{ criterio.descripcion }}</td>
+                                <td>{{ criterio.peso }}%</td>
+                                <td class="text-center">
+                                  <button
+                                    class="btn-action-icon btn-action-edit-icon me-1"
+                                    @click="editCriterio(idx)"
+                                  >
+                                    <i class="fas fa-edit"></i>
+                                  </button>
+                                  <button
+                                    class="btn-action-icon btn-action-delete-icon"
+                                    @click="deleteCriterio(idx)"
+                                  >
+                                    <i class="fas fa-trash"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            </tbody>
+                            <tfoot>
+                              <tr>
+                                <td colspan="2" class="text-end fw-bold">Total Peso:</td>
+                                <td
+                                  :class="{
+                                    'text-danger': totalPeso !== 100,
+                                    'text-success': totalPeso === 100,
+                                  }"
+                                  class="fw-bold"
+                                >
+                                  {{ totalPeso }}%
+                                </td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ScrollBar>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="handleModalClose"
+              :disabled="modalLoading"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="submitAllPlantillas"
+              :disabled="modalLoading || allNewPlantillasInSession.length === 0"
+            >
+              <span
+                v-if="modalLoading"
+                class="spinner-border spinner-border-sm me-2"
+                role="status"
+                aria-hidden="true"
+              ></span>
+              Guardar Todas las Plantillas
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ConfirmationModal
+      :show="showDeleteConfirmation"
+      :title="confirmDeleteTitle"
+      :message="confirmDeleteMessage"
+      :confirmText="confirmDeleteConfirmText"
+      :cancelText="confirmDeleteCancelText"
+      @confirm="handleDeletePlantillaConfirmed"
+      @cancel="handleDeleteConfirmationCancelled"
+    />
+
+    <Transition name="fade">
+      <div v-show="showInlineEditNameModal" class="inline-edit-modal-overlay">
+        <div class="inline-edit-modal-content">
+          <h4>Editar Nombre de Plantilla</h4>
+          <div class="mb-3">
+            <label for="inlinePlantillaNameInput" class="form-label-sm">Nuevo Nombre:</label>
+            <input
+              type="text"
+              :readonly="false"
+              :disabled="false"
+              id="inlinePlantillaNameInput"
+              class="form-control form-control-sm editable-input"
+              v-model="inlineEditPlantillaName"
+              @keyup.enter="saveInlineEditedName"
+              :key="inlineEditingPlantillaId"
+              ref="inlineEditInputRef"
+              tabindex="0"
+              autofocus
+            />
+          </div>
+          <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-secondary btn-sm" @click="cancelInlineEditName">Cancelar</button>
+            <button class="btn btn-primary btn-sm" @click="saveInlineEditedName">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </teleport>
+</template>
+
+<style scoped>
+.modal-header {
+  background-color: #174384;
+  color: white;
+  padding: 1rem 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.btn-close {
+  background: transparent
+    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23fff'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e")
+    center / 0.8em auto no-repeat;
+  border: 0;
+  border-radius: 0.375rem;
+  opacity: 0.8;
+  transition: opacity 0.2s ease-in-out;
+  font-size: 1rem;
+  padding: 0.4rem;
+}
+
+.btn-close:hover {
+  opacity: 1;
+}
+
+.modal-content {
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-body-custom {
+  padding: 1.5rem;
+  flex-grow: 1;
+  overflow: hidden; /* Changed to hidden, ScrollBar will manage overflow */
+  position: relative;
+  display: flex; /* Added for flex layout */
+  flex-direction: column; /* Added for flex layout */
+}
+
+.form-label {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  display: block;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.form-label-sm {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  display: block;
+  color: #333;
+  font-size: 0.85rem;
+}
+
+.form-control,
+.form-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.form-control-sm {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  border-radius: 5px;
+}
+.editable-input {
+  pointer-events: auto !important;
+  user-select: auto !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  outline: none;
+}
+
+.btn-add-criterio {
+  background-color: #28a745;
+  border-color: #28a745;
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.btn-add-criterio:hover:not(:disabled) {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
+
+.btn-add-criterio:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #212529;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th,
+.table td {
+  padding: 0.6rem 0.75rem;
+  vertical-align: middle;
+  border-top: 1px solid #dee2e6;
+}
+
+.table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #dee2e6;
+  background-color: #f8f9fa;
+  color: #495057;
+  font-weight: 600;
+}
+
+.table-bordered {
+  border: 1px solid #dee2e6;
+}
+
+.table-bordered th,
+.table-bordered td {
+  border: 1px solid #dee2e6;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.btn-sm {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  border-radius: 0.15rem;
+}
+
+.btn-action-icon {
+  background: none;
+  border: none;
+  padding: 0.2rem;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.btn-action-edit-icon {
+  color: #17a2b8;
+}
+
+.btn-action-edit-icon:hover {
+  color: #138496;
+}
+
+.btn-action-delete-icon {
+  color: #dc3545;
+}
+
+.btn-action-delete-icon:hover {
+  color: #c82333;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background-color: #f8f8f8;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+  border: 1px solid #007bff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: 1px solid #6c757d;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #5a6268;
+  border-color: #545b62;
+}
+
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+  border: 1px solid #17a2b8;
+}
+
+.btn-info:hover:not(:disabled) {
+  background-color: #138496;
+  border-color: #117a8b;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.text-danger {
+  color: #dc3545;
+}
+
+.text-success {
+  color: #28a745;
+}
+
+.no-data-message {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+.accordion-item {
+  border: 1px solid #dee2e6;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion-header {
+  margin-bottom: 0;
+  position: relative;
+}
+
+.accordion-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  background-color: #f8f9fa;
+  border: none;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.accordion-button:not(.collapsed) {
+  color: #174384;
+  background-color: #e0f2f7;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.125);
+}
+
+.accordion-button:hover {
+  background-color: #e9ecef;
+}
+
+.accordion-button:focus {
+  z-index: 3;
+  border-color: #86b7fe;
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.accordion-title-text {
+  flex-grow: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.accordion-body {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.row.g-2 {
+  --bs-gutter-x: 0.5rem;
+  --bs-gutter-y: 0.5rem;
+}
+.row.g-3 {
+  --bs-gutter-x: 0.75rem;
+  --bs-gutter-y: 0.75rem;
+}
+
+.inline-edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1151;
+}
+
+.inline-edit-modal-content {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  max-width: 350px;
+  width: 90%;
+  transform: translateY(-20px);
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.inline-edit-modal-content h4 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.1em;
+}
+
+.inline-edit-modal-content .form-label-sm {
+  text-align: left;
+  margin-bottom: 5px;
+}
+
+.inline-edit-modal-content .form-control-sm {
+  margin-bottom: 15px;
+}
+
+.inline-edit-modal-overlay,
+.inline-edit-modal-content {
+  pointer-events: auto !important;
+}
+</style>
