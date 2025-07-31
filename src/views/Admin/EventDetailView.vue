@@ -13,7 +13,8 @@ import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'
 import ScrollBar from '@/components/ScrollBar.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
-import { useProyectosEventosStore } from '@/stores/proyectos_eventos' // Import the new store
+import { useProyectosEventosStore } from '@/stores/proyectos_eventos'
+import { usePlantillasEvaluacionStore } from '@/stores/plantillas_evaluacion' // Import the new store
 
 const route = useRoute()
 const router = useRouter()
@@ -49,12 +50,15 @@ const imageManagementModalRef = ref(null)
 
 const showReactivateConfirmModal = ref(false)
 
-// Initialize the Pinia store
+// Initialize the Pinia stores
 const proyectosEventosStore = useProyectosEventosStore()
+const plantillasEvaluacionStore = usePlantillasEvaluacionStore() // Initialize the new store
 
-// Use computed properties from the store
+// Use computed properties from the stores
 const eventProjects = computed(() => proyectosEventosStore.getProjectsForEvent(eventId.value))
 const loadingProjects = computed(() => proyectosEventosStore.isLoadingProjects)
+const eventForms = computed(() => plantillasEvaluacionStore.getPlantillasForEvent(eventId.value)) // Computed for forms
+const loadingForms = computed(() => plantillasEvaluacionStore.isLoadingPlantillas) // Computed for forms loading
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -275,8 +279,8 @@ const handleModalSubmit = async (emittedEventData) => {
   if (eventId.value) {
     await fetchEventDetails()
     await fetchEventImages()
-    // No need to call fetchEventProjectsAndTeams directly here,
-    // as it's handled by the watch on eventId.value
+    await proyectosEventosStore.fetchProjectsAndTeams(eventId.value) // Re-fetch projects and teams after event edit
+    await plantillasEvaluacionStore.fetchPlantillasForEvent(eventId.value) // Re-fetch forms after event edit
   }
 }
 
@@ -513,13 +517,24 @@ const formatShortDate = (dateString) => {
   return date.toLocaleDateString('es-ES', options)
 }
 
+// NEW: Function to redirect to crearProyecto
+const redirectToCreateProject = () => {
+  if (eventId.value) {
+    router.push(`/admin/crearProyecto/${eventId.value}`)
+  } else {
+    errorMessage.value = 'No se puede crear un proyecto: El ID del evento no está disponible.'
+    showErrorModal.value = true
+  }
+}
+
 onMounted(async () => {
   try {
     eventId.value = route.params.id
     if (eventId.value) {
       await fetchEventDetails()
       await fetchEventImages()
-      await proyectosEventosStore.fetchProjectsAndTeams(eventId.value) // Fetch projects and teams on mount using the store
+      await proyectosEventosStore.fetchProjectsAndTeams(eventId.value)
+      await plantillasEvaluacionStore.fetchPlantillasForEvent(eventId.value)
     } else {
       errorMessage.value = 'ID de evento no proporcionado.'
       showErrorModal.value = true
@@ -547,7 +562,9 @@ watch(
         mainImage.value = DEFAULT_IMAGE_URL
         loadingImages.value = true
         proyectosEventosStore.clearProjects() // Clear projects cache when event ID changes
-        await proyectosEventosStore.fetchProjectsAndTeams(newId) // Re-fetch projects and teams on ID change using the store
+        await proyectosEventosStore.fetchProjectsAndTeams(newId)
+        plantillasEvaluacionStore.clearPlantillas() // Clear forms cache when event ID changes
+        await plantillasEvaluacionStore.fetchPlantillasForEvent(newId)
 
         await fetchEventDetails()
         await fetchEventImages()
@@ -584,467 +601,582 @@ const formatDate = (dateString) => {
 </script>
 
 <template>
-  <LoaderComponent v-if="loading" />
-  <div class="d-flex" style="height: 100vh; overflow: hidden">
-    <Sidebar />
+  <div class="event-detail-view-wrapper">
+    <LoaderComponent v-if="loading" />
+    <div class="d-flex" style="height: 100vh; overflow: hidden">
+      <Sidebar />
 
-    <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute
-        :currentRouteName="route.name"
-        :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'"
-      />
+      <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
+        <PageHeaderRoute
+          :currentRouteName="route.name"
+          :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'"
+        />
 
-      <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <div class="container-fluid" v-if="eventDetails">
-          <div class="d-flex align-items-center justify-content-between mb-4">
-            <div class="d-flex align-items-center">
-              <button class="btn btn-secondary me-3 animated-btn" @click="goBack">
-                <i class="fas fa-arrow-left me-2"></i>Volver
-              </button>
-              <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
-            </div>
-            <div class="d-flex">
-              <button
-                v-if="canEditEvent"
-                class="btn btn-primary btn-m me-2 animated-btn"
-                @click="handleEditButtonClick"
-              >
-                <i class="fa-solid fa-pencil me-2"></i>Editar
-              </button>
-              <div v-if="!eventDetails.estado_borrado && canEditEvent">
-                <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
-                  <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
+        <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
+          <div class="container-fluid" v-if="eventDetails">
+            <div class="d-flex align-items-center justify-content-between mb-4">
+              <div class="d-flex align-items-center">
+                <button class="btn btn-secondary me-3 animated-btn" @click="goBack">
+                  <i class="fas fa-arrow-left me-2"></i>Volver
                 </button>
+                <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
               </div>
-            </div>
-          </div>
-          <div class="row align-items-stretch mb-5">
-            <div class="col-md-8 d-flex">
-              <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
-                <ScrollBar :maxHeight="'calc(100% - 60px)'" class="image-list-scroll-area">
-                  <div v-if="loadingImages" class="text-center my-3">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status">
-                      <span class="visually-hidden">Cargando miniaturas...</span>
-                    </div>
-                  </div>
-                  <div
-                    v-else
-                    class="flex-grow-1 d-flex flex-column justify-content-start align-items-center"
-                  >
-                    <div
-                      v-for="image in imagesToDisplay"
-                      :key="image.id"
-                      class="thumbnail-container mb-2"
-                      :class="{ 'active-thumbnail': mainImage === image.url }"
-                      @click="selectImage(image)"
-                    >
-                      <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
-                    </div>
-                  </div>
-                </ScrollBar>
+              <div class="d-flex">
                 <button
                   v-if="canEditEvent"
-                  class="btn btn-primary add-image-plus-btn animated-btn"
-                  @click="openImageManagementModal"
-                  title="Editar Imágenes"
+                  class="btn btn-primary btn-m me-2 animated-btn"
+                  @click="handleEditButtonClick"
                 >
-                  <i class="fas fa-plus"></i>
+                  <i class="fa-solid fa-pencil me-2"></i>Editar
                 </button>
+                <div v-if="!eventDetails.estado_borrado && canEditEvent">
+                  <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
+                  </button>
+                </div>
               </div>
-              <div class="flex-grow-1 main-image-display">
+            </div>
+            <div class="row align-items-stretch mb-5">
+              <div class="col-md-8 d-flex">
+                <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
+                  <ScrollBar :maxHeight="'calc(100% - 60px)'" class="image-list-scroll-area">
+                    <div v-if="loadingImages" class="text-center my-3">
+                      <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Cargando miniaturas...</span>
+                      </div>
+                    </div>
+                    <div
+                      v-else
+                      class="flex-grow-1 d-flex flex-column justify-content-start align-items-center"
+                    >
+                      <div
+                        v-for="image in imagesToDisplay"
+                        :key="image.id"
+                        class="thumbnail-container mb-2"
+                        :class="{ 'active-thumbnail': mainImage === image.url }"
+                        @click="selectImage(image)"
+                      >
+                        <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
+                      </div>
+                    </div>
+                  </ScrollBar>
+                  <button
+                    v-if="canEditEvent"
+                    class="btn btn-primary add-image-plus-btn animated-btn"
+                    @click="openImageManagementModal"
+                    title="Editar Imágenes"
+                  >
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="flex-grow-1 main-image-display">
+                  <div
+                    v-if="loadingImages"
+                    class="d-flex justify-content-center align-items-center h-100"
+                  >
+                    <div
+                      class="spinner-border text-primary"
+                      role="status"
+                      style="width: 3rem; height: 3rem"
+                    ></div>
+                  </div>
+                  <img
+                    v-else
+                    :src="mainImage"
+                    class="img-fluid rounded main-event-image"
+                    :alt="eventDetails.nombre || 'Event Image'"
+                  />
+                </div>
+              </div>
+
+              <div class="col-md-4 event-info-section">
+                <div class="info-group">
+                  <p class="info-label">Descripción</p>
+                  <p class="info-content">{{ eventDetails.descripcion }}</p>
+                </div>
+
+                <div class="info-group">
+                  <p class="info-label">Categoría</p>
+                  <p class="info-content">{{ eventDetails.categoria }}</p>
+                </div>
+
+                <div class="info-group">
+                  <p class="info-label">Sede del evento</p>
+                  <p class="info-content">{{ eventDetails.espacio }}</p>
+                </div>
+
+                <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
+                  <div class="me-4">
+                    <p class="info-label">Fecha de Inicio:</p>
+                    <p class="info-content">{{ formatDate(eventDetails.fecha_inicio) }}</p>
+                  </div>
+                  <div>
+                    <p class="info-label">Fecha de Finalización:</p>
+                    <p class="info-content">{{ formatDate(eventDetails.fecha_fin) }}</p>
+                  </div>
+                </div>
+
+                <button
+                  v-if="eventDetails.inscripcionesAbiertas"
+                  class="btn btn-success mb-4 animated-btn"
+                  @click="redirectToCreateProject"
+                >
+                  Inscribirse
+                </button>
+                <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
+              </div>
+
+              <hr class="my-3" />
+
+              <div class="d-flex justify-content-between flex-wrap event-attributes">
+                <div class="attribute-item">
+                  <p class="info-label">Estado:</p>
+                  <p class="info-content">{{ eventDetails.estado }}</p>
+                </div>
+                <div class="attribute-item">
+                  <p class="info-label">Modalidad:</p>
+                  <p class="info-content">{{ eventDetails.modalidad }}</p>
+                </div>
+                <div class="attribute-item">
+                  <p class="info-label">Capacidad:</p>
+                  <p class="info-content">{{ eventDetails.capacidad }}</p>
+                </div>
+                <div class="attribute-item">
+                  <p class="info-label">Inscripciones Abiertas:</p>
+                  <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section"
+            >
+              <div class="d-flex align-items-center">
+                <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
+                  <i class="fas fa-check-circle me-2"></i> Este evento está activo
+                </span>
+                <span v-else class="text-danger status-text">
+                  <i class="fas fa-times-circle me-2"></i> El evento está desactivado
+                </span>
+              </div>
+              <button
+                v-if="eventDetails.estado_borrado && canEditEvent"
+                class="btn btn-success animated-btn"
+                @click="triggerReactivateEvent"
+              >
+                <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
+              </button>
+            </div>
+
+            <div class="mt-4">
+              <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link active"
+                    id="pills-cronogramas-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#pills-cronogramas"
+                    type="button"
+                    role="tab"
+                    aria-controls="pills-cronogramas"
+                    aria-selected="true"
+                  >
+                    Cronogramas
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link"
+                    id="pills-equipos-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#pills-equipos"
+                    type="button"
+                    role="tab"
+                    aria-controls="pills-equipos"
+                    aria-selected="false"
+                  >
+                    Equipos
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link"
+                    id="pills-formularios-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#pills-formularios"
+                    type="button"
+                    role="tab"
+                    aria-controls="pills-formularios"
+                    aria-selected="false"
+                  >
+                    Formularios
+                  </button>
+                </li>
+              </ul>
+              <div class="tab-content" id="pills-tabContent">
                 <div
-                  v-if="loadingImages"
-                  class="d-flex justify-content-center align-items-center h-100"
+                  class="tab-pane fade show active"
+                  id="pills-cronogramas"
+                  role="tabpanel"
+                  aria-labelledby="pills-cronogramas-tab"
                 >
                   <div
-                    class="spinner-border text-primary"
-                    role="status"
-                    style="width: 3rem; height: 3rem"
-                  ></div>
-                </div>
-                <img
-                  v-else
-                  :src="mainImage"
-                  class="img-fluid rounded main-event-image"
-                  :alt="eventDetails.nombre || 'Event Image'"
-                />
-              </div>
-            </div>
-
-            <div class="col-md-4 event-info-section">
-              <div class="info-group">
-                <p class="info-label">Descripción</p>
-                <p class="info-content">{{ eventDetails.descripcion }}</p>
-              </div>
-
-              <div class="info-group">
-                <p class="info-label">Categoría</p>
-                <p class="info-content">{{ eventDetails.categoria }}</p>
-              </div>
-
-              <div class="info-group">
-                <p class="info-label">Sede del evento</p>
-                <p class="info-content">{{ eventDetails.espacio }}</p>
-              </div>
-
-              <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
-                <div class="me-4">
-                  <p class="info-label">Fecha de Inicio:</p>
-                  <p class="info-content">{{ formatDate(eventDetails.fecha_inicio) }}</p>
-                </div>
-                <div>
-                  <p class="info-label">Fecha de Finalización:</p>
-                  <p class="info-content">{{ formatDate(eventDetails.fecha_fin) }}</p>
-                </div>
-              </div>
-
-              <button
-                v-if="eventDetails.inscripcionesAbiertas"
-                class="btn btn-success mb-4 animated-btn"
-              >
-                Inscribirse
-              </button>
-              <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
-            </div>
-
-            <hr class="my-3" />
-
-            <div class="d-flex justify-content-between flex-wrap event-attributes">
-              <div class="attribute-item">
-                <p class="info-label">Estado:</p>
-                <p class="info-content">{{ eventDetails.estado }}</p>
-              </div>
-              <div class="attribute-item">
-                <p class="info-label">Modalidad:</p>
-                <p class="info-content">{{ eventDetails.modalidad }}</p>
-              </div>
-              <div class="attribute-item">
-                <p class="info-label">Capacidad:</p>
-                <p class="info-content">{{ eventDetails.capacidad }}</p>
-              </div>
-              <div class="attribute-item">
-                <p class="info-label">Inscripciones Abiertas:</p>
-                <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section"
-          >
-            <div class="d-flex align-items-center">
-              <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
-                <i class="fas fa-check-circle me-2"></i> Este evento está activo
-              </span>
-              <span v-else class="text-danger status-text">
-                <i class="fas fa-times-circle me-2"></i> El evento está desactivado
-              </span>
-            </div>
-            <button
-              v-if="eventDetails.estado_borrado && canEditEvent"
-              class="btn btn-success animated-btn"
-              @click="triggerReactivateEvent"
-            >
-              <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
-            </button>
-          </div>
-
-          <div class="mt-4">
-            <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
-              <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link active"
-                  id="pills-cronogramas-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-cronogramas"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-cronogramas"
-                  aria-selected="true"
-                >
-                  Cronogramas
-                </button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link"
-                  id="pills-equipos-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-equipos"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-equipos"
-                  aria-selected="false"
-                >
-                  Equipos
-                </button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button
-                  class="nav-link"
-                  id="pills-formularios-tab"
-                  data-bs-toggle="pill"
-                  data-bs-target="#pills-formularios"
-                  type="button"
-                  role="tab"
-                  aria-controls="pills-formularios"
-                  aria-selected="false"
-                >
-                  Formularios
-                </button>
-              </li>
-            </ul>
-            <div class="tab-content" id="pills-tabContent">
-              <div
-                class="tab-pane fade show active"
-                id="pills-cronogramas"
-                role="tabpanel"
-                aria-labelledby="pills-cronogramas-tab"
-              >
-                <div
-                  v-if="
-                    eventDetails && eventDetails.cronogramas && eventDetails.cronogramas.length > 0
-                  "
-                >
-                  <div class="accordion" id="nestedAccordionCronogramas">
-                    <div
-                      class="accordion-item"
-                      v-for="cronograma in eventDetails.cronogramas"
-                      :key="cronograma.id"
-                    >
-                      <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
-                        <button
-                          class="accordion-button nested-accordion-button collapsed"
-                          type="button"
-                          data-bs-toggle="collapse"
-                          :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
-                          aria-expanded="false"
-                          :aria-controls="`cronogramaCollapse${cronograma.id}`"
-                        >
-                          <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
-                          {{ cronograma.titulo }}
-                        </button>
-                      </h2>
+                    v-if="
+                      eventDetails &&
+                      eventDetails.cronogramas &&
+                      eventDetails.cronogramas.length > 0
+                    "
+                  >
+                    <div class="accordion" id="nestedAccordionCronogramas">
                       <div
-                        :id="`cronogramaCollapse${cronograma.id}`"
-                        class="accordion-collapse collapse"
-                        :aria-labelledby="`cronogramaHeading${cronograma.id}`"
-                        data-bs-parent="#nestedAccordionCronogramas"
+                        class="accordion-item"
+                        v-for="cronograma in eventDetails.cronogramas"
+                        :key="cronograma.id"
                       >
-                        <div class="accordion-body nested-accordion-body">
-                          <p class="mb-2">
-                            <strong>Descripción:</strong> {{ cronograma.descripcion }}
-                          </p>
-                          <p class="mb-2">
-                            <strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}
-                          </p>
-                          <p class="mb-3">
-                            <strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}
-                          </p>
-                          <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
-                          <div
-                            v-if="
-                              cronograma.actividades_cronogramas &&
-                              cronograma.actividades_cronogramas.length > 0
-                            "
+                        <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
+                          <button
+                            class="accordion-button nested-accordion-button collapsed"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
+                            aria-expanded="false"
+                            :aria-controls="`cronogramaCollapse${cronograma.id}`"
                           >
+                            <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
+                            {{ cronograma.titulo }}
+                          </button>
+                        </h2>
+                        <div
+                          :id="`cronogramaCollapse${cronograma.id}`"
+                          class="accordion-collapse collapse"
+                          :aria-labelledby="`cronogramaHeading${cronograma.id}`"
+                          data-bs-parent="#nestedAccordionCronogramas"
+                        >
+                          <div class="accordion-body nested-accordion-body">
+                            <p class="mb-2">
+                              <strong>Descripción:</strong> {{ cronograma.descripcion }}
+                            </p>
+                            <p class="mb-2">
+                              <strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}
+                            </p>
+                            <p class="mb-3">
+                              <strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}
+                            </p>
+                            <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
                             <div
-                              class="accordion accordion-flush"
-                              :id="`activitiesAccordion${cronograma.id}`"
+                              v-if="
+                                cronograma.actividades_cronogramas &&
+                                cronograma.actividades_cronogramas.length > 0
+                              "
                             >
                               <div
-                                class="accordion-item"
-                                v-for="actividad in cronograma.actividades_cronogramas"
-                                :key="actividad.id"
+                                class="accordion accordion-flush"
+                                :id="`activitiesAccordion${cronograma.id}`"
                               >
-                                <h2 class="accordion-header" :id="`activityHeading${actividad.id}`">
-                                  <button
-                                    class="accordion-button activity-accordion-button collapsed"
-                                    type="button"
-                                    data-bs-toggle="collapse"
-                                    :data-bs-target="`#activityCollapse${actividad.id}`"
-                                    aria-expanded="false"
-                                    :aria-controls="`activityCollapse${actividad.id}`"
-                                  >
-                                    <i class="fas fa-check-circle activity-icon me-2"></i>
-                                    {{ actividad.titulo }}
-                                    <div class="activity-date-display ms-auto">
-                                      <i
-                                        class="fas fa-clock activity-date-icon me-1"
-                                        title="Inicio de Actividad"
-                                      ></i>
-                                      <span class="activity-start-date">{{
-                                        formatTime(actividad.fecha_inicio)
-                                      }}</span>
-                                      <span class="mx-1">-</span>
-                                      <span class="activity-end-date">{{
-                                        formatTime(actividad.fecha_fin)
-                                      }}</span>
-                                      <i
-                                        class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
-                                        title="Fecha de Actividad"
-                                      ></i>
-                                      <span class="activity-full-date">{{
-                                        formatShortDate(actividad.fecha_inicio)
-                                      }}</span>
-                                    </div>
-                                  </button>
-                                </h2>
                                 <div
-                                  :id="`activityCollapse${actividad.id}`"
-                                  class="accordion-collapse collapse"
-                                  :aria-labelledby="`activityHeading${actividad.id}`"
-                                  :data-bs-parent="`#activitiesAccordion${cronograma.id}`"
+                                  class="accordion-item"
+                                  v-for="actividad in cronograma.actividades_cronogramas"
+                                  :key="actividad.id"
                                 >
-                                  <div class="accordion-body activity-accordion-body">
-                                    <p class="mb-2">
-                                      <strong>Descripción:</strong>
-                                      {{ actividad.descripcion || 'Sin descripción.' }}
-                                    </p>
+                                  <h2
+                                    class="accordion-header"
+                                    :id="`activityHeading${actividad.id}`"
+                                  >
+                                    <button
+                                      class="accordion-button activity-accordion-button collapsed"
+                                      type="button"
+                                      data-bs-toggle="collapse"
+                                      :data-bs-target="`#activityCollapse${actividad.id}`"
+                                      aria-expanded="false"
+                                      :aria-controls="`activityCollapse${actividad.id}`"
+                                    >
+                                      <i class="fas fa-check-circle activity-icon me-2"></i>
+                                      {{ actividad.titulo }}
+                                      <div class="activity-date-display ms-auto">
+                                        <i
+                                          class="fas fa-clock activity-date-icon me-1"
+                                          title="Inicio de Actividad"
+                                        ></i>
+                                        <span class="activity-start-date">{{
+                                          formatTime(actividad.fecha_inicio)
+                                        }}</span>
+                                        <span class="mx-1">-</span>
+                                        <span class="activity-end-date">{{
+                                          formatTime(actividad.fecha_fin)
+                                        }}</span>
+                                        <i
+                                          class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
+                                          title="Fecha de Actividad"
+                                        ></i>
+                                        <span class="activity-full-date">{{
+                                          formatShortDate(actividad.fecha_inicio)
+                                        }}</span>
+                                      </div>
+                                    </button>
+                                  </h2>
+                                  <div
+                                    :id="`activityCollapse${actividad.id}`"
+                                    class="accordion-collapse collapse"
+                                    :aria-labelledby="`activityHeading${actividad.id}`"
+                                    :data-bs-parent="`#activitiesAccordion${cronograma.id}`"
+                                  >
+                                    <div class="accordion-body activity-accordion-body">
+                                      <p class="mb-2">
+                                        <strong>Descripción:</strong>
+                                        {{ actividad.descripcion || 'Sin descripción.' }}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
+                            <p v-else class="text-muted text-center py-2">
+                              No hay actividades para este cronograma.
+                            </p>
                           </div>
-                          <p v-else class="text-muted text-center py-2">
-                            No hay actividades para este cronograma.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-else class="text-muted mt-3">
+                    No hay cronogramas disponibles para este evento.
+                  </p>
+                </div>
+
+                <div
+                  class="tab-pane fade"
+                  id="pills-equipos"
+                  role="tabpanel"
+                  aria-labelledby="pills-equipos-tab"
+                >
+                  <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                    <h5 class="mb-3">Proyectos y Equipos del Evento</h5>
+                    <div v-if="loadingProjects" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando proyectos y equipos...</span>
+                      </div>
+                      <p class="text-muted mt-2">Cargando proyectos y equipos...</p>
+                    </div>
+                    <div v-else-if="eventProjects.length === 0" class="text-center text-muted py-2">
+                      Este evento no tiene proyectos ni equipos asociados.
+                    </div>
+                    <div v-else class="row g-3">
+                      <div
+                        v-for="project in eventProjects"
+                        :key="project.id"
+                        class="col-md-6 col-lg-4"
+                      >
+                        <div class="project-card">
+                          <h6 class="project-title">{{ project.titulo }}</h6>
+                          <p class="project-description">{{ project.descripcion }}</p>
+                          <hr />
+                          <p class="team-info">
+                            <strong>Equipo:</strong>
+                            <span :class="{ 'text-danger': project.team.estado_borrado }">
+                              {{ project.team.nombre }}
+                              <i
+                                v-if="project.team.estado_borrado"
+                                class="fas fa-exclamation-circle ms-1"
+                                title="Equipo Deshabilitado"
+                              ></i>
+                            </span>
+                          </p>
+                          <p class="project-status">
+                            <strong>Estado del Proyecto:</strong> {{ project.estado }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Inicio:</strong> {{ formatDate(project.fecha_inicio) }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Fin:</strong> {{ formatDate(project.fecha_fin) }}
                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-muted mt-3">
-                  No hay cronogramas disponibles para este evento.
-                </p>
-              </div>
 
-              <div
-                class="tab-pane fade"
-                id="pills-equipos"
-                role="tabpanel"
-                aria-labelledby="pills-equipos-tab"
-              >
-                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                  <h5 class="mb-3">Proyectos y Equipos del Evento</h5>
-                  <div v-if="loadingProjects" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Cargando proyectos y equipos...</span>
+                <div
+                  class="tab-pane fade"
+                  id="pills-formularios"
+                  role="tabpanel"
+                  aria-labelledby="pills-formularios-tab"
+                >
+                  <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                    <h5 class="mb-3">Plantillas de Evaluación para este Evento</h5>
+                    <div v-if="loadingForms" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando formularios...</span>
+                      </div>
+                      <p class="text-muted mt-2">Cargando plantillas de evaluación...</p>
                     </div>
-                    <p class="text-muted mt-2">Cargando proyectos y equipos...</p>
-                  </div>
-                  <div v-else-if="eventProjects.length === 0" class="text-center text-muted py-2">
-                    Este evento no tiene proyectos ni equipos asociados.
-                  </div>
-                  <div v-else class="row g-3">
-                    <div
-                      v-for="project in eventProjects"
-                      :key="project.id"
-                      class="col-md-6 col-lg-4"
-                    >
-                      <div class="project-card">
-                        <h6 class="project-title">{{ project.titulo }}</h6>
-                        <p class="project-description">{{ project.descripcion }}</p>
-                        <hr />
-                        <p class="team-info">
-                          <strong>Equipo:</strong>
-                          <span :class="{ 'text-danger': project.team.estado_borrado }">
-                            {{ project.team.nombre }}
-                            <i
-                              v-if="project.team.estado_borrado"
-                              class="fas fa-exclamation-circle ms-1"
-                              title="Equipo Deshabilitado"
-                            ></i>
-                          </span>
-                        </p>
-                        <p class="project-status">
-                          <strong>Estado del Proyecto:</strong> {{ project.estado }}
-                        </p>
-                        <p class="project-dates">
-                          <strong>Inicio:</strong> {{ formatDate(project.fecha_inicio) }}
-                        </p>
-                        <p class="project-dates">
-                          <strong>Fin:</strong> {{ formatDate(project.fecha_fin) }}
-                        </p>
+                    <div v-else-if="eventForms.length === 0" class="text-center text-muted py-2">
+                      Este evento no tiene procesos de evaluación o plantillas asociadas.
+                    </div>
+                    <div v-else>
+                      <div class="accordion" id="evaluationProcessesAccordion">
+                        <div
+                          v-for="proceso in eventForms"
+                          :key="proceso.procesoId"
+                          class="accordion-item mb-3"
+                        >
+                          <h2 class="accordion-header" :id="`procesoHeading${proceso.procesoId}`">
+                            <button
+                              class="accordion-button nested-accordion-button collapsed"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              :data-bs-target="`#procesoCollapse${proceso.procesoId}`"
+                              aria-expanded="false"
+                              :aria-controls="`procesoCollapse${proceso.procesoId}`"
+                            >
+                              <i class="fas fa-file-alt me-2 nested-accordion-icon"></i>
+                              Proceso: {{ proceso.procesoTitulo }}
+                            </button>
+                          </h2>
+                          <div
+                            :id="`procesoCollapse${proceso.procesoId}`"
+                            class="accordion-collapse collapse"
+                            :aria-labelledby="`procesoHeading${proceso.procesoId}`"
+                            data-bs-parent="#evaluationProcessesAccordion"
+                          >
+                            <div class="accordion-body nested-accordion-body">
+                              <h6 class="mb-3">Plantillas:</h6>
+                              <div v-if="proceso.plantillas && proceso.plantillas.length > 0">
+                                <div
+                                  class="accordion accordion-flush"
+                                  :id="`plantillasAccordion${proceso.procesoId}`"
+                                >
+                                  <div
+                                    v-for="plantilla in proceso.plantillas"
+                                    :key="plantilla.plantillaId"
+                                    class="accordion-item"
+                                  >
+                                    <h2
+                                      class="accordion-header"
+                                      :id="`plantillaHeading${plantilla.plantillaId}`"
+                                    >
+                                      <button
+                                        class="accordion-button activity-accordion-button collapsed"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        :data-bs-target="`#plantillaCollapse${plantilla.plantillaId}`"
+                                        aria-expanded="false"
+                                        :aria-controls="`plantillaCollapse${plantilla.plantillaId}`"
+                                      >
+                                        <i class="fas fa-clipboard-list activity-icon me-2"></i>
+                                        {{ plantilla.plantillaNombre }}
+                                      </button>
+                                    </h2>
+                                    <div
+                                      :id="`plantillaCollapse${plantilla.plantillaId}`"
+                                      class="accordion-collapse collapse"
+                                      :aria-labelledby="`plantillaHeading${plantilla.plantillaId}`"
+                                      :data-bs-parent="`#plantillasAccordion${proceso.procesoId}`"
+                                    >
+                                      <div class="accordion-body activity-accordion-body">
+                                        <h6 class="mt-2 mb-2">Criterios:</h6>
+                                        <ul
+                                          v-if="
+                                            plantilla.criterios && plantilla.criterios.length > 0
+                                          "
+                                          class="list-group list-group-flush"
+                                        >
+                                          <li
+                                            v-for="criterio in plantilla.criterios"
+                                            :key="criterio.criterioId"
+                                            class="list-group-item d-flex justify-content-between align-items-center"
+                                          >
+                                            <div>
+                                              <strong>{{ criterio.criterioNombre }}</strong
+                                              >: {{ criterio.criterioDescripcion }}
+                                            </div>
+                                            <span class="badge bg-primary rounded-pill"
+                                              >{{ criterio.criterioPeso }}%</span
+                                            >
+                                          </li>
+                                        </ul>
+                                        <p v-else class="text-muted text-center py-2">
+                                          No hay criterios para esta plantilla.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <p v-else class="text-muted text-center py-2">
+                                No hay plantillas para este proceso de evaluación.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-
-              <div
-                class="tab-pane fade"
-                id="pills-formularios"
-                role="tabpanel"
-                aria-labelledby="pills-formularios-tab"
-              >
-                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                  <h5 class="mb-3">Información de Formularios</h5>
-                  <p class="mb-0">
-                    Formularios del evento: <strong>{{ eventDetails?.nombre }}</strong>
-                  </p>
-                  <p class="text-muted mt-2">
-                    Aquí se mostrará la información de los formularios asociados a este evento.
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
-        <div v-else-if="!loading" class="container text-center text-muted mt-5">
-          No se pudieron cargar los detalles del evento o el evento no existe.
+          <div v-else-if="!loading" class="container text-center text-muted mt-5">
+            No se pudieron cargar los detalles del evento o el evento no existe.
+          </div>
         </div>
       </div>
     </div>
+
+    <OkModal
+      :show="showOkModal"
+      :message="okModalMessage"
+      :duration="1000"
+      @close="handleOkModalClose"
+    />
+
+    <ModalCrearEvento
+      :show="showCreateEditModal"
+      :eventData="currentEventToEdit"
+      @close="handleModalClose"
+      @submit="handleModalSubmit"
+    />
+
+    <ImageManagementModal
+      :show="showImageManagementModal"
+      :currentImages="eventImages"
+      :isLoading="isLoadingImagesInModal"
+      @close="closeImageManagementModal"
+      @delete-image="triggerDeleteImage"
+      @upload-images="uploadNewImages"
+      ref="imageManagementModalRef"
+    />
+
+    <ConfirmationModal
+      :show="showReactivateConfirmModal"
+      title="Reactivar Evento"
+      message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
+      confirmText="Sí, Reactivar"
+      cancelText="Cancelar"
+      @confirm="handleReactivateConfirm"
+      @cancel="handleReactivateCancel"
+    />
+
+    <DeleteModal
+      ref="universalDeleteModalRef"
+      :title="modalTitle"
+      :message="modalMessage"
+      :warning="modalWarning"
+      :confirmButtonText="modalConfirmText"
+      @confirmed="handleDeleteConfirmed"
+    />
+
+    <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
   </div>
-
-  <OkModal
-    :show="showOkModal"
-    :message="okModalMessage"
-    :duration="1000"
-    @close="handleOkModalClose"
-  />
-
-  <ModalCrearEvento
-    :show="showCreateEditModal"
-    :eventData="currentEventToEdit"
-    @close="handleModalClose"
-    @submit="handleModalSubmit"
-  />
-
-  <ImageManagementModal
-    :show="showImageManagementModal"
-    :currentImages="eventImages"
-    :isLoading="isLoadingImagesInModal"
-    @close="closeImageManagementModal"
-    @delete-image="triggerDeleteImage"
-    @upload-images="uploadNewImages"
-    ref="imageManagementModalRef"
-  />
-
-  <ConfirmationModal
-    :show="showReactivateConfirmModal"
-    title="Reactivar Evento"
-    message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
-    confirmText="Sí, Reactivar"
-    cancelText="Cancelar"
-    @confirm="handleReactivateConfirm"
-    @cancel="handleReactivateCancel"
-  />
-
-  <DeleteModal
-    ref="universalDeleteModalRef"
-    :title="modalTitle"
-    :message="modalMessage"
-    :warning="modalWarning"
-    :confirmButtonText="modalConfirmText"
-    @confirmed="handleDeleteConfirmed"
-  />
-
-  <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 </template>
 
 <style scoped>
+.event-detail-view-wrapper {
+  /* This is the new single root element */
+  height: 100vh;
+  overflow: hidden;
+}
+
 .image-thumbnail-sidebar {
   width: 120px;
   flex-shrink: 0;
