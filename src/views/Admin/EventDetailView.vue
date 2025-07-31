@@ -13,6 +13,7 @@ import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'
 import ScrollBar from '@/components/ScrollBar.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
+import { useProyectosEventosStore } from '@/stores/proyectos_eventos' // Import the new store
 
 const route = useRoute()
 const router = useRouter()
@@ -47,6 +48,13 @@ const imageToDelete = ref(null)
 const imageManagementModalRef = ref(null)
 
 const showReactivateConfirmModal = ref(false)
+
+// Initialize the Pinia store
+const proyectosEventosStore = useProyectosEventosStore()
+
+// Use computed properties from the store
+const eventProjects = computed(() => proyectosEventosStore.getProjectsForEvent(eventId.value))
+const loadingProjects = computed(() => proyectosEventosStore.isLoadingProjects)
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
@@ -267,6 +275,8 @@ const handleModalSubmit = async (emittedEventData) => {
   if (eventId.value) {
     await fetchEventDetails()
     await fetchEventImages()
+    // No need to call fetchEventProjectsAndTeams directly here,
+    // as it's handled by the watch on eventId.value
   }
 }
 
@@ -509,6 +519,7 @@ onMounted(async () => {
     if (eventId.value) {
       await fetchEventDetails()
       await fetchEventImages()
+      await proyectosEventosStore.fetchProjectsAndTeams(eventId.value) // Fetch projects and teams on mount using the store
     } else {
       errorMessage.value = 'ID de evento no proporcionado.'
       showErrorModal.value = true
@@ -535,6 +546,8 @@ watch(
         eventImages.value = []
         mainImage.value = DEFAULT_IMAGE_URL
         loadingImages.value = true
+        proyectosEventosStore.clearProjects() // Clear projects cache when event ID changes
+        await proyectosEventosStore.fetchProjectsAndTeams(newId) // Re-fetch projects and teams on ID change using the store
 
         await fetchEventDetails()
         await fetchEventImages()
@@ -913,13 +926,49 @@ const formatDate = (dateString) => {
                 aria-labelledby="pills-equipos-tab"
               >
                 <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                  <h5 class="mb-3">Información de Equipos</h5>
-                  <p class="mb-0">
-                    Equipos del evento: <strong>{{ eventDetails?.nombre }}</strong>
-                  </p>
-                  <p class="text-muted mt-2">
-                    Aquí se mostrará la información de los equipos asociados a este evento.
-                  </p>
+                  <h5 class="mb-3">Proyectos y Equipos del Evento</h5>
+                  <div v-if="loadingProjects" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Cargando proyectos y equipos...</span>
+                    </div>
+                    <p class="text-muted mt-2">Cargando proyectos y equipos...</p>
+                  </div>
+                  <div v-else-if="eventProjects.length === 0" class="text-center text-muted py-2">
+                    Este evento no tiene proyectos ni equipos asociados.
+                  </div>
+                  <div v-else class="row g-3">
+                    <div
+                      v-for="project in eventProjects"
+                      :key="project.id"
+                      class="col-md-6 col-lg-4"
+                    >
+                      <div class="project-card">
+                        <h6 class="project-title">{{ project.titulo }}</h6>
+                        <p class="project-description">{{ project.descripcion }}</p>
+                        <hr />
+                        <p class="team-info">
+                          <strong>Equipo:</strong>
+                          <span :class="{ 'text-danger': project.team.estado_borrado }">
+                            {{ project.team.nombre }}
+                            <i
+                              v-if="project.team.estado_borrado"
+                              class="fas fa-exclamation-circle ms-1"
+                              title="Equipo Deshabilitado"
+                            ></i>
+                          </span>
+                        </p>
+                        <p class="project-status">
+                          <strong>Estado del Proyecto:</strong> {{ project.estado }}
+                        </p>
+                        <p class="project-dates">
+                          <strong>Inicio:</strong> {{ formatDate(project.fecha_inicio) }}
+                        </p>
+                        <p class="project-dates">
+                          <strong>Fin:</strong> {{ formatDate(project.fecha_fin) }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1376,6 +1425,46 @@ const formatDate = (dateString) => {
 .activity-end-date,
 .activity-full-date {
   white-space: nowrap; /* Prevent dates from wrapping */
+}
+
+/* Styles for Project Cards in Equipos tab */
+.project-card {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  height: 100%; /* Ensure cards in a row have equal height */
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.project-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #174384;
+  margin-bottom: 5px;
+}
+
+.project-description {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 10px;
+  flex-grow: 1; /* Allow description to take available space */
+}
+
+.team-info,
+.project-status,
+.project-dates {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.team-info strong,
+.project-status strong,
+.project-dates strong {
+  color: #333;
 }
 
 /* Ensure the full date is displayed on smaller screens if necessary, or adjust layout */

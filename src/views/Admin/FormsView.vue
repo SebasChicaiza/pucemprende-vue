@@ -317,7 +317,7 @@ const redirectToEditEvent = () => {
   }
 }
 
-// NEW: Handlers for PlantillasEvaluacionModal
+// Handlers for PlantillasEvaluacionModal
 const openPlantillasModal = (procesoId, procesoTitle) => {
   currentProcesoIdForPlantillas.value = procesoId
   currentProcesoTitleForPlantillas.value = procesoTitle
@@ -328,19 +328,22 @@ const handlePlantillasModalClose = () => {
   showPlantillasModal.value = false
   currentProcesoIdForPlantillas.value = null
   currentProcesoTitleForPlantillas.value = ''
-  // Optionally re-fetch procesos if templates affect their display (unlikely, but good practice)
   fetchProcesosEvaluacion()
 }
 
 const handlePlantillasSuccess = (payload) => {
   okModalMessage.value = payload.message
   showOkModal.value = true
-  // No need to close the main modal here, it's handled by handlePlantillasModalClose
 }
 
 const handlePlantillasError = (payload) => {
   errorMessage.value = payload.message
   showErrorModal.value = true
+}
+
+// NEW: Function to redirect to the /admin/formularios/:id route
+const redirectToFormularioDetail = (procesoId) => {
+  router.push(`/admin/formularios/${procesoId}`)
 }
 
 onMounted(() => {
@@ -502,7 +505,13 @@ watch(processSearchQuery, () => {
               class="btn btn-primary templates-button mt-auto"
               @click="openPlantillasModal(proceso.id, proceso.titulo)"
             >
-              <i class="fas fa-star me-2"></i>Plantillas de evaluacion
+              <i class="fas fa-plus me-2"></i>Crear/Editar Plantillas
+            </button>
+            <button
+              class="btn btn-secondary view-templates-button mt-2"
+              @click="redirectToFormularioDetail(proceso.id)"
+            >
+              <i class="fas fa-eye me-2"></i>Ver plantillas a evaluar
             </button>
           </div>
         </div>
@@ -827,6 +836,27 @@ watch(processSearchQuery, () => {
   background-color: #0056b3;
 }
 
+.view-templates-button {
+  background-color: #6c757d; /* A neutral color for viewing */
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px; /* Add some space between the two buttons */
+  transition: background-color 0.2s;
+}
+
+.view-templates-button:hover {
+  background-color: #5a6268;
+}
+
 .event-description {
   font-size: 0.85em;
   color: #666;
@@ -924,7 +954,8 @@ watch(processSearchQuery, () => {
     font-size: 0.9em;
   }
 
-  .templates-button {
+  .templates-button,
+  .view-templates-button {
     font-size: 0.85em;
     padding: 8px 12px;
   }

@@ -17,6 +17,7 @@ import UserEvent from '@/views/Admin/UserEvent.vue'
 import FormsView from '@/views/Admin/FormsView.vue'
 import UserManagement from '@/views/Admin/UserManagement.vue'
 import EquiposGestion from '@/views/Admin/EquiposGestion.vue'
+import FormsDetailView from '@/views/Admin/FormsDetailView.vue'
 
 
 const router = createRouter({
@@ -167,7 +168,15 @@ const router = createRouter({
         title: 'Equipos',
       },
     },
-
+    {
+      path: '/admin/formularios/:id',
+      name: 'Detalle formulario',
+      component: FormsDetailView,
+      props: true,
+      meta: {
+        title: 'Formularios - id',
+      },
+    },
 
   ],
 })
