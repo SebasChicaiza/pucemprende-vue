@@ -12,9 +12,12 @@
           <label class="form-label fw-semibold">Nombre de tu Equipo</label>
           <input
             v-model="nombreEquipo"
-            class="form-control"
+            :class="['form-control', { 'is-invalid': mostrarErrores && !nombreEquipo.trim() }]"
             placeholder="Ingresa el Nombre de tu Equipo"
           />
+          <div v-if="mostrarErrores && !nombreEquipo.trim()" class="invalid-feedback">
+            El nombre es obligatorio.
+          </div>
         </div>
 
         <!-- Buscador -->
@@ -80,7 +83,12 @@
                   </button>
                 </td>
               </tr>
-              <tr v-if="integrantes.length === 0">
+              <tr v-if="integrantes.length === 0 && mostrarErrores">
+                <td colspan="7" class="text-center text-danger">
+                  Debes añadir al menos un integrante.
+                </td>
+              </tr>
+              <tr v-if="integrantes.length === 0 && !mostrarErrores">
                 <td colspan="7" class="text-center text-muted">Sin integrantes aún</td>
               </tr>
             </tbody>
@@ -91,9 +99,21 @@
       <!-- Footer -->
       <div class="modal-footer">
         <p v-if="dialogoError" class="text-danger fw-semibold mb-2">{{ dialogoError }}</p>
-
         <button class="btn btn-primary" @click="guardarEquipo">Guardar equipo</button>
       </div>
+    </div>
+
+    <!-- Confirmación -->
+    <ConfirmationDialog
+      :visible="showConfirmDialog"
+      message="¿Estás seguro de que quieres crear este equipo?"
+      @confirm="confirmSave"
+      @cancel="cancelSave"
+    />
+
+    <!-- Toast -->
+    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
+      {{ toastMessage }}
     </div>
   </div>
 </template>
@@ -101,12 +121,7 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
-
-const cedulaBusqueda = ref('')
-const resultadosBusqueda = ref([])
-const buscando = ref(false)
-const busquedaError = ref('')
-const dialogoError = ref('')
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 
 const props = defineProps({
   visible: Boolean,
@@ -116,13 +131,104 @@ const props = defineProps({
 const emit = defineEmits(['close', 'guardar'])
 
 const nombreEquipo = ref('')
+const cedulaBusqueda = ref('')
+const resultadosBusqueda = ref([])
+const buscando = ref(false)
+const busquedaError = ref('')
 const integrantes = ref([])
+const dialogoError = ref('')
+const mostrarErrores = ref(false)
+
+const showConfirmDialog = ref(false)
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref('') // 'success' o 'error'
+
+function showNotification(message, type) {
+  toastMessage.value = message
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => {
+    showToast.value = false
+  }, 3000)
+}
+
+function validarFormulario() {
+  mostrarErrores.value = true
+  if (!nombreEquipo.value.trim()) return false
+  if (integrantes.value.length === 0) return false
+  return true
+}
+
+function guardarEquipo() {
+  if (!validarFormulario()) {
+    showNotification('Completa los campos obligatorios.', 'error')
+    return
+  }
+  showConfirmDialog.value = true
+}
+
+function cancelSave() {
+  showConfirmDialog.value = false
+}
+
+async function confirmSave() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    showNotification('No se encontró token de autenticación.', 'error')
+    return
+  }
+
+  try {
+    const equipoResponse = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
+      {
+        nombre: nombreEquipo.value,
+        evento_id: props.eventoId,
+        ranking: null,
+      },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    const equipoId = equipoResponse.data.id
+
+    const fechaInicio = new Date().toISOString().split('T')[0]
+    const fechaFin = new Date()
+    fechaFin.setDate(fechaFin.getDate() + 42)
+    const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
+
+    for (const integrante of integrantes.value) {
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
+        {
+          equipo_id: equipoId,
+          persona_id: integrante.persona_id,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFinFormatted,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    }
+
+    showNotification('Equipo creado correctamente.', 'success')
+    emit('guardar')
+    emit('close')
+  } catch (error) {
+    console.error('Error al guardar el equipo:', error)
+    showNotification('Ocurrió un error al guardar el equipo.', 'error')
+  } finally {
+    showConfirmDialog.value = false
+  }
+}
 
 async function buscarPersonaPorCedula() {
   if (!cedulaBusqueda.value.trim()) return
 
   const token = localStorage.getItem('token')
-  if (!token) return
+  if (!token) {
+    showNotification('No se encontró token de autenticación.', 'error')
+    return
+  }
 
   buscando.value = true
   busquedaError.value = ''
@@ -133,7 +239,9 @@ async function buscarPersonaPorCedula() {
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedulaBusqueda.value}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    resultadosBusqueda.value = Array.isArray(data) ? data : [data]
+
+    const resultados = Array.isArray(data) ? data : [data]
+    resultadosBusqueda.value = resultados.filter((p) => !p.estado_borrado)
   } catch (e) {
     busquedaError.value = 'No se encontraron resultados.'
   } finally {
@@ -141,16 +249,18 @@ async function buscarPersonaPorCedula() {
   }
 }
 
-function eliminarIntegrante(index) {
-  integrantes.value.splice(index, 1)
-}
-
 async function seleccionarPersona(persona) {
   const yaExiste = integrantes.value.some((i) => i.identificacion === persona.identificacion)
-  if (yaExiste) return
+  if (yaExiste) {
+    showNotification('Esta persona ya ha sido añadida al equipo.', 'error')
+    return
+  }
 
   const token = localStorage.getItem('token')
-  if (!token) return
+  if (!token) {
+    showNotification('No se encontró token de autenticación.', 'error')
+    return
+  }
 
   try {
     const response = await axios.get(
@@ -168,60 +278,16 @@ async function seleccionarPersona(persona) {
       persona_id: personaCompleta.id,
       rol_id: 2,
     })
+
+    showNotification('Integrante añadido correctamente.', 'success')
   } catch (error) {
+    showNotification('Ocurrió un error al añadir al integrante.', 'error')
     console.error('Error obteniendo persona completa:', error)
   }
 }
 
-async function guardarEquipo() {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    alert('No se encontró token de autenticación.')
-    return
-  }
-
-  try {
-    // 1. Crear el equipo
-    const equipoResponse = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
-      {
-        nombre: nombreEquipo.value,
-        evento_id: props.eventoId,
-        ranking: null,
-      },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    const equipoId = equipoResponse.data.id
-    console.log('Equipo creado con ID:', equipoId)
-
-    // 2. Fechas para miembros
-    const fechaInicio = new Date().toISOString().split('T')[0]
-    const fechaFin = new Date()
-    fechaFin.setDate(fechaFin.getDate() + 42)
-    const fechaFinFormatted = fechaFin.toISOString().split('T')[0]
-
-    // 3. Asociar miembros usando la nueva API
-    for (const integrante of integrantes.value) {
-      await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
-        {
-          equipo_id: equipoId,
-          persona_id: integrante.persona_id,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFinFormatted,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-    }
-
-    dialogoError.value = ''
-    alert('Equipo creado correctamente.')
-    emit('guardar')
-  } catch (error) {
-    console.error('Error al guardar el equipo o los miembros:', error)
-    alert('Ocurrió un error al guardar el equipo. Intenta de nuevo.')
-  }
+function eliminarIntegrante(index) {
+  integrantes.value.splice(index, 1)
 }
 </script>
 
@@ -255,10 +321,6 @@ async function guardarEquipo() {
   border: none;
   font-size: 1.5rem;
 }
-.table input {
-  font-size: 0.875rem;
-  padding: 4px;
-}
 .btn {
   background-color: #174384;
   border-color: #174384;
@@ -275,5 +337,36 @@ async function guardarEquipo() {
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 6px;
+}
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
+}
+/* Campo inválido */
+.is-invalid {
+  border-color: #dc3545;
+}
+.invalid-feedback {
+  font-size: 0.875rem;
 }
 </style>

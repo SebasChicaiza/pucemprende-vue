@@ -14,6 +14,8 @@ const orden = ref('alfabetico')
 const currentPage = ref(1)
 const pageSize = 8
 const equipos = ref([])
+const proyectosConEventos = ref([])
+const eventos = ref([]) // para traer nombre del evento
 
 async function fetchEquipos() {
   const token = localStorage.getItem('token')
@@ -90,6 +92,11 @@ async function fetchProyectos() {
     const archivos = archivosRes.data
 
     proyectos.value = proyRes.data.map((p) => {
+      const eventoData = proyectosConEventos.value.find((pe) => pe.proyecto_id === p.id)
+      const evento = eventos.value.find((e) => e.id === eventoData?.evento_id)
+      const equipo = equipos.value.find((eq) => eq.id === p.equipo_id)
+      const miembros = equipo?.miembros || []
+
       const archivosRelacionados = archivosProyecto
         .filter((rel) => rel.proyecto_id === p.id)
         .map((rel) => archivos.find((a) => a.id === rel.archivo_id && !a.estado_borrado))
@@ -102,6 +109,9 @@ async function fetchProyectos() {
 
       return {
         ...p,
+        evento_id: eventoData?.evento_id,
+        nombre_evento: evento?.nombre || 'Evento desconocido',
+        equipo: miembros,
         logoUrl: logo?.url || null,
       }
     })
@@ -115,12 +125,34 @@ async function fetchProyectos() {
   }
 }
 
-function verDetalles(proyecto) {
-  alert(`Ver detalles de: ${proyecto.titulo}`)
+async function fetchProyectosConEventos() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  try {
+    const [proyEventoRes, eventosRes, equiposRes] = await Promise.all([
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/proyectosConEventos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/evento`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+
+    proyectosConEventos.value = proyEventoRes.data
+    eventos.value = eventosRes.data
+    equipos.value = equiposRes.data
+  } catch (e) {
+    console.error('Error al cargar proyectos con eventos:', e)
+  }
 }
 
 onMounted(async () => {
   await fetchEquipos()
+  await fetchProyectosConEventos()
   await fetchProyectos()
 })
 </script>
@@ -155,7 +187,8 @@ onMounted(async () => {
               <ProjectCard
                 :proyecto="proyecto"
                 :equipoNombre="getEquipoNombre(proyecto.equipo_id)"
-                @ver-detalles="verDetalles"
+                :nombreEvento="proyecto.nombre_evento"
+                :equipo="proyecto.equipo"
               />
             </div>
             <div

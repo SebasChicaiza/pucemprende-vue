@@ -6,6 +6,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import CrearEquipoModal from '@/components/Admin/Proyectos/CrearEquipoModal.vue'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 
 import { useRoute } from 'vue-router'
 
@@ -26,6 +27,82 @@ const equipos = ref([])
 const selectedEquipo = ref(null)
 const loading = ref(false)
 const error = ref('')
+
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref('') // 'success' o 'error'
+const showConfirmDialog = ref(false)
+
+function showNotification(msg, type = 'success') {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => (showToast.value = false), 3000)
+}
+
+function validarFormulario() {
+  if (!titulo.value.trim() || !descripcion.value.trim() || !selectedEquipo.value) {
+    showNotification('Por favor completa todos los campos.', 'error')
+    return false
+  }
+  if (descripcion.value.length > 45) {
+    showNotification('La descripción no puede tener más de 45 caracteres.', 'error')
+    return false
+  }
+  if (!miembrosEquipo.value.some((m) => m.rol_id === 1)) {
+    showNotification('Debes asignar al menos un integrante con rol de Líder.', 'error')
+    return false
+  }
+  return true
+}
+
+async function confirmarCreacion() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    showNotification('Token de autenticación no encontrado.', 'error')
+    return
+  }
+
+  try {
+    const { data: proyectoCreado } = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
+      {
+        titulo: titulo.value,
+        descripcion: descripcion.value,
+        equipo_id: selectedEquipo.value,
+      },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    if (logoImage.value && logoImage.value.url) {
+      const { data: archivoId } = await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
+        {
+          url: logoImage.value.url,
+          tipo: 'png',
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
+        {
+          archivo_id: archivoId,
+          proyecto_id: proyectoCreado.id,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    }
+
+    showNotification('Proyecto creado correctamente.', 'success')
+    router.push('/proyectos')
+  } catch (error) {
+    console.error('Error al crear el proyecto:', error)
+    showNotification('Ocurrió un error al crear el proyecto.', 'error')
+  } finally {
+    showConfirmDialog.value = false
+  }
+}
 
 // Mensajes temporales
 async function showTimedErrorMessage(msg) {
@@ -143,70 +220,9 @@ async function fetchEquipos() {
   }
 }
 
-async function submitForm() {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    alert('No se encontró token de autenticación.')
-    return
-  }
-
-  if (!titulo.value || !descripcion.value || !selectedEquipo.value) {
-    alert('Por favor completa todos los campos.')
-    return
-  }
-  if (descripcion.value.trim().length > 40) {
-    alert('La descripción no puede contener más de 45 caracteres.')
-    return
-  }
-
-  // Validar que haya al menos un líder en el equipo (opcional si lo haces antes)
-  const tieneLider = miembrosEquipo.value.some((m) => m.rol_id === 1)
-  if (!tieneLider) {
-    alert('Debes asignar al menos un integrante con rol de Líder.')
-    return
-  }
-
-  try {
-    // 1. Crear el proyecto
-    const { data: proyectoCreado } = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
-      {
-        titulo: titulo.value,
-        descripcion: descripcion.value,
-        equipo_id: selectedEquipo.value,
-      },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    // 3. Subir el logo si existe
-    if (logoImage.value && logoImage.value.url) {
-      // a. Subir el archivo a /api/archivos
-      const { data: archivoId } = await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
-        {
-          url: logoImage.value.url,
-          tipo: 'png', // o 'jpg', 'pdf', etc. según lo que tengas
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-
-      // b. Asociar el archivo al proyecto
-      await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-        {
-          archivo_id: archivoId,
-          proyecto_id: proyectoCreado.id,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-    }
-
-    alert('Proyecto creado correctamente.')
-    router.push('/proyectos') // o donde quieras redirigir
-  } catch (error) {
-    console.error('Error al crear el proyecto:', error)
-    alert('Ocurrió un error al crear el proyecto. Revisa la consola para más detalles.')
-  }
+function submitForm() {
+  if (!validarFormulario()) return
+  showConfirmDialog.value = true
 }
 
 onMounted(fetchEquipos)
@@ -351,6 +367,16 @@ function handleGuardarEquipo() {
         </div>
       </div>
     </div>
+    <ConfirmationDialog
+      :visible="showConfirmDialog"
+      message="¿Estás seguro de que deseas crear este proyecto?"
+      @confirm="confirmarCreacion"
+      @cancel="() => (showConfirmDialog.value = false)"
+    />
+
+    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
+      {{ toastMessage }}
+    </div>
   </div>
 </template>
 
@@ -393,5 +419,29 @@ textarea::placeholder {
 .btn-crearequipo:hover {
   background-color: #174384;
   color: white;
+}
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
 }
 </style>
