@@ -27,7 +27,7 @@ const procesosEvaluacion = ref([])
 const eventosStore = useEventosStore()
 
 const currentPage = ref(1)
-const itemsPerPage = ref(6)
+const itemsPerPage = ref(12)
 
 const eventSearchQuery = ref('')
 const showEventSuggestions = ref(false)

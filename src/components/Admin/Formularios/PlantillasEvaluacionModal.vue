@@ -9,7 +9,7 @@ import {
   onUnmounted,
   nextTick,
 } from 'vue'
-import { Modal } from 'bootstrap'
+import { Modal, Collapse } from 'bootstrap' // Import Collapse
 import axios from 'axios'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
@@ -38,7 +38,7 @@ const plantillasModalRef = ref(null)
 let bsModal = null
 
 const allNewPlantillasInSession = ref([])
-const activeAccordionItem = ref(null)
+const activeAccordionItem = ref(null) // Stores the ID of the currently open accordion item
 const nextPlantillaTempId = ref(1)
 
 const currentCriterioName = ref('')
@@ -65,7 +65,10 @@ const tempPlantillaName = ref('')
 const inPlaceEditInputRef = ref(null)
 
 const currentPlantilla = computed(() => {
-  return allNewPlantillasInSession.value.find((p) => p.id === activeAccordionItem.value)
+  // console.log('Computed currentPlantilla. activeAccordionItem:', activeAccordionItem.value);
+  const found = allNewPlantillasInSession.value.find((p) => p.id === activeAccordionItem.value)
+  // console.log('Found currentPlantilla:', found);
+  return found
 })
 
 const totalPeso = computed(() => {
@@ -95,13 +98,46 @@ watch(currentCriterioPeso, () => {
   if (errorMessage.value) errorMessage.value = ''
 })
 
-watch(activeAccordionItem, () => {
+// Watch for changes in activeAccordionItem to reset criterion input fields
+// and to control Bootstrap's accordion state
+watch(activeAccordionItem, (newId, oldId) => {
+  // console.log('activeAccordionItem changed from', oldId, 'to', newId);
+
+  // Reset criterion input fields when a new accordion item becomes active
   currentCriterioName.value = ''
   currentCriterioDescription.value = ''
   currentCriterioPeso.value = 0
   editingCriterioIndex.value = null
   errorMessage.value = ''
   showErrorModal.value = false
+
+  nextTick(() => {
+    // Hide old accordion item
+    if (oldId) {
+      const oldCollapseElement = document.getElementById(`collapse${oldId}`)
+      if (oldCollapseElement) {
+        const bsCollapseInstance = Collapse.getInstance(oldCollapseElement)
+        if (bsCollapseInstance) {
+          bsCollapseInstance.hide()
+        } else {
+          new Collapse(oldCollapseElement, { toggle: false }).hide()
+        }
+      }
+    }
+
+    // Show new accordion item
+    if (newId) {
+      const newCollapseElement = document.getElementById(`collapse${newId}`)
+      if (newCollapseElement) {
+        const bsCollapseInstance = Collapse.getInstance(newCollapseElement)
+        if (bsCollapseInstance) {
+          bsCollapseInstance.show()
+        } else {
+          new Collapse(newCollapseElement, { toggle: false }).show()
+        }
+      }
+    }
+  })
 })
 
 const initializeModal = () => {
@@ -111,15 +147,8 @@ const initializeModal = () => {
       emit('close')
       resetModalState()
     })
-
-    plantillasModalRef.value.addEventListener('shown.bs.collapse', (event) => {
-      activeAccordionItem.value = event.target.id.replace('collapse', '')
-    })
-    plantillasModalRef.value.addEventListener('hidden.bs.collapse', (event) => {
-      if (activeAccordionItem.value === event.target.id.replace('collapse', '')) {
-        activeAccordionItem.value = null
-      }
-    })
+    // We are now explicitly controlling Bootstrap's collapse state via the activeAccordionItem watch
+    // So, we don't need to listen to Bootstrap's 'shown.bs.collapse'/'hidden.bs.collapse' to SET activeAccordionItem
   }
 }
 
@@ -131,16 +160,6 @@ onUnmounted(() => {
   if (bsModal) {
     bsModal.dispose()
     bsModal = null
-  }
-  if (plantillasModalRef.value) {
-    plantillasModalRef.value.removeEventListener('shown.bs.collapse', (event) => {
-      activeAccordionItem.value = event.target.id.replace('collapse', '')
-    })
-    plantillasModalRef.value.removeEventListener('hidden.bs.collapse', (event) => {
-      if (activeAccordionItem.value === event.target.id.replace('collapse', '')) {
-        activeAccordionItem.value = null
-      }
-    })
   }
 })
 
@@ -154,7 +173,7 @@ watch(
         }
         bsModal?.show()
         resetModalState()
-        addNewPlantillaSession()
+        fetchPlantillasData() // Fetch data when modal opens
       } else {
         bsModal?.hide()
       }
@@ -196,8 +215,61 @@ const handleErrorModalClose = () => {
   errorMessage.value = ''
 }
 
+const fetchPlantillasData = async () => {
+  modalLoading.value = true
+  const token = localStorage.getItem('token')
+  if (!token) {
+    displayError('Token de autenticación no encontrado.')
+    modalLoading.value = false
+    return
+  }
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/procesos-evaluacion-detalle`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    const procesosDetalle = response.data
+    const currentProceso = procesosDetalle.find((p) => p.procesoId === props.procesoId)
+
+    if (currentProceso && currentProceso.plantillas.length > 0) {
+      allNewPlantillasInSession.value = currentProceso.plantillas.map((p) => ({
+        id: p.plantillaId, // Use backend ID
+        nombre_plantilla: p.plantillaNombre,
+        criterios: p.criterios.map((c) => ({
+          id: c.criterioId, // Use backend ID
+          nombre: c.criterioNombre,
+          descripcion: c.criterioDescripcion,
+          peso: c.criterioPeso,
+        })),
+      }))
+      // Set the first plantilla as active initially
+      if (allNewPlantillasInSession.value.length > 0) {
+        activeAccordionItem.value = allNewPlantillasInSession.value[0].id
+        // The watch on activeAccordionItem will now handle opening the accordion.
+      }
+    } else {
+      // If no existing plantillas, add a new one to start
+      addNewPlantillaSession()
+    }
+  } catch (err) {
+    console.error('Error fetching plantillas data:', err.response?.data || err.message)
+    displayError('Error al cargar las plantillas existentes. Intente de nuevo más tarde.')
+    // Still add a new plantilla if fetching fails to allow creation
+    addNewPlantillaSession()
+  } finally {
+    modalLoading.value = false
+  }
+}
+
 const addNewPlantillaSession = () => {
-  const newId = `temp-${nextPlantillaTempId.value++}`
+  const newId = `temp-${nextPlantillaTempId.value++}` // Use string for temporary ID
   const newPlantilla = {
     id: newId,
     nombre_plantilla: `Nueva Plantilla ${allNewPlantillasInSession.value.length + 1}`,
@@ -263,15 +335,9 @@ const startEditingPlantillaName = (plantillaId, currentName) => {
 }
 
 const savePlantillaName = (plantilla) => {
-  // Guard clause: only proceed if this specific plantilla is still in editing mode
-  // This prevents blur event from re-triggering save after enter key has already handled it
   if (editingPlantillaNameId.value !== plantilla.id) {
     return
   }
-
-  console.log('Attempting to save plantilla name.')
-  console.log('tempPlantillaName.value:', tempPlantillaName.value)
-  console.log('tempPlantillaName.value.trim():', tempPlantillaName.value.trim())
 
   if (!tempPlantillaName.value.trim()) {
     displayError('El nombre de la plantilla no puede estar vacío.')
@@ -314,6 +380,7 @@ const addOrUpdateCriterio = () => {
       return
     }
     currentPlantilla.value.criterios[editingCriterioIndex.value] = {
+      id: currentPlantilla.value.criterios[editingCriterioIndex.value].id, // Keep existing ID
       nombre: currentCriterioName.value.trim(),
       descripcion: currentCriterioDescription.value.trim(),
       peso: newPeso,
@@ -326,6 +393,7 @@ const addOrUpdateCriterio = () => {
       return
     }
     currentPlantilla.value.criterios.push({
+      id: null, // New criteria won't have an ID until saved to DB
       nombre: currentCriterioName.value.trim(),
       descripcion: currentCriterioDescription.value.trim(),
       peso: newPeso,
@@ -398,31 +466,55 @@ const submitAllPlantillas = async () => {
 
   try {
     for (const plantilla of allNewPlantillasInSession.value) {
-      const payload = {
-        proceso_id: props.procesoId,
-        nombre_plantilla: plantilla.nombre_plantilla.trim(),
-        criterios: plantilla.criterios.map((c) => ({
+      const criteriosPayload = plantilla.criterios.map((c) => {
+        const criterioData = {
           nombre: c.nombre,
           descripcion: c.descripcion,
           peso: Number(c.peso),
-        })),
+        }
+        // Only include 'id' if it's an existing backend ID (number type)
+        if (c.id && typeof c.id === 'number') {
+          criterioData.id = c.id
+        }
+        return criterioData
+      })
+
+      const payload = {
+        nombre_plantilla: plantilla.nombre_plantilla.trim(),
+        criterios: criteriosPayload,
       }
 
-      await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      if (typeof plantilla.id === 'string' && plantilla.id.startsWith('temp-')) {
+        // This is a new plantilla, use POST
+        payload.proceso_id = props.procesoId // Add proceso_id only for new plantillas
+        await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      } else {
+        // This is an existing plantilla, use PUT
+        await axios.put(
+          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios/${plantilla.id}`,
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+      }
     }
 
-    okModalMessage.value = `Todas las plantillas han sido creadas con éxito!`
+    okModalMessage.value = `Todas las plantillas han sido procesadas con éxito!`
     showOkModal.value = true
     emit('success', { message: okModalMessage.value })
     handleModalClose()
   } catch (err) {
-    console.error('Error creating plantillas:', err.response?.data || err.message)
-    let errorToDisplay = 'Error desconocido al crear las plantillas.'
+    console.error('Error processing plantillas:', err.response?.data || err.message)
+    let errorToDisplay = 'Error desconocido al procesar las plantillas.'
 
     if (err.response && err.response.data) {
       if (err.response.data.errors) {
@@ -439,7 +531,7 @@ const submitAllPlantillas = async () => {
     } else if (err.message) {
       errorToDisplay = err.message
     }
-    displayError(`Error al crear plantillas: ${errorToDisplay}`)
+    displayError(`Error al procesar plantillas: ${errorToDisplay}`)
   } finally {
     modalLoading.value = false
   }
@@ -448,6 +540,18 @@ const submitAllPlantillas = async () => {
 const displayError = (message) => {
   errorMessage.value = message
   showErrorModal.value = true
+}
+
+// Function to toggle accordion manually
+const toggleAccordion = (plantillaId) => {
+  // If the clicked item is already active, close it
+  if (activeAccordionItem.value === plantillaId) {
+    activeAccordionItem.value = null
+  } else {
+    // Otherwise, set it as the active item
+    activeAccordionItem.value = plantillaId
+  }
+  // The watch on activeAccordionItem will handle the Bootstrap Collapse show/hide.
 }
 </script>
 
@@ -538,8 +642,7 @@ const displayError = (message) => {
                         class="accordion-button"
                         :class="{ collapsed: activeAccordionItem !== plantilla.id }"
                         type="button"
-                        data-bs-toggle="collapse"
-                        :data-bs-target="`#collapse${plantilla.id}`"
+                        @click="toggleAccordion(plantilla.id)"
                         :aria-expanded="activeAccordionItem === plantilla.id ? 'true' : 'false'"
                         :aria-controls="`collapse${plantilla.id}`"
                       >
