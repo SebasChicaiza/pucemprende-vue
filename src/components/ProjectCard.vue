@@ -13,7 +13,11 @@
           <span v-else class="logo-placeholder">Logo</span>
         </div>
 
-        <div class="edit-icon" @click="$router.push(`/admin/proyectos/${proyecto.id}/editar`)">
+        <div
+          v-if="puedeEditar"
+          class="edit-icon"
+          @click="$router.push(`/admin/proyectos/${proyecto.id}/editar`)"
+        >
           <i class="bi bi-pencil-square"></i>
         </div>
       </div>
@@ -40,6 +44,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { puedeEditarProyecto } from '@/stores/userPermisos' // ajusta la ruta
+
 const props = defineProps({
   proyecto: { type: Object, required: true },
   equipoNombre: { type: String, default: '' },
@@ -49,6 +55,8 @@ function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString()
 }
+
+const puedeEditar = computed(() => puedeEditarProyecto(props.proyecto))
 </script>
 
 <style scoped>
