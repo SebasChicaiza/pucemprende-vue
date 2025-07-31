@@ -102,6 +102,9 @@ const router = createRouter({
       name: 'crearProyecto',
       component: CrearProyectosView,
       props: true,
+      meta: {
+        title: 'Crear Proyecto',
+      },
     },
     {
       path: '/admin/usuarios',
