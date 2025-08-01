@@ -13,22 +13,33 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  procesoEventoId: {
+    type: [Number, String],
+    default: null,
+  },
+  userEventPermissions: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'submit-evaluation'])
 
 const teams = ref([])
 const loadingTeams = ref(false)
+const isFullPageLoading = ref(false)
 const teamSearchQuery = ref('')
 const selectedTeamId = ref(null)
-const evaluationScores = ref({}) // { criterioId: { score: 0-5, comment: '' } }
+const evaluationScores = ref({})
+const isSubmitting = ref(false)
+
+const evaluadorId = ref(null)
 
 const showErrorModal = ref(false)
 const errorMessage = ref('')
 
-// Custom dropdown state
 const isTeamDropdownOpen = ref(false)
-const teamSearchInputRef = ref(null) // Ref for the search input inside the custom dropdown
+const teamSearchInputRef = ref(null)
 
 const selectedTeamName = computed(() => {
   const team = teams.value.find((t) => t.id === selectedTeamId.value)
@@ -45,7 +56,16 @@ const filteredTeams = computed(() => {
   )
 })
 
-// Watch for plantilla changes to reset scores
+const currentEventRoleId = computed(() => {
+  if (!props.procesoEventoId || props.userEventPermissions.length === 0) {
+    return null
+  }
+  const eventPermission = props.userEventPermissions.find(
+    (perm) => perm.evento_id === props.procesoEventoId,
+  )
+  return eventPermission ? eventPermission.rol_id : null
+})
+
 watch(
   () => props.plantilla,
   (newPlantilla) => {
@@ -54,16 +74,15 @@ watch(
       newPlantilla.criterios.forEach((criterio) => {
         evaluationScores.value[criterio.criterioId] = { score: 0, comment: '' }
       })
-      selectedTeamId.value = null // Reset selected team when plantilla changes
-      teamSearchQuery.value = '' // Clear search query
-      isTeamDropdownOpen.value = false // Close dropdown
-      fetchTeams() // Fetch teams every time modal is opened with a new plantilla
+      selectedTeamId.value = null
+      teamSearchQuery.value = ''
+      isTeamDropdownOpen.value = false
+      fetchTeams()
     }
   },
   { immediate: true },
 )
 
-// Watch for show prop to fetch teams when modal opens
 watch(
   () => props.show,
   (newValue) => {
@@ -104,6 +123,39 @@ async function fetchTeams() {
   }
 }
 
+async function fetchEvaluadorId() {
+  const userString = localStorage.getItem('user')
+  if (!userString) {
+    throw new Error('Usuario no encontrado en el almacenamiento local.')
+  }
+
+  const user = JSON.parse(userString)
+  const userId = user.id
+  const token = localStorage.getItem('token')
+
+  if (!token) {
+    throw new Error('Token de autenticación no encontrado.')
+  }
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+    return response.data.id
+  } catch (err) {
+    console.error('Error fetching evaluador persona ID:', err.response?.data || err.message)
+    throw new Error(
+      `Error al obtener el ID del evaluador: ${err.response?.data?.message || err.message}`,
+    )
+  }
+}
+
 const toggleTeamDropdown = async () => {
   isTeamDropdownOpen.value = !isTeamDropdownOpen.value
   if (isTeamDropdownOpen.value) {
@@ -116,27 +168,76 @@ const toggleTeamDropdown = async () => {
 
 const selectTeam = (team) => {
   selectedTeamId.value = team.id
-  teamSearchQuery.value = team.nombre // Set input value to selected team name
+  teamSearchQuery.value = team.nombre
   isTeamDropdownOpen.value = false
 }
 
-const submitEvaluation = () => {
+const submitEvaluation = async () => {
   if (!selectedTeamId.value) {
     errorMessage.value = 'Por favor, selecciona un equipo para evaluar.'
     showErrorModal.value = true
     return
   }
 
-  const evaluationData = {
-    plantillaId: props.plantilla.plantillaId,
-    teamId: selectedTeamId.value,
-    criterioEvaluations: Object.entries(evaluationScores.value).map(([criterioId, data]) => ({
-      criterioId: parseInt(criterioId),
-      score: data.score,
-      comment: data.comment,
-    })),
+  const rolEventoId = currentEventRoleId.value
+  if (!rolEventoId) {
+    errorMessage.value =
+      'No se pudo obtener el rol del usuario para este evento. Por favor, recarga la página.'
+    showErrorModal.value = true
+    return
   }
-  emit('submit-evaluation', evaluationData)
+
+  isSubmitting.value = true
+  isFullPageLoading.value = true
+  errorMessage.value = ''
+  showErrorModal.value = false
+
+  try {
+    const evaluatorId = await fetchEvaluadorId()
+    const token = localStorage.getItem('token')
+
+    const evaluationPromises = Object.entries(evaluationScores.value).map(([criterioId, data]) => {
+      const payload = {
+        equipo_id: selectedTeamId.value,
+        criterio_id: parseInt(criterioId),
+        evaluador_id: evaluatorId,
+        puntaje: data.score,
+        comentarios: data.comment,
+        rolEvento_id: rolEventoId,
+      }
+      console.log('Payload for evaluation:', payload)
+      return axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-evaluacion`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    })
+
+    await Promise.all(evaluationPromises)
+
+    const rubricaPayload = {
+      persona_id: evaluatorId,
+      plantilla_id: props.plantilla.plantillaId,
+      equipo_id: selectedTeamId.value,
+    }
+    await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    emit('submit-evaluation', { success: true })
+    close()
+  } catch (err) {
+    console.error('Error during evaluation submission:', err.message)
+    errorMessage.value = `Error al guardar la evaluación: ${err.message}`
+    showErrorModal.value = true
+  } finally {
+    isSubmitting.value = false
+    isFullPageLoading.value = false
+  }
 }
 
 const close = () => {
@@ -161,7 +262,7 @@ const handleErrorModalClose = () => {
           <button type="button" class="btn-close" @click="close"></button>
         </div>
         <div class="modal-body">
-          <LoaderComponent v-if="loadingTeams" />
+          <LoaderComponent v-if="loadingTeams || isFullPageLoading" />
           <div v-else>
             <div class="mb-4">
               <label for="teamSelect" class="form-label">Seleccionar Equipo a Evaluar:</label>
@@ -258,10 +359,20 @@ const handleErrorModalClose = () => {
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary animated-btn" @click="close">
+          <button
+            type="button"
+            class="btn btn-secondary animated-btn"
+            @click="close"
+            :disabled="isSubmitting"
+          >
             Cancelar
           </button>
-          <button type="button" class="btn btn-primary animated-btn" @click="submitEvaluation">
+          <button
+            type="button"
+            class="btn btn-primary animated-btn"
+            @click="submitEvaluation"
+            :disabled="isSubmitting"
+          >
             Guardar Evaluación
           </button>
         </div>
@@ -269,7 +380,12 @@ const handleErrorModalClose = () => {
     </div>
   </div>
 
-  <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
+  <ErrorModal
+    :show="showErrorModal"
+    :message="errorMessage"
+    @close="handleErrorModalClose"
+    style="z-index: 1100"
+  />
 </template>
 
 <style scoped>
@@ -283,7 +399,7 @@ const handleErrorModalClose = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1050; /* Bootstrap modal backdrop z-index is 1040 */
+  z-index: 1050;
 }
 
 .modal-dialog {
@@ -292,7 +408,7 @@ const handleErrorModalClose = () => {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   width: 90%;
-  max-width: 700px; /* Adjust max-width as needed */
+  max-width: 700px;
 }
 
 .modal-content {
@@ -318,7 +434,7 @@ const handleErrorModalClose = () => {
   background-color: transparent;
   border: none;
   font-size: 1.5rem;
-  color: #fff;
+  color: #ffffff;
   opacity: 0.7;
   transition: opacity 0.2s;
 }
@@ -329,8 +445,8 @@ const handleErrorModalClose = () => {
 
 .modal-body {
   padding: 1.5rem;
-  max-height: 70vh; /* Limit height for scrollbar */
-  overflow-y: auto; /* Enable scrolling for content */
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .modal-footer {
@@ -340,7 +456,6 @@ const handleErrorModalClose = () => {
   justify-content: flex-end;
 }
 
-/* Reusing animated-btn styles from parent */
 .animated-btn {
   transition: all 0.2s ease-in-out;
   position: relative;
@@ -386,7 +501,6 @@ const handleErrorModalClose = () => {
   padding: 0.4em 0.7em;
 }
 
-/* Icon Colors */
 .text-primary {
   color: #174384 !important;
 }
@@ -406,7 +520,6 @@ const handleErrorModalClose = () => {
   color: #6c757d !important;
 }
 
-/* Custom Select Styles (mimicking image_6b4c3e.png) */
 .custom-select-wrapper {
   position: relative;
   width: 100%;
@@ -444,7 +557,7 @@ const handleErrorModalClose = () => {
 
 .options-container {
   position: absolute;
-  top: 100%; /* Position below the selected item */
+  top: 100%;
   left: 0;
   right: 0;
   background-color: #fff;
@@ -452,13 +565,13 @@ const handleErrorModalClose = () => {
   border-top: none;
   border-radius: 0 0 0.25rem 0.25rem;
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
-  z-index: 10; /* Ensure it's above other content */
-  max-height: 200px; /* Limit height for scroll */
+  z-index: 10;
+  max-height: 200px;
   overflow-y: auto;
 }
 
 .search-input {
-  width: calc(100% - 1.5rem); /* Adjust for padding */
+  width: calc(100% - 1.5rem);
   margin: 0.5rem 0.75rem;
   border: 1px solid #ced4da;
   border-radius: 0.2rem;
@@ -482,7 +595,7 @@ const handleErrorModalClose = () => {
 }
 
 .option.selected {
-  background-color: #e9ecef; /* A subtle highlight for selected */
+  background-color: #e9ecef;
   font-weight: 600;
 }
 
@@ -492,7 +605,6 @@ const handleErrorModalClose = () => {
   background-color: #f8f9fa;
 }
 
-/* Score Input Styles (mimicking image_6b5496.png) */
 .score-input-group {
   display: flex;
   align-items: center;
@@ -501,7 +613,7 @@ const handleErrorModalClose = () => {
 
 .score-radios {
   display: flex;
-  gap: 10px; /* Space between circles */
+  gap: 10px;
 }
 
 .score-radio-label {
@@ -535,7 +647,7 @@ const handleErrorModalClose = () => {
 }
 
 .score-radio-input:checked + .score-circle {
-  background-color: #174384; /* Primary color for selected */
+  background-color: #174384;
   border-color: #174384;
   color: #fff;
   box-shadow: 0 0 0 3px rgba(23, 67, 132, 0.3);

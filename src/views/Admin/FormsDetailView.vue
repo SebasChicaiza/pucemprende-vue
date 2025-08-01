@@ -10,40 +10,93 @@ import OkModal from '@/components/OkModal.vue'
 import ScrollBar from '@/components/ScrollBar.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
-import EvaluateTemplateModal from '@/components/Admin/Formularios/EvaluateTemplateModal.vue' // NEW: Import the new modal
+import EvaluateTemplateModal from '@/components/Admin/Formularios/EvaluateTemplateModal.vue'
 
 const route = useRoute()
 const router = useRouter()
-const loading = ref(true) // Set to true initially to show loader on mount
+const loading = ref(true)
 
 const procesoId = ref(null)
 const procesoDetails = ref(null)
-// Removed eventInfo ref as it's now static text
-// const eventInfo = ref(null) // To store event details
 
 const showErrorModal = ref(false)
 const errorMessage = ref('')
 
-// --- Existing Modals State ---
 const showOkModal = ref(false)
 const okModalMessage = ref('')
-const universalDeleteModalRef = ref(null)
 
-// --- Dynamic Confirmation Modal State ---
-const showConfirmationModal = ref(false) // Controls visibility of the dynamic modal
+// FIX: Add missing refs to resolve warnings
+const universalDeleteModalRef = ref(null)
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalWarning = ref('')
+const modalConfirmText = ref('')
+
+const showConfirmationModal = ref(false)
 const confirmModalTitle = ref('')
 const confirmModalMessage = ref('')
 const confirmModalConfirmText = ref('')
 const confirmModalCancelText = ref('Cancelar')
 
-// Stores the callback function to execute when the dynamic confirmation is accepted
 let onConfirmCallback = () => {}
 
-// NEW: State for EvaluateTemplateModal
 const showEvaluateTemplateModal = ref(false)
 const currentPlantillaToEvaluate = ref(null)
+const currentProcesoEventoId = ref(null)
 
-// Placeholder functions for other modals
+const user = ref(null)
+const userEventPermissions = ref([])
+
+const canEvaluate = computed(() => {
+  if (!user.value) {
+    console.warn('canEvaluate: El objeto de usuario es nulo. No se pueden determinar los permisos.')
+    return false
+  }
+
+  const globalRoleId = user.value.rol_id
+
+  console.log(`canEvaluate check para usuario con rol_id global: ${globalRoleId}`)
+
+  if (globalRoleId === 1 || globalRoleId === 8) {
+    console.log(`- El rol_id global es ${globalRoleId}. Permiso concedido.`)
+    return true
+  }
+
+  if (globalRoleId === 2) {
+    if (!procesoDetails.value || !procesoDetails.value.procesoEventoId) {
+      console.error(
+        "- El usuario tiene rol_id global 2, pero 'procesoEventoId' falta en la respuesta de la API. No se pueden validar los permisos específicos del evento.",
+      )
+      return false
+    }
+
+    const eventId = procesoDetails.value.procesoEventoId
+    console.log(`- ID de evento asociado para la validación: ${eventId}`)
+
+    const eventPermission = userEventPermissions.value.find((perm) => perm.evento_id === eventId)
+
+    if (eventPermission) {
+      const eventRoleId = eventPermission.rol_id
+      console.log(`- Permiso de evento encontrado con rol_id: ${eventRoleId}`)
+      const canSee = eventRoleId !== 4
+      if (!canSee) {
+        console.log(`- El rol_id del evento es 4. Permiso denegado.`)
+      } else {
+        console.log(`- El rol_id del evento no es 4. Permiso concedido.`)
+      }
+      return canSee
+    } else {
+      console.warn(
+        '- El usuario tiene rol_id global 2, pero no se encontró un permiso específico para este evento en localStorage. Suponiendo que el acceso no está restringido por rol_id 4, se concede el permiso.',
+      )
+      return true
+    }
+  }
+
+  console.log(`- El rol_id global ${globalRoleId} no tiene acceso. Permiso denegado.`)
+  return false
+})
+
 const handleOkModalClose = () => {
   showOkModal.value = false
 }
@@ -57,17 +110,15 @@ const handleDeleteConfirmed = () => {
   showOkModal.value = true
 }
 
-// --- Handlers for the dynamic ConfirmationModal's events ---
 const handleDynamicConfirm = () => {
-  onConfirmCallback() // Execute the stored callback
-  showConfirmationModal.value = false // Hide the modal after confirmation
+  onConfirmCallback()
+  showConfirmationModal.value = false
 }
 
 const handleDynamicCancel = () => {
-  showConfirmationModal.value = false // Just hide the modal on cancel
+  showConfirmationModal.value = false
 }
 
-// Function to fetch proceso details
 async function fetchProcesoDetails() {
   loading.value = true
   const token = localStorage.getItem('token')
@@ -89,39 +140,38 @@ async function fetchProcesoDetails() {
       },
     )
     procesoDetails.value = response.data
+    // Set the event ID for the child modal
+    currentProcesoEventoId.value = procesoDetails.value.procesoEventoId
   } catch (err) {
-    console.error('Error fetching proceso details:', err.response?.data || err.message)
-    errorMessage.value = `Error al cargar los detalles del proceso de evaluación: ${err.response?.data?.message || err.message}`
+    console.error('Error al obtener los detalles del proceso:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar los detalles del proceso de evaluación: ${
+      err.response?.data?.message || err.message
+    }`
     showErrorModal.value = true
-    procesoDetails.value = null // Clear details on error
+    procesoDetails.value = null
   } finally {
     loading.value = false
   }
 }
 
-// Function to open the evaluation modal
 const openEvaluateTemplateModal = (plantilla) => {
   currentPlantillaToEvaluate.value = plantilla
   showEvaluateTemplateModal.value = true
 }
 
-// Function to handle evaluation submission (from modal)
 const handleEvaluationSubmit = (evaluationData) => {
   console.log('Evaluación enviada:', evaluationData)
   showEvaluateTemplateModal.value = false
   currentPlantillaToEvaluate.value = null
   okModalMessage.value = '¡Evaluación guardada exitosamente!'
   showOkModal.value = true
-  // Here you would typically send this data to your backend
 }
 
-// Function to close the evaluation modal
 const handleEvaluateModalClose = () => {
   showEvaluateTemplateModal.value = false
   currentPlantillaToEvaluate.value = null
 }
 
-// Format date function to display DD/MM/YYYY without time
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = new Date(dateString)
@@ -129,12 +179,35 @@ const formatDate = (dateString) => {
     return 'Fecha inválida'
   }
   const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0') // Months are 0-indexed
+  const month = String(date.getMonth() + 1).padStart(2, '0')
   const year = date.getFullYear()
   return `${day}/${month}/${year}`
 }
 
+const loadUserPermissions = () => {
+  const userString = localStorage.getItem('user')
+  if (userString) {
+    try {
+      user.value = JSON.parse(userString)
+    } catch (e) {
+      console.error('Error al analizar el usuario desde localStorage', e)
+      user.value = null
+    }
+  }
+
+  const eventosString = localStorage.getItem('eventos')
+  if (eventosString) {
+    try {
+      userEventPermissions.value = JSON.parse(eventosString)
+    } catch (e) {
+      console.error('Error al analizar eventos desde localStorage', e)
+      userEventPermissions.value = []
+    }
+  }
+}
+
 onMounted(async () => {
+  loadUserPermissions()
   procesoId.value = route.params.id
   if (procesoId.value) {
     await fetchProcesoDetails()
@@ -151,7 +224,7 @@ watch(
       procesoId.value = newId
       errorMessage.value = ''
       showErrorModal.value = false
-      procesoDetails.value = null // Clear previous details
+      procesoDetails.value = null
       await fetchProcesoDetails()
     }
   },
@@ -186,12 +259,8 @@ const goBack = () => {
               </div>
             </div>
 
-            <!-- Event Information Card -->
             <div class="card card-body p-4 border-0 shadow-sm custom-tab-content mb-4">
-              <h5 class="mb-3">
-                <i class="fas fa-calendar-check text-success me-2"></i>Información del Evento
-                Asociado
-              </h5>
+              <h5 class="mb-3">Información del Evento Asociado</h5>
               <p class="mb-2">
                 <strong>Nombre del Evento:</strong> Conferencia de Innovación Tecnológica
               </p>
@@ -202,7 +271,6 @@ const goBack = () => {
               <p class="mb-2"><strong>Fecha de Inicio:</strong> 15/10/2025</p>
               <p class="mb-0"><strong>Fecha de Fin:</strong> 17/10/2025</p>
             </div>
-            <!-- END Event Information Card -->
 
             <h5 class="mb-3">Plantillas de Evaluación</h5>
             <div v-if="procesoDetails.plantillas && procesoDetails.plantillas.length > 0">
@@ -241,8 +309,8 @@ const goBack = () => {
                             class="list-group-item d-flex justify-content-between align-items-center"
                           >
                             <div>
-                              <i class="fas fa-star me-2 text-warning"></i
-                              ><strong>{{ criterio.criterioNombre }}</strong
+                              <i class="fas fa-star me-2 text-warning"></i>
+                              <strong>{{ criterio.criterioNombre }}</strong
                               >: {{ criterio.criterioDescripcion }}
                             </div>
                             <span class="badge bg-primary rounded-pill"
@@ -257,6 +325,7 @@ const goBack = () => {
 
                       <div class="d-flex justify-content-end mt-4">
                         <button
+                          v-if="canEvaluate"
                           class="btn btn-primary animated-btn"
                           @click="openEvaluateTemplateModal(plantilla)"
                         >
@@ -307,10 +376,11 @@ const goBack = () => {
 
     <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 
-    <!-- NEW: Evaluate Template Modal -->
     <EvaluateTemplateModal
       :show="showEvaluateTemplateModal"
       :plantilla="currentPlantillaToEvaluate"
+      :proceso-evento-id="currentProcesoEventoId"
+      :user-event-permissions="userEventPermissions"
       @close="handleEvaluateModalClose"
       @submit-evaluation="handleEvaluationSubmit"
     />
@@ -323,7 +393,6 @@ const goBack = () => {
   overflow: hidden;
 }
 
-/* Base styles for all animated buttons */
 .animated-btn {
   transition: all 0.2s ease-in-out;
   position: relative;
@@ -380,7 +449,6 @@ const goBack = () => {
   box-shadow: none !important;
 }
 
-/* Custom styles for the accordion */
 .accordion-button {
   background-color: #174384;
   color: #ffffff;
@@ -403,7 +471,7 @@ const goBack = () => {
 }
 
 .accordion-button::after {
-  display: none; /* Ensure no default caret is shown */
+  display: none;
 }
 
 .accordion-body {
@@ -449,7 +517,6 @@ const goBack = () => {
   color: #28a745;
 }
 
-/* Specific styles for nested accordion buttons */
 .nested-accordion-button {
   background-color: #f0f5ff;
   color: #3730a3;

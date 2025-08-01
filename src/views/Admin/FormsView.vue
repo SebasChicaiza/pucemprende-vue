@@ -13,7 +13,7 @@ import ErrorModal from '@/components/ErrorModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 import { useEventosStore } from '@/stores/eventos'
 import ModalProcesoEvaluacion from '@/components/Admin/Formularios/ModalProcesoEvaluacion.vue'
-import PlantillasEvaluacionModal from '@/components/Admin/Formularios/PlantillasEvaluacionModal.vue' // NEW: Import the new modal
+import PlantillasEvaluacionModal from '@/components/Admin/Formularios/PlantillasEvaluacionModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +23,8 @@ const showErrorModal = ref(false)
 const errorMessage = ref('')
 
 const procesosEvaluacion = ref([])
+const user = ref(null)
+const userEventPermissions = ref([])
 
 const eventosStore = useEventosStore()
 
@@ -31,7 +33,7 @@ const itemsPerPage = ref(12)
 
 const eventSearchQuery = ref('')
 const showEventSuggestions = ref(false)
-const selectedEventForFilter = ref(null) // This will now hold the full event object, including hayFormulario
+const selectedEventForFilter = ref(null)
 
 const processSearchQuery = ref('')
 
@@ -53,11 +55,38 @@ const confirmModalMessage = ''
 const confirmModalConfirmText = ''
 const confirmModalCancelText = ref('Cancelar')
 
-const showPlantillasModal = ref(false) // NEW: State for the new PlantillasEvaluacionModal
-const currentProcesoIdForPlantillas = ref(null) // NEW: To pass the procesoId to the plantillas modal
-const currentProcesoTitleForPlantillas = ref('') // NEW: To pass the proceso title to the plantillas modal
+const showPlantillasModal = ref(false)
+const currentProcesoIdForPlantillas = ref(null)
+const currentProcesoTitleForPlantillas = ref('')
 
 let onConfirmCallback = () => {}
+
+const isUserAdmin = computed(() => user.value && user.value.rol_id === 8)
+const isViewerRole = computed(() => user.value && user.value.rol_id === 2)
+
+const hasPermissionForEvent = (eventId) => {
+  if (isViewerRole.value) {
+    return false
+  }
+  if (isUserAdmin.value) {
+    return true
+  }
+  const eventPermission = userEventPermissions.value.find((perm) => perm.evento_id === eventId)
+  return eventPermission && eventPermission.rol_id === 1
+}
+
+const canCreateProcessForSelectedEvent = computed(() => {
+  if (isViewerRole.value) {
+    return false
+  }
+  if (isUserAdmin.value) {
+    return true
+  }
+  if (!selectedEventForFilter.value) {
+    return false
+  }
+  return hasPermissionForEvent(selectedEventForFilter.value.id)
+})
 
 const handleOkModalClose = () => {
   showOkModal.value = false
@@ -82,14 +111,22 @@ const handleDynamicCancel = () => {
 }
 
 const openCreateProcessModal = () => {
+  if (isViewerRole.value) {
+    errorMessage.value = 'No tiene los permisos para crear un proceso de evaluación.'
+    showErrorModal.value = true
+    return
+  }
   if (!selectedEventForFilter.value) {
     errorMessage.value =
       'Por favor, seleccione un evento primero para crear un proceso de evaluación.'
     showErrorModal.value = true
     return
   }
-
-  // Check the hayFormulario field
+  if (!canCreateProcessForSelectedEvent.value) {
+    errorMessage.value = 'No tiene los permisos para crear un proceso de evaluación en este evento.'
+    showErrorModal.value = true
+    return
+  }
   if (!selectedEventForFilter.value.hayFormulario) {
     errorMessage.value =
       'Este evento no admite formularios. Edite el evento para habilitar la creación de formularios.'
@@ -103,6 +140,11 @@ const openCreateProcessModal = () => {
 }
 
 const openEditProcessModal = async (processId) => {
+  if (isViewerRole.value) {
+    errorMessage.value = 'No tiene los permisos para editar un proceso de evaluación.'
+    showErrorModal.value = true
+    return
+  }
   loading.value = true
   const token = localStorage.getItem('token')
   if (!token) {
@@ -123,7 +165,7 @@ const openEditProcessModal = async (processId) => {
       },
     )
     currentProcessToEdit.value = response.data
-    selectedEventForFilter.value = response.data.evento // Ensure the full event object is set
+    selectedEventForFilter.value = response.data.evento
     isEditing.value = true
     showCreateProcessModal.value = true
   } catch (err) {
@@ -142,13 +184,10 @@ const handleCreateProcessModalClose = () => {
 }
 
 const handleNewProcessCreated = async (payload) => {
-  // First, re-fetch processes and wait for it to complete (loader will show/hide)
   await fetchProcesosEvaluacion()
 
-  // Then, show the OkModal
   if (payload.type === 'create') {
     okModalMessage.value = `Proceso "${payload.data.titulo}" creado exitosamente.`
-    // Clear the event filter after a create operation
     selectedEventForFilter.value = null
     eventSearchQuery.value = ''
   } else if (payload.type === 'edit') {
@@ -204,7 +243,7 @@ const onEventInput = () => {
 
 const selectEventSuggestion = (event) => {
   eventSearchQuery.value = event.nombre
-  selectedEventForFilter.value = event // Store the full event object
+  selectedEventForFilter.value = event
   showEventSuggestions.value = false
   currentPage.value = 1
 }
@@ -276,6 +315,16 @@ const formatShortDateWithSlashes = (dateString) => {
 }
 
 const bannerContent = computed(() => {
+  if (isViewerRole.value) {
+    return {
+      title: 'Procesos de evaluación',
+      dates: null,
+      showCreateButton: false,
+      showWarning: false,
+      eventId: null,
+    }
+  }
+
   if (selectedEventForFilter.value) {
     const event = selectedEventForFilter.value
     const startDate = formatShortDateWithSlashes(event.fecha_inicio)
@@ -317,8 +366,12 @@ const redirectToEditEvent = () => {
   }
 }
 
-// Handlers for PlantillasEvaluacionModal
 const openPlantillasModal = (procesoId, procesoTitle) => {
+  if (isViewerRole.value) {
+    errorMessage.value = 'No tiene los permisos para crear o editar plantillas.'
+    showErrorModal.value = true
+    return
+  }
   currentProcesoIdForPlantillas.value = procesoId
   currentProcesoTitleForPlantillas.value = procesoTitle
   showPlantillasModal.value = true
@@ -341,12 +394,29 @@ const handlePlantillasError = (payload) => {
   showErrorModal.value = true
 }
 
-// NEW: Function to redirect to the /admin/formularios/:id route
 const redirectToFormularioDetail = (procesoId) => {
   router.push(`/admin/formularios/${procesoId}`)
 }
 
+const loadUserPermissions = () => {
+  const userString = localStorage.getItem('user')
+  if (userString) {
+    user.value = JSON.parse(userString)
+  }
+
+  const eventosString = localStorage.getItem('eventos')
+  if (eventosString) {
+    try {
+      userEventPermissions.value = JSON.parse(eventosString)
+    } catch (e) {
+      console.error('Error parsing eventos from localStorage', e)
+      userEventPermissions.value = []
+    }
+  }
+}
+
 onMounted(() => {
+  loadUserPermissions()
   fetchProcesosEvaluacion()
   eventosStore.fetchAllEventsForFilter()
   document.addEventListener('click', onClickOutsideEventSearch)
@@ -364,7 +434,6 @@ const onClickOutsideEventSearch = (event) => {
 }
 
 watch(eventSearchQuery, (newVal, oldVal) => {
-  // Clear selectedEventForFilter if the user types something new that doesn't match the current selection
   if (selectedEventForFilter.value && newVal !== selectedEventForFilter.value.nombre) {
     selectedEventForFilter.value = null
   }
@@ -384,10 +453,8 @@ watch(processSearchQuery, () => {
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <div class="forms-header">
           <div class="d-flex align-items-baseline flex-wrap">
-            <h1 class="main-title">
-              Crear formularios para calificar diversos proyectos de eventos
-            </h1>
-            <p class="info-text">
+            <h1 class="main-title">Procesos de evaluación de eventos</h1>
+            <p v-if="!isViewerRole" class="info-text">
               Para iniciar, por favor, busque y seleccione un evento existente. Una vez
               seleccionado, podrá asignarle un nombre a este nuevo proceso de evaluación.
             </p>
@@ -440,7 +507,17 @@ watch(processSearchQuery, () => {
           </div>
         </div>
 
+        <div v-if="!isViewerRole && !selectedEventForFilter">
+          <div class="event-info-banner">
+            <span
+              ><i class="fas fa-info-circle me-2"></i>Seleccione un evento para crear su proceso de
+              evaluación</span
+            >
+          </div>
+        </div>
+
         <div
+          v-if="!isViewerRole && selectedEventForFilter"
           class="event-info-banner"
           :class="{ 'event-info-banner-warning': bannerContent.showWarning }"
         >
@@ -448,7 +525,7 @@ watch(processSearchQuery, () => {
           <span v-if="bannerContent.dates" class="d-flex align-items-center">
             <i class="fas fa-calendar-alt me-2"></i>{{ bannerContent.dates }}
             <button
-              v-if="bannerContent.showCreateButton"
+              v-if="canCreateProcessForSelectedEvent && bannerContent.showCreateButton"
               class="btn btn-primary btn-sm ms-3 create-process-banner-btn"
               @click="openCreateProcessModal"
             >
@@ -483,7 +560,11 @@ watch(processSearchQuery, () => {
             class="evaluation-card"
           >
             <div class="card-header-top-right">
-              <button class="btn-edit-process-corner" @click="openEditProcessModal(proceso.id)">
+              <button
+                v-if="!isViewerRole && hasPermissionForEvent(proceso.evento.id)"
+                class="btn-edit-process-corner"
+                @click="openEditProcessModal(proceso.id)"
+              >
                 <i class="fas fa-pencil-alt"></i>
               </button>
             </div>
@@ -502,6 +583,7 @@ watch(processSearchQuery, () => {
               }}
             </p>
             <button
+              v-if="!isViewerRole && hasPermissionForEvent(proceso.evento.id)"
               class="btn btn-primary templates-button mt-auto"
               @click="openPlantillasModal(proceso.id, proceso.titulo)"
             >
@@ -700,8 +782,8 @@ watch(processSearchQuery, () => {
 }
 
 .event-info-banner-warning {
-  background-color: #fff3cd; /* Light yellow for warning */
-  color: #856404; /* Darker yellow for text */
+  background-color: #fff3cd;
+  color: #856404;
   border: 1px solid #ffeeba;
 }
 
@@ -723,9 +805,9 @@ watch(processSearchQuery, () => {
 }
 
 .edit-event-banner-btn {
-  background-color: #ffc107; /* Yellow for edit button */
+  background-color: #ffc107;
   border-color: #ffc107;
-  color: #212529; /* Dark text for contrast */
+  color: #212529;
   padding: 8px 15px;
   font-size: 0.85em;
   border-radius: 6px;
@@ -837,7 +919,7 @@ watch(processSearchQuery, () => {
 }
 
 .view-templates-button {
-  background-color: #6c757d; /* A neutral color for viewing */
+  background-color: #6c757d;
   color: white;
   border: none;
   padding: 10px 15px;
@@ -849,7 +931,7 @@ watch(processSearchQuery, () => {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin-top: 10px; /* Add some space between the two buttons */
+  margin-top: 10px;
   transition: background-color 0.2s;
 }
 
@@ -910,7 +992,6 @@ watch(processSearchQuery, () => {
   margin-top: 20px;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .forms-header h1.main-title {
     font-size: 1.3rem;
