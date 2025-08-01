@@ -27,6 +27,8 @@ onUnmounted(() => {
 function logout() {
   localStorage.removeItem('user')
   localStorage.removeItem('token')
+  localStorage.removeItem('eventos')
+  localStorage.removeItem('proyectos')
   user.value = null
   router.push('/login') // o usar router.push('/login') si prefieres redireccionar
 }

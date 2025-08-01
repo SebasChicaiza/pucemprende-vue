@@ -231,6 +231,9 @@ const logout = () => {
 
   onConfirmCallback = () => {
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('eventos')
+    localStorage.removeItem('proyectos')
     router.push('/login')
   }
 

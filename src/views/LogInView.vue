@@ -124,7 +124,7 @@ export default {
         if (data.user.rol_id === 1 || data.user.rol_id === 8) {
           this.$router.push('/admin/eventos')
         } else if (data.user.rol_id === 2) {
-          this.$router.push('/eventos')
+          this.$router.push('/admin/usuario')
         } else {
           this.$router.push('/')
         }
