@@ -220,7 +220,9 @@ const submitEvaluation = async () => {
       persona_id: evaluatorId,
       plantilla_id: props.plantilla.plantillaId,
       equipo_id: selectedTeamId.value,
+      rolEvento_id: rolEventoId,
     }
+    console.log('Payload for rubrica:', rubricaPayload)
     await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
       headers: {
         'Content-Type': 'application/json',
@@ -231,8 +233,8 @@ const submitEvaluation = async () => {
     emit('submit-evaluation', { success: true })
     close()
   } catch (err) {
-    console.error('Error during evaluation submission:', err.message)
-    errorMessage.value = `Error al guardar la evaluación: ${err.message}`
+    console.error('Error during evaluation submission:', err.response?.data || err.message)
+    errorMessage.value = `Error al guardar la evaluación: ${err.response?.data?.message || err.message}`
     showErrorModal.value = true
   } finally {
     isSubmitting.value = false
