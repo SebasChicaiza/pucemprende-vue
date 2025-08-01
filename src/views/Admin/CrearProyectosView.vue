@@ -95,15 +95,16 @@ async function confirmarCreacion() {
     showNotification('Token de autenticación no encontrado.', 'error')
     return
   }
+  const headers = { Authorization: `Bearer ${token}` }
 
   const yaInscrito = eventosInscritosStore.estaInscrito(Number(props.eventoId))
-
   if (!yaInscrito) {
     const inscrito = await inscribirEnEvento()
     if (!inscrito) return
   }
 
   try {
+    // 1. Creamos el proyecto
     const { data: proyectoCreado } = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
       {
@@ -112,13 +113,50 @@ async function confirmarCreacion() {
         equipo_id: selectedEquipo.value,
       },
       { headers: { Authorization: `Bearer ${token}` } },
+      { headers },
     )
 
+    // 2. Subimos logo (si aplica)
     if (logoImage.value?.file) {
       const uploaded = await subirLogoProyecto(logoImage.value.file, proyectoCreado.id)
       if (!uploaded) {
         showNotification('Error al subir el logo del proyecto.', 'error')
         return
+      }
+    }
+
+    // 3. Inscribir cada miembro del equipo al evento
+    for (const miembro of miembrosEquipo.value) {
+      try {
+        await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
+          { evento_id: Number(props.eventoId), persona_id: miembro.persona_id },
+          { headers },
+        )
+      } catch (e) {
+        console.warn(`No se pudo inscribir persona ${miembro.persona_id}:`, e)
+      }
+    }
+
+    // 4. Registrar cada miembro en miembros-proyecto
+    //    Usamos las fechas que devuelve el backend al crear el proyecto
+    const fechaInicio = proyectoCreado.fecha_inicio.split('T')[0]
+    const fechaFin = proyectoCreado.fecha_fin.split('T')[0]
+    for (const miembro of miembrosEquipo.value) {
+      try {
+        await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
+          {
+            rol_id: miembro.rol_id,
+            proyecto_id: proyectoCreado.id,
+            persona_id: miembro.persona_id,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+          },
+          { headers },
+        )
+      } catch (e) {
+        console.warn(`Error al registrar miembro-proyecto (${miembro.persona_id}):`, e)
       }
     }
 
