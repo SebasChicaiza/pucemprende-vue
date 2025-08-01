@@ -2,7 +2,7 @@
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import CrearEquipoModal from '@/components/Admin/Proyectos/CrearEquipoModal.vue'
@@ -10,15 +10,25 @@ import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.
 
 import { useRoute } from 'vue-router'
 
+import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
+import { storeToRefs } from 'pinia'
+
+const eventosInscritosStore = useEventosInscritosStore()
+const { eventos } = storeToRefs(eventosInscritosStore)
+
 const showModal = ref(false)
 
 const router = useRouter()
 const route = useRoute()
 
-const eventoId = route.params.eventoId
-
 const miembrosEquipo = ref([])
 
+const props = defineProps({
+  eventoId: {
+    type: [String, Number], // o el tipo de dato que corresponda
+    required: true, // o false si es opcional
+  },
+})
 // Form state
 const logoImage = ref({ file: null, id: null, url: '' })
 const titulo = ref('')
@@ -32,6 +42,29 @@ const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('') // 'success' o 'error'
 const showConfirmDialog = ref(false)
+
+async function inscribirEnEvento() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    showNotification('Token no encontrado', 'error')
+    return false
+  }
+
+  try {
+    await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
+      { evento_id: props.eventoId },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    console.log('✅ Usuario inscrito al evento antes de crear proyecto')
+    eventosInscritosStore.eventos.push({ evento_id: Number(props.eventoId) })
+    return true
+  } catch (err) {
+    console.error('❌ Error al inscribirse al evento', err)
+    showNotification('Error al inscribirse al evento.', 'error')
+    return false
+  }
+}
 
 function showNotification(msg, type = 'success') {
   toastMessage.value = msg
@@ -63,6 +96,13 @@ async function confirmarCreacion() {
     return
   }
 
+  const yaInscrito = eventosInscritosStore.estaInscrito(Number(props.eventoId))
+
+  if (!yaInscrito) {
+    const inscrito = await inscribirEnEvento()
+    if (!inscrito) return
+  }
+
   try {
     const { data: proyectoCreado } = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
@@ -74,28 +114,30 @@ async function confirmarCreacion() {
       { headers: { Authorization: `Bearer ${token}` } },
     )
 
-    if (logoImage.value && logoImage.value.url) {
-      const { data: archivoId } = await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
-        {
-          url: logoImage.value.url,
-          tipo: 'png',
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+    if (logoImage.value?.file) {
+      const uploaded = await uploadFileToBackend(logoImage.value.file)
+      if (uploaded) {
+        const { id: archivoId, url } = uploaded
 
-      await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-        {
-          archivo_id: archivoId,
-          proyecto_id: proyectoCreado.id,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+        await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
+          { url, tipo: 'png' },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+
+        await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
+          {
+            archivo_id: archivoId,
+            proyecto_id: proyectoCreado.id,
+          },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+      }
     }
 
     showNotification('Proyecto creado correctamente.', 'success')
-    router.push('/proyectos')
+    router.push('/admin/proyectos')
   } catch (error) {
     console.error('Error al crear el proyecto:', error)
     showNotification('Ocurrió un error al crear el proyecto.', 'error')
@@ -150,6 +192,9 @@ async function fetchMiembrosEquipo(equipoId) {
     console.error('Error al obtener miembros del equipo:', error)
     miembrosEquipo.value = []
   }
+}
+function handleCancel() {
+  showConfirmDialog.value = false
 }
 
 watch(selectedEquipo, (nuevoEquipoId) => {
@@ -225,7 +270,10 @@ function submitForm() {
   showConfirmDialog.value = true
 }
 
-onMounted(fetchEquipos)
+onMounted(async () => {
+  await eventosInscritosStore.fetchEventosInscritos()
+  fetchEquipos()
+})
 
 function handleGuardarEquipo() {
   showModal.value = false
@@ -371,7 +419,7 @@ function handleGuardarEquipo() {
       :visible="showConfirmDialog"
       message="¿Estás seguro de que deseas crear este proyecto?"
       @confirm="confirmarCreacion"
-      @cancel="() => (showConfirmDialog.value = false)"
+      @cancel="handleCancel"
     />
 
     <div v-if="showToast" :class="['toast-notification', toastType, 'show']">

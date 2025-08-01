@@ -1,28 +1,20 @@
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
+import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
+import { storeToRefs } from 'pinia'
 
+const eventosInscritosStore = useEventosInscritosStore()
+const { eventos, cargado } = storeToRefs(eventosInscritosStore)
 const router = useRouter()
-
-const props = defineProps({
-  event: {
-    type: Object,
-    required: true,
-  },
-})
-const id = props.event.id
-
-// Add 'view-event' to the emitted events
+const props = defineProps({ event: Object })
 const emit = defineEmits(['edit-event', 'view-event'])
 
-const emitEditEvent = () => {
-  emit('edit-event', props.event)
-}
-
-// New function to emit the event for viewing
-const emitViewEvent = () => {
-  emit('view-event', props.event.id) // Emit just the ID for viewing
-}
+const showConfirmDialog = ref(false)
+const toastMessage = ref('')
+const showToast = ref(false)
+const toastType = ref('') // 'success' o 'error'
 
 const canEdit = computed(() => {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -36,12 +28,69 @@ const canEdit = computed(() => {
   if (userRolId === 1) {
     const eventos = JSON.parse(localStorage.getItem('eventos') || '[]')
     // Check if there's an entry in 'eventos' for the current event_id and rol_id 1
-    // It's assumed that `props.event.id` corresponds to `evento_id` in the 'eventos' array.
+    // It's assumed that props.event.id corresponds to evento_id in the 'eventos' array.
     const hasEventPermission = eventos.some((e) => e.evento_id === props.event.id && e.rol_id === 1)
     return hasEventPermission
   }
 
   return false
+})
+function handleInscribirse() {
+  if (props.event.permite_proyectos) {
+    // Solo redirige, NO inscribe aquí
+    router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
+  } else {
+    // Si no permite proyectos, inscribe directamente
+    inscribirEnEvento()
+  }
+}
+
+const inscribirEnEvento = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    toast('Token no encontrado', 'error')
+    return
+  }
+
+  try {
+    await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ evento_id: props.event.id }),
+    })
+    console.log('Inscripción exitosa al evento', props.event)
+    if (props.event.hayEquipos > 0) {
+      router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
+    } else {
+      showConfirmDialog.value = true
+    }
+  } catch (error) {
+    toast('Error al inscribirse al evento', 'error')
+    console.error(error)
+  }
+}
+
+const confirmarSinProyecto = () => {
+  toast('Inscripción exitosa al evento sin proyecto.', 'success')
+  showConfirmDialog.value = false
+}
+
+const toast = (msg, type) => {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => (showToast.value = false), 3000)
+}
+
+const puedeInscribirse = computed(() => {
+  return (
+    props.event.inscripcionesAbiertas &&
+    !eventosInscritosStore.estaInscrito(props.event.id) &&
+    !props.event.estado_borrado
+  )
 })
 </script>
 
@@ -92,14 +141,24 @@ const canEdit = computed(() => {
 
       <div class="d-flex gap-2">
         <button class="btn btn-outline-primary btn-sm" @click="emitViewEvent">Ver evento</button>
-        <button
-          v-if="event.inscripcionesAbiertas"
-          class="btn btn-primary btn-sm"
-          @click="router.push({ name: 'crearProyecto', params: { eventoId: id } })"
-        >
-          Inscribirse
-        </button>
+        <!-- Botón solo si inscripciones están abiertas -->
+        <template v-if="props.event.inscripcionesAbiertas && !props.event.estado_borrado">
+          <button v-if="puedeInscribirse" class="btn btn-primary btn-sm" @click="handleInscribirse">
+            Inscribirse
+          </button>
+          <button v-else class="btn btn-secondary btn-sm" disabled>Ya inscrito</button>
+        </template>
       </div>
+    </div>
+    <ConfirmationDialog
+      :visible="showConfirmDialog"
+      message="¿Deseas inscribirte al evento?"
+      @confirm="confirmarSinProyecto"
+      @cancel="() => (showConfirmDialog.value = false)"
+    />
+
+    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
+      {{ toastMessage }}
     </div>
   </div>
 </template>
@@ -251,5 +310,30 @@ const canEdit = computed(() => {
     flex-direction: column !important;
     gap: 0.5rem;
   }
+}
+
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
 }
 </style>
