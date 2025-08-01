@@ -623,6 +623,13 @@ const formatDate = (dateString) => {
               </div>
               <div class="d-flex">
                 <button
+                  v-if="eventDetails.estado === 'Finalizado'"
+                  class="btn btn-terciario btn-m me-2 animated-btn"
+                  @click="handleEditButtonClick"
+                >
+                  <i class="fa-solid fa-file-pdf me-2"></i>Generar certificado
+                </button>
+                <button
                   v-if="canEditEvent"
                   class="btn btn-primary btn-m me-2 animated-btn"
                   @click="handleEditButtonClick"
@@ -1254,6 +1261,22 @@ const formatDate = (dateString) => {
 .btn-secondary {
   background-color: #6c757d;
   border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+  border-color: #545b62;
+}
+
+.btn-terciario {
+  background-color: #cfac11;
+  border-color: #ffcf4c;
+  color: #ffffff;
+}
+
+.btn-terciario:hover {
+  background-color: #b89a0e;
+  border-color: #8f740b;
 }
 
 .btn-secondary:hover {
