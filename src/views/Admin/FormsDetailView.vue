@@ -19,13 +19,14 @@ const loading = ref(true)
 const procesoId = ref(null)
 const procesoDetails = ref(null)
 
+const eventDetails = ref(null)
+
 const showErrorModal = ref(false)
 const errorMessage = ref('')
 
 const showOkModal = ref(false)
 const okModalMessage = ref('')
 
-// FIX: Add missing refs to resolve warnings
 const universalDeleteModalRef = ref(null)
 const modalTitle = ref('')
 const modalMessage = ref('')
@@ -52,16 +53,12 @@ const canEvaluate = computed(() => {
     console.warn('canEvaluate: El objeto de usuario es nulo. No se pueden determinar los permisos.')
     return false
   }
-
   const globalRoleId = user.value.rol_id
-
   console.log(`canEvaluate check para usuario con rol_id global: ${globalRoleId}`)
-
   if (globalRoleId === 1 || globalRoleId === 8) {
     console.log(`- El rol_id global es ${globalRoleId}. Permiso concedido.`)
     return true
   }
-
   if (globalRoleId === 2) {
     if (!procesoDetails.value || !procesoDetails.value.procesoEventoId) {
       console.error(
@@ -69,12 +66,9 @@ const canEvaluate = computed(() => {
       )
       return false
     }
-
     const eventId = procesoDetails.value.procesoEventoId
     console.log(`- ID de evento asociado para la validación: ${eventId}`)
-
     const eventPermission = userEventPermissions.value.find((perm) => perm.evento_id === eventId)
-
     if (eventPermission) {
       const eventRoleId = eventPermission.rol_id
       console.log(`- Permiso de evento encontrado con rol_id: ${eventRoleId}`)
@@ -92,7 +86,6 @@ const canEvaluate = computed(() => {
       return true
     }
   }
-
   console.log(`- El rol_id global ${globalRoleId} no tiene acceso. Permiso denegado.`)
   return false
 })
@@ -119,6 +112,31 @@ const handleDynamicCancel = () => {
   showConfirmationModal.value = false
 }
 
+async function fetchEventDetails(eventId) {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return
+  }
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    eventDetails.value = response.data
+  } catch (err) {
+    console.error('Error al obtener los detalles del evento:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar los detalles del evento: ${
+      err.response?.data?.message || err.message
+    }`
+    showErrorModal.value = true
+    eventDetails.value = null
+  }
+}
+
 async function fetchProcesoDetails() {
   loading.value = true
   const token = localStorage.getItem('token')
@@ -128,7 +146,6 @@ async function fetchProcesoDetails() {
     loading.value = false
     return
   }
-
   try {
     const response = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/procesos-evaluacion/${procesoId.value}/detalle`,
@@ -140,8 +157,11 @@ async function fetchProcesoDetails() {
       },
     )
     procesoDetails.value = response.data
-    // Set the event ID for the child modal
     currentProcesoEventoId.value = procesoDetails.value.procesoEventoId
+
+    if (procesoDetails.value.procesoEventoId) {
+      await fetchEventDetails(procesoDetails.value.procesoEventoId)
+    }
   } catch (err) {
     console.error('Error al obtener los detalles del proceso:', err.response?.data || err.message)
     errorMessage.value = `Error al cargar los detalles del proceso de evaluación: ${
@@ -194,7 +214,6 @@ const loadUserPermissions = () => {
       user.value = null
     }
   }
-
   const eventosString = localStorage.getItem('eventos')
   if (eventosString) {
     try {
@@ -258,20 +277,25 @@ const goBack = () => {
                 </h3>
               </div>
             </div>
-
-            <div class="card card-body p-4 border-0 shadow-sm custom-tab-content mb-4">
+            <div
+              class="card card-body p-4 border-0 shadow-sm custom-tab-content mb-4"
+              v-if="eventDetails"
+            >
               <h5 class="mb-3">Información del Evento Asociado</h5>
+              <p class="mb-2"><strong>Nombre del Evento:</strong> {{ eventDetails.nombre }}</p>
+              <p class="mb-2"><strong>Descripción:</strong> {{ eventDetails.descripcion }}</p>
               <p class="mb-2">
-                <strong>Nombre del Evento:</strong> Conferencia de Innovación Tecnológica
+                <strong>Fecha de Inicio:</strong> {{ formatDate(eventDetails.fecha_inicio) }}
               </p>
-              <p class="mb-2">
-                <strong>Descripción:</strong> Un evento para explorar las últimas tendencias y
-                avances en el mundo de la tecnología y la innovación.
+              <p class="mb-0">
+                <strong>Fecha de Fin:</strong> {{ formatDate(eventDetails.fecha_fin) }}
               </p>
-              <p class="mb-2"><strong>Fecha de Inicio:</strong> 15/10/2025</p>
-              <p class="mb-0"><strong>Fecha de Fin:</strong> 17/10/2025</p>
             </div>
-
+            <div v-else class="card card-body p-4 border-0 shadow-sm custom-tab-content mb-4">
+              <p class="text-muted text-center py-2">
+                No se pudo cargar la información del evento asociado.
+              </p>
+            </div>
             <h5 class="mb-3">Plantillas de Evaluación</h5>
             <div v-if="procesoDetails.plantillas && procesoDetails.plantillas.length > 0">
               <div class="accordion" id="plantillasAccordion">
@@ -311,7 +335,8 @@ const goBack = () => {
                             <div>
                               <i class="fas fa-star me-2 text-warning"></i>
                               <strong>{{ criterio.criterioNombre }}</strong
-                              >: {{ criterio.criterioDescripcion }}
+                              >:
+                              {{ criterio.criterioDescripcion }}
                             </div>
                             <span class="badge bg-primary rounded-pill"
                               >{{ criterio.criterioPeso }}%</span
@@ -322,7 +347,6 @@ const goBack = () => {
                       <p v-else class="text-muted text-center py-2">
                         No hay criterios definidos para esta plantilla.
                       </p>
-
                       <div class="d-flex justify-content-end mt-4">
                         <button
                           v-if="canEvaluate"
@@ -347,14 +371,12 @@ const goBack = () => {
         </div>
       </div>
     </div>
-
     <OkModal
       :show="showOkModal"
       :message="okModalMessage"
       :duration="1000"
       @close="handleOkModalClose"
     />
-
     <ConfirmationModal
       :show="showConfirmationModal"
       :title="confirmModalTitle"
@@ -364,7 +386,6 @@ const goBack = () => {
       @confirm="handleDynamicConfirm"
       @cancel="handleDynamicCancel"
     />
-
     <DeleteModal
       ref="universalDeleteModalRef"
       :title="modalTitle"
@@ -373,9 +394,7 @@ const goBack = () => {
       :confirmButtonText="modalConfirmText"
       @confirmed="handleDeleteConfirmed"
     />
-
     <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
-
     <EvaluateTemplateModal
       :show="showEvaluateTemplateModal"
       :plantilla="currentPlantillaToEvaluate"
@@ -392,63 +411,51 @@ const goBack = () => {
   height: 100vh;
   overflow: hidden;
 }
-
 .animated-btn {
   transition: all 0.2s ease-in-out;
   position: relative;
   overflow: hidden;
 }
-
 .btn-primary {
   background-color: #174384;
   border-color: #174384;
 }
-
 .btn-primary:hover {
   background-color: #14386b;
   border-color: #14386b;
 }
-
 .btn-danger {
   background-color: #dc3545;
   border-color: #dc3545;
 }
-
 .btn-danger:hover {
   background-color: #c82333;
   border-color: #bd2130;
 }
-
 .btn-success {
   background-color: #28a745;
   border-color: #28a745;
 }
-
 .btn-success:hover {
   background-color: #218838;
   border-color: #1e7e34;
 }
-
 .btn-secondary {
   background-color: #6c757d;
   border-color: #6c757d;
 }
-
 .btn-secondary:hover {
   background-color: #5a6268;
   border-color: #545b62;
 }
-
 .card {
   border: 1px solid rgba(0, 0, 0, 0.125);
   border-radius: 0.25rem;
 }
-
 .custom-tab-content {
   border: none !important;
   box-shadow: none !important;
 }
-
 .accordion-button {
   background-color: #174384;
   color: #ffffff;
@@ -459,27 +466,22 @@ const goBack = () => {
     color 0.2s ease;
   padding: 1rem 1.25rem;
 }
-
 .accordion-button:not(.collapsed) {
   background-color: #e0e7ff;
   color: #174384;
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.125);
 }
-
 .accordion-button:focus {
   box-shadow: 0 0 0 0.25rem rgba(23, 67, 132, 0.25);
 }
-
 .accordion-button::after {
   display: none;
 }
-
 .accordion-body {
   padding: 1.5rem;
   background-color: #fdfdff;
   border-top: 1px dashed #e0e0e0;
 }
-
 .accordion-item {
   margin-bottom: 10px;
   border: 1px solid #dcdcdc;
@@ -487,17 +489,14 @@ const goBack = () => {
   overflow: hidden;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
-
 .accordion-item:first-of-type {
   border-top-left-radius: 0.5rem;
   border-top-right-radius: 0.5rem;
 }
-
 .accordion-item:last-of-type {
   border-bottom-left-radius: 0.5rem;
   border-bottom-right-radius: 0.5rem;
 }
-
 .cronograma-activities-title {
   color: #174384;
   font-weight: 700;
@@ -505,29 +504,24 @@ const goBack = () => {
   padding-bottom: 5px;
   margin-bottom: 10px;
 }
-
 .list-group-item {
   border-color: #f0f0f0;
   padding-left: 0.5rem;
   font-size: 0.95rem;
   color: #495057;
 }
-
 .activity-icon {
   color: #28a745;
 }
-
 .nested-accordion-button {
   background-color: #f0f5ff;
   color: #3730a3;
   font-weight: 500;
 }
-
 .nested-accordion-button .nested-accordion-icon {
   color: #3730a3;
   transition: transform 0.2s ease-in-out;
 }
-
 .nested-accordion-body {
   background-color: #ffffff;
 }
