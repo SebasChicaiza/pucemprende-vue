@@ -19,7 +19,8 @@ export async function cargarEventosPermitidos() {
         !e.estado_borrado &&
         ['Gestor', 'AdminEvento'].includes(e.rol)
     )
-    .map((e) => e.evento_id) // Asegúrate que ese campo exista
+    .map((e) => e.id) // Asegúrate que ese campo exista
+
 }
 
 
@@ -49,6 +50,7 @@ export function puedeEditarProyecto(proyecto) {
 
   return esLiderDeSuEquipo
 }
+
 
 
 

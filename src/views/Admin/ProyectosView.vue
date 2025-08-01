@@ -134,7 +134,7 @@ async function fetchProyectosConEventos() {
       axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/proyectosConEventos`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/evento`, {
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
       axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {

@@ -41,7 +41,7 @@ const emitViewEvent = () => {
 }
 
 function handleInscribirse() {
-  if (props.event.permite_proyectos) {
+  if (props.event.hayEquipos > 0) {
     // Solo redirige, NO inscribe aquí
     router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
   } else {
@@ -159,7 +159,7 @@ const puedeInscribirse = computed(() => {
       :visible="showConfirmDialog"
       message="¿Deseas inscribirte al evento?"
       @confirm="confirmarSinProyecto"
-      @cancel="() => (showConfirmDialog.value = false)"
+      @cancel="showConfirmDialog.value = false"
     />
 
     <div v-if="showToast" :class="['toast-notification', toastType, 'show']">

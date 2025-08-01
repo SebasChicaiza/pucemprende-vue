@@ -32,7 +32,7 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="card-title">{{ equipo.nombre }}</h4>
-              <div>
+              <div v-if="puedeEditarEquipo()" class="btn-group">
                 <!-- Button to open modal for editing an existing team -->
                 <button
                   class="btn btn-outline-secondary btn-sm me-2"
@@ -99,39 +99,47 @@
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
-import FormularioEquipoModal from '@/components/Admin/Proyectos/FormularioEquipoModal.vue' // Import the modal component
-import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue' // Import the new confirmation dialog
+import FormularioEquipoModal from '@/components/Admin/Proyectos/FormularioEquipoModal.vue'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { user } from '@/stores/userPermisos'
 
+// reactive state
 const loading = ref(true)
 const error = ref('')
 const equipos = ref([])
 const filtroTexto = ref('')
 
+// only superadmin can edit
+const esSuperadmin = computed(() => user.value?.rol_id === 8)
+function puedeEditarEquipo() {
+  return esSuperadmin.value
+}
+
+// filtered list for UI
 const equiposFiltrados = computed(() => {
   const texto = filtroTexto.value.toLowerCase()
   return equipos.value.filter((equipo) => {
-    const nombreEquipo = equipo.nombre?.toLowerCase() || ''
-    const nombresIntegrantes = equipo.integrantes
+    const nombre = equipo.nombre?.toLowerCase() || ''
+    const nombres = equipo.integrantes
       .map((i) => `${i.persona?.nombre || ''} ${i.persona?.apellido || ''}`.toLowerCase())
       .join(' ')
-    return nombreEquipo.includes(texto) || nombresIntegrantes.includes(texto)
+    return nombre.includes(texto) || nombres.includes(texto)
   })
 })
-// State for the modals
-const showFormularioEquipoModal = ref(false)
-const currentEquipoForEdit = ref(null) // Holds the team data when editing
 
+// modals and confirmation state
+const showFormularioEquipoModal = ref(false)
+const currentEquipoForEdit = ref(null)
 const showConfirmDialog = ref(false)
 const confirmDialogMessage = ref('')
-const teamIdToDelete = ref(null) // To store the ID of the team to be deleted
-
+const teamIdToDelete = ref(null)
 const mensajeExito = ref('')
 const showToast = ref(false)
 
-function mostrarToast(mensaje) {
-  mensajeExito.value = mensaje
+function mostrarToast(msg) {
+  mensajeExito.value = msg
   showToast.value = true
   setTimeout(() => {
     showToast.value = false
@@ -148,131 +156,84 @@ async function fetchEquipos() {
     loading.value = false
     return
   }
-
+  const headers = { Authorization: `Bearer ${token}` }
   try {
-    // Fetch all necessary data concurrently
     const [resEquipos, resMiembros, resPersonas] = await Promise.all([
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/persona`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, { headers }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`, { headers }),
+      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/persona`, { headers }),
     ])
 
-    let allEquipos = resEquipos.data
-    const allMiembros = resMiembros.data
-    const allPersonas = resPersonas.data
+    // filter out soft-deleted teams
+    let allEquipos = Array.isArray(resEquipos.data)
+      ? resEquipos.data.filter((e) => !e.estado_borrado)
+      : []
 
-    // Filter out teams where estado_borrado is true
-    if (Array.isArray(allEquipos)) {
-      allEquipos = allEquipos.filter((equipo) => equipo.estado_borrado !== true)
-    } else {
-      console.warn(
-        'API /api/equipos did not return an array. Team data might be incomplete or malformed.',
-      )
-      allEquipos = [] // Ensure it's an array for subsequent processing
-    }
+    // map personas
+    const personasMap = new Map(resPersonas.data.map((p) => [p.id, p]))
 
-    // Create maps for quick lookup
-    const personasMap = new Map()
-    if (Array.isArray(allPersonas)) {
-      allPersonas.forEach((persona) => {
-        personasMap.set(persona.id, persona)
-      })
-    } else {
-      console.warn('API /api/persona did not return an array. Person data might be incomplete.')
-    }
-
-    // Process teams and assign members
-    const processedEquipos = allEquipos.map((equipo) => {
-      // Filter members belonging to the current team
-      const teamMembers = Array.isArray(allMiembros)
-        ? allMiembros.filter((miembro) => miembro.equipo_id === equipo.id)
-        : []
-
-      // Enrichen each member with their corresponding person data
-      const integrantesConPersona = teamMembers.map((miembro) => {
-        const persona = personasMap.get(miembro.persona_id) || null // Get person from map
-        return {
-          ...miembro, // Keep all original miembro properties (like 'id' for deletion)
-          persona: persona, // Assign the found persona object
-          rol: miembro.rol || 'Sin rol', // Keep the role from the miembro object
-        }
-      })
-
-      return {
-        ...equipo,
-        integrantes: integrantesConPersona,
-      }
+    equipos.value = allEquipos.map((equipo) => {
+      const miembros = resMiembros.data.filter((m) => m.equipo_id === equipo.id)
+      const integrantes = miembros.map((m) => ({
+        ...m,
+        persona: personasMap.get(m.persona_id) || null,
+        rol: m.rol || 'Sin rol',
+      }))
+      return { ...equipo, integrantes }
     })
-
-    equipos.value = processedEquipos
   } catch (err) {
-    console.error('Error al cargar datos:', err)
+    console.error('Error al cargar equipos:', err)
     error.value = err.response?.data?.message || 'Error al cargar equipos o miembros'
   } finally {
     loading.value = false
   }
 }
 
-// Functions to control the FormularioEquipoModal
 function openCreateEquipoModal() {
-  currentEquipoForEdit.value = null // No team data means creating a new one
+  currentEquipoForEdit.value = null
   showFormularioEquipoModal.value = true
 }
-
 function openEditEquipoModal(equipo) {
-  currentEquipoForEdit.value = equipo // Pass the selected team's data
+  currentEquipoForEdit.value = equipo
   showFormularioEquipoModal.value = true
 }
-
 function closeFormularioEquipoModal() {
   showFormularioEquipoModal.value = false
-  currentEquipoForEdit.value = null // Clear the data when modal closes
+  currentEquipoForEdit.value = null
 }
-
 function handleEquipoSaved() {
-  closeFormularioEquipoModal() // Close the modal
-  fetchEquipos() // Re-fetch all teams to update the list with new/edited data
+  closeFormularioEquipoModal()
+  fetchEquipos()
 }
 
-// Functions to control the ConfirmationDialog
-function confirmDeleteEquipo(equipoId) {
-  teamIdToDelete.value = equipoId
-  confirmDialogMessage.value =
-    '¿Estás seguro de que quieres eliminar este equipo? Esta acción no se puede deshacer.'
+function confirmDeleteEquipo(id) {
+  teamIdToDelete.value = id
+  confirmDialogMessage.value = '¿Quieres eliminar este equipo? Esta acción no se puede deshacer.'
   showConfirmDialog.value = true
 }
-
 async function executeDeleteEquipo() {
   const token = localStorage.getItem('token')
   if (!token) {
-    mostrarToast('No se encontró token de autenticación. Por favor, inicia sesión.')
+    mostrarToast('Token no encontrado')
     return
   }
-
   try {
     await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/equipos/${teamIdToDelete.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     mostrarToast('Equipo eliminado correctamente.')
-    showConfirmDialog.value = false
     fetchEquipos()
   } catch (err) {
-    console.error('Error al eliminar el equipo:', err)
-    mostrarToast(err.response?.data?.message || 'Ocurrió un error al eliminar el equipo.')
+    console.error('Error eliminar equipo:', err)
+    mostrarToast(err.response?.data?.message || 'Error al eliminar')
   } finally {
+    showConfirmDialog.value = false
     teamIdToDelete.value = null
   }
 }
-
 function cancelDeleteEquipo() {
-  showConfirmDialog.value = false // Close the confirmation dialog
-  teamIdToDelete.value = null // Clear the stored ID
+  showConfirmDialog.value = false
+  teamIdToDelete.value = null
 }
 </script>
 

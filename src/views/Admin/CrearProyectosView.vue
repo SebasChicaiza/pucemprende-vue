@@ -115,24 +115,10 @@ async function confirmarCreacion() {
     )
 
     if (logoImage.value?.file) {
-      const uploaded = await uploadFileToBackend(logoImage.value.file)
-      if (uploaded) {
-        const { id: archivoId, url } = uploaded
-
-        await axios.post(
-          `${import.meta.env.VITE_URL_BACKEND}/api/archivos`,
-          { url, tipo: 'png' },
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-
-        await axios.post(
-          `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-          {
-            archivo_id: archivoId,
-            proyecto_id: proyectoCreado.id,
-          },
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
+      const uploaded = await subirLogoProyecto(logoImage.value.file, proyectoCreado.id)
+      if (!uploaded) {
+        showNotification('Error al subir el logo del proyecto.', 'error')
+        return
       }
     }
 
@@ -144,17 +130,6 @@ async function confirmarCreacion() {
   } finally {
     showConfirmDialog.value = false
   }
-}
-
-// Mensajes temporales
-async function showTimedErrorMessage(msg) {
-  error.value = msg
-  setTimeout(() => (error.value = ''), 3000)
-}
-
-async function showTimedSuccessMessage(msg) {
-  // Podrías usar un store o evento para notificar
-  console.log(msg)
 }
 
 async function fetchMiembrosEquipo(equipoId) {
@@ -205,23 +180,22 @@ watch(selectedEquipo, (nuevoEquipoId) => {
   }
 })
 
-// Subir archivo al backend como logo
-async function uploadFileToBackend(file) {
+async function subirLogoProyecto(file, proyectoId) {
   const token = localStorage.getItem('token')
   if (!token) {
-    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.')
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
     return null
   }
 
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('name', file.name.split('.')[0])
-  formData.append('tipo', 'logo')
-
-  loading.value = true
   try {
-    const response = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`,
+    //  Subir el archivo (ya crea el registro en la tabla archivos)
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', file.name.split('.')[0])
+    formData.append('proyecto_id', proyectoId)
+
+    const uploadResponse = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/proyecto/upload`,
       formData,
       {
         headers: {
@@ -230,13 +204,39 @@ async function uploadFileToBackend(file) {
         },
       },
     )
-    return { id: response.data.file.id, url: response.data.file.url }
+
+    console.log('Archivo subido:', uploadResponse.data)
+
+    // Crear la relación en archivos-proyecto usando el ID devuelto
+    const archivoId = uploadResponse.data.file.id // ID del archivo creado
+
+    const relacionData = {
+      proyecto_id: proyectoId,
+      archivo_id: archivoId,
+    }
+
+    const relacionResponse = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
+      relacionData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    console.log('Relación proyecto-archivo creada:', relacionResponse.data)
+
+    return {
+      archivo: uploadResponse.data.file,
+      relacion: relacionResponse.data,
+    }
   } catch (err) {
-    console.error('Error subiendo logo:', err.response?.data || err.message)
-    await showTimedErrorMessage('Error al subir la imagen del logo.')
+    console.error('Error al subir y vincular el logo:', err.response?.data || err.message)
+    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
+
     return null
-  } finally {
-    loading.value = false
   }
 }
 

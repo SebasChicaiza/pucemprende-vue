@@ -45,22 +45,44 @@
   </div>
 </template>
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import axios from 'axios'
 import { puedeEditarProyecto } from '@/stores/userPermisos'
 
 const props = defineProps({
   proyecto: { type: Object, required: true },
   equipoNombre: { type: String, default: '' },
   nombreEvento: { type: String, default: '' },
-  equipo: { type: Array, default: () => [] },
 })
+
+const miembrosProyecto = ref([])
+const cargandoMiembros = ref(true)
 
 const puedeEditar = computed(() => {
   const proyectoConDatos = {
     ...props.proyecto,
-    equipo: props.equipo,
+    equipo: miembrosProyecto.value, // usamos esta lista como si fuera 'equipo'
   }
+
   return puedeEditarProyecto(proyectoConDatos)
+})
+
+onMounted(async () => {
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  try {
+    const res = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    miembrosProyecto.value = res.data.filter((m) => m.proyecto_id === props.proyecto.id)
+    console.log('Miembros del proyecto:', miembrosProyecto.value)
+  } catch (err) {
+    console.error('Error cargando miembros del proyecto:', err)
+  } finally {
+    cargandoMiembros.value = false
+  }
 })
 
 function formatDate(dateStr) {
