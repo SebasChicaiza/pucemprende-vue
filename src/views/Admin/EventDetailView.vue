@@ -60,6 +60,8 @@ const loadingProjects = computed(() => proyectosEventosStore.isLoadingProjects)
 const eventForms = computed(() => plantillasEvaluacionStore.getPlantillasForEvent(eventId.value)) // Computed for forms
 const loadingForms = computed(() => plantillasEvaluacionStore.isLoadingPlantillas) // Computed for forms loading
 
+const currentPerson = ref(null)
+
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
     return eventImages.value
@@ -501,6 +503,100 @@ const uploadNewImages = async (newFiles) => {
   isLoadingImagesInModal.value = false
 }
 
+const getCurrentPerson = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return null
+  }
+
+  const idUser = JSON.parse(localStorage.getItem('user') || '{}').id
+
+  console.log('Fetching current person data for user ID:', idUser)
+  if (!idUser) {
+    errorMessage.value = 'ID de usuario no encontrado en localStorage.'
+    showErrorModal.value = true
+    return null
+  }
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${idUser}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+    console.log('Current Person Data:', response.data)
+    currentPerson.value = response.data
+    return response.data
+  } catch (err) {
+    console.error('Error fetching current person data:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar datos de la persona actual: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+    return null
+  }
+}
+
+const handleCertificateButtonClick = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return null
+  }
+
+  loading.value = true
+
+  await getCurrentPerson()
+  console.log('Current Person:', currentPerson.value)
+
+  const nombrePersona = currentPerson.value
+    ? `${currentPerson.value.nombre} ${currentPerson.value.apellido}`
+    : 'Sin Nombre'
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/certificados/1/generar?nombre=${nombrePersona}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: 'blob',
+      },
+    )
+
+    if (!response.data) {
+      throw new Error('No se recibió ningún archivo del servidor.')
+    }
+
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `certificado_${eventId.value}_${nombrePersona}.pdf`)
+
+    document.body.appendChild(link)
+    link.click()
+
+    link.parentNode.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    okModalMessage.value = 'Certificado descargado con éxito.'
+    showOkModal.value = true
+  } catch (err) {
+    console.error('Error al generar el certificado:', err.response?.data || err.message)
+    errorMessage.value = `Error al generar el certificado: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
 const formatTime = (dateString) => {
   if (!dateString) return ''
   const date = new Date(dateString)
@@ -625,7 +721,7 @@ const formatDate = (dateString) => {
                 <button
                   v-if="eventDetails.estado === 'Finalizado'"
                   class="btn btn-terciario btn-m me-2 animated-btn"
-                  @click="handleEditButtonClick"
+                  @click="handleCertificateButtonClick"
                 >
                   <i class="fa-solid fa-file-pdf me-2"></i>Generar certificado
                 </button>
