@@ -35,6 +35,11 @@ const canEdit = computed(() => {
 
   return false
 })
+
+const emitViewEvent = () => {
+  emit('view-event', props.event.id) // Emit just the ID for viewing
+}
+
 function handleInscribirse() {
   if (props.event.permite_proyectos) {
     // Solo redirige, NO inscribe aquí
