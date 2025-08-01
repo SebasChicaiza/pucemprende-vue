@@ -22,6 +22,9 @@
         </div>
       </div>
       <div class="project-subtitle">
+        <span>Evento: {{ nombreEvento }}</span
+        ><br />
+
         <span>Equipo: {{ equipoNombre || 'Sin equipo' }}</span>
       </div>
 
@@ -41,22 +44,29 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { computed } from 'vue'
-import { puedeEditarProyecto } from '@/stores/userPermisos' // ajusta la ruta
+import { puedeEditarProyecto } from '@/stores/userPermisos'
 
 const props = defineProps({
   proyecto: { type: Object, required: true },
   equipoNombre: { type: String, default: '' },
+  nombreEvento: { type: String, default: '' },
+  equipo: { type: Array, default: () => [] },
+})
+
+const puedeEditar = computed(() => {
+  const proyectoConDatos = {
+    ...props.proyecto,
+    equipo: props.equipo,
+  }
+  return puedeEditarProyecto(proyectoConDatos)
 })
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString()
 }
-
-const puedeEditar = computed(() => puedeEditarProyecto(props.proyecto))
 </script>
 
 <style scoped>

@@ -119,6 +119,7 @@ export default {
         localStorage.setItem('token', `Bearer ${data.access_token}`)
         localStorage.setItem('user', JSON.stringify(data.user))
         localStorage.setItem('eventos', JSON.stringify(data.eventos || []))
+        localStorage.setItem('proyectos', JSON.stringify(data.proyectos_liderados || []))
 
         if (data.user.rol_id === 1 || data.user.rol_id === 8) {
           this.$router.push('/admin/eventos')
