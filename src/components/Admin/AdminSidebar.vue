@@ -3,6 +3,19 @@ import { ref, onMounted, watch } from 'vue'
 
 const collapsed = ref(false)
 
+const isSuperAdmin = ref(false)
+const isAdmin = ref(false)
+const isUser = ref(false)
+const user = JSON.parse(localStorage.getItem('user'))
+
+if (user.rol_id === 1) {
+  isAdmin.value = true
+} else if (user.rol_id === 8) {
+  isSuperAdmin.value = true
+} else if (user.rol_id === 2) {
+  isUser.value = true
+}
+
 // Function to toggle sidebar and save state to localStorage
 function toggleSidebar() {
   collapsed.value = !collapsed.value
@@ -48,8 +61,7 @@ if (userJsonString) {
           class="toggle-icon"
         ></i>
       </div>
-
-      <ul class="flex-grow-1 px-3 py-3 border-top list-unstyled">
+      <ul v-if="isSuperAdmin" class="flex-grow-1 px-3 py-3 border-top list-unstyled">
         <li
           v-for="(item, index) in [
             { icon: 'fa-solid fa-home', text: 'Dashboard', route: '/admin/dashboard' },
@@ -63,6 +75,66 @@ if (userJsonString) {
               text: 'Organizaciones',
               route: '/admin/organizadores',
             },
+          ]"
+          :key="index"
+          class="sidebar-item"
+        >
+          <router-link
+            :to="item.route"
+            class="d-flex align-items-center py-2 px-3 rounded text-decoration-none sidebar-link"
+          >
+            <i :class="[item.icon, collapsed ? '' : 'me-2']"></i>
+            <span
+              :class="[
+                'transition-all sidebar-text sidebar-weight',
+                collapsed ? 'collapsed-text' : 'expanded-text',
+              ]"
+              >{{ item.text }}</span
+            >
+            <div v-if="collapsed" class="sidebar-tooltip">{{ item.text }}</div>
+          </router-link>
+        </li>
+      </ul>
+      <ul v-else-if="isAdmin" class="flex-grow-1 px-3 py-3 border-top list-unstyled">
+        <li
+          v-for="(item, index) in [
+            { icon: 'fa-regular fa-folder-open', text: 'Eventos', route: '/admin/eventos' },
+            { icon: 'fa-solid fa-link', text: 'Proyectos', route: '/admin/proyectos' },
+            { icon: 'fa-regular fa-file', text: 'Formularios', route: '/admin/formularios' },
+            { icon: 'fa-solid fa-users', text: 'Equipos', route: '/admin/equipos' },
+            { icon: 'fa-regular fa-user', text: 'Usuarios', route: '/admin/usuarios' },
+            {
+              icon: 'fa-regular fa-building',
+              text: 'Organizaciones',
+              route: '/admin/organizadores',
+            },
+          ]"
+          :key="index"
+          class="sidebar-item"
+        >
+          <router-link
+            :to="item.route"
+            class="d-flex align-items-center py-2 px-3 rounded text-decoration-none sidebar-link"
+          >
+            <i :class="[item.icon, collapsed ? '' : 'me-2']"></i>
+            <span
+              :class="[
+                'transition-all sidebar-text sidebar-weight',
+                collapsed ? 'collapsed-text' : 'expanded-text',
+              ]"
+              >{{ item.text }}</span
+            >
+            <div v-if="collapsed" class="sidebar-tooltip">{{ item.text }}</div>
+          </router-link>
+        </li>
+      </ul>
+      <ul v-else-if="isUser" class="flex-grow-1 px-3 py-3 border-top list-unstyled">
+        <li
+          v-for="(item, index) in [
+            { icon: 'fa-regular fa-folder-open', text: 'Eventos', route: '/admin/eventos' },
+            { icon: 'fa-solid fa-link', text: 'Proyectos', route: '/admin/proyectos' },
+            { icon: 'fa-regular fa-file', text: 'Formularios', route: '/admin/formularios' },
+            { icon: 'fa-solid fa-users', text: 'Equipos', route: '/admin/equipos' },
           ]"
           :key="index"
           class="sidebar-item"
