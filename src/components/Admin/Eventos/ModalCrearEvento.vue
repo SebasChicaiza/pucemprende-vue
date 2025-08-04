@@ -4,17 +4,16 @@ import Loader from '@/components/LoaderComponent.vue'
 import imageHolder from '@/assets/iconos/imageHolder.png'
 import ScrollBar from '@/components/ScrollBar.vue'
 import OkModal from '@/components/OkModal.vue'
-import ErrorModal from '@/components/ErrorModal.vue';
+import ErrorModal from '@/components/ErrorModal.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import axios from 'axios';
-
+import axios from 'axios'
 
 const tabTitleMap = computed(() => ({
   info: 'Información del Evento',
   imagenes: 'Imágenes del Evento',
   cronograma: 'Añadir Cronogramas',
-  actividades: 'Añadir Actividades'
-}));
+  actividades: 'Añadir Actividades',
+}))
 
 const props = defineProps({
   show: Boolean,
@@ -22,7 +21,7 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-});
+})
 
 const emit = defineEmits(['close', 'submit'])
 
@@ -40,8 +39,8 @@ const form = reactive({
   hayEquipos: 0,
   hayFormulario: false,
   estado: 'Creado',
-  inscripcionesAbiertas: true
-});
+  inscripcionesAbiertas: true,
+})
 
 const cronogramaForm = reactive({
   evento_id: '',
@@ -49,7 +48,7 @@ const cronogramaForm = reactive({
   descripcion: '',
   fecha_inicio: '',
   fecha_fin: '',
-});
+})
 
 const actividadForm = reactive({
   cronograma_id: '',
@@ -58,139 +57,139 @@ const actividadForm = reactive({
   fecha_inicio: '',
   fecha_fin: '',
   dependencia_id: null,
-});
+})
 
-const cronogramas = ref([]);
+const cronogramas = ref([])
 
-const activeTab = ref('info');
-const descripcionCount = computed(() => form.descripcion.length);
-const loading = ref(false);
-const categorias = ref([]);
-const sede = ref([]);
-const eventIdStore = ref(null);
-const cronogramaIdStore = ref([]);
-const showConfirmationModal = ref(false);
-const ConfModalMessage = ref('');
-const showSuccessModal = ref(false);
-const successMessage = ref('');
+const activeTab = ref('info')
+const descripcionCount = computed(() => form.descripcion.length)
+const loading = ref(false)
+const categorias = ref([])
+const sede = ref([])
+const eventIdStore = ref(null)
+const cronogramaIdStore = ref([])
+const showConfirmationModal = ref(false)
+const ConfModalMessage = ref('')
+const showSuccessModal = ref(false)
+const successMessage = ref('')
 
-const showErrorModal = ref(false);
-const errorMessage = ref('');
+const showErrorModal = ref(false)
+const errorMessage = ref('')
 
-const coverInput = ref(null);
-const additionalInput = ref(null);
+const coverInput = ref(null)
+const additionalInput = ref(null)
 
-const coverImage = reactive({ id: null, url: imageHolder, file: null });
-const additionalImages = ref([]);
+const coverImage = reactive({ id: null, url: imageHolder, file: null })
+const additionalImages = ref([])
 
+const addingActividad = ref(false)
+const reorderingActividades = ref(false)
 
-const addingActividad = ref(false);
-const reorderingActividades = ref(false);
+const isClosingModal = ref(false)
 
-const isClosingModal = ref(false);
+const editingCronogramaTempId = ref(null)
+const editingActividadTempId = ref(null)
 
-const editingCronogramaTempId = ref(null);
-const editingActividadTempId = ref(null);
+const deletedCronogramaIds = ref(new Set())
+const deletedActivityIds = ref(new Set())
 
-const deletedCronogramaIds = ref(new Set());
-const deletedActivityIds = ref(new Set());
+const confirmationActionType = ref('')
+const confirmationActionPayload = ref(null)
+let confirmationResolver = null
 
-const confirmationActionType = ref('');
-const confirmationActionPayload = ref(null);
-let confirmationResolver = null;
-
-
-const isEditing = computed(() => form.id !== null);
+const isEditing = computed(() => form.id !== null)
 
 const tabOrder = computed(() => {
-  return isEditing.value ? ['info', 'cronograma', 'actividades'] : ['info', 'imagenes', 'cronograma', 'actividades'];
-});
+  return isEditing.value
+    ? ['info', 'cronograma', 'actividades']
+    : ['info', 'imagenes', 'cronograma', 'actividades']
+})
 
 const goToPreviousTab = () => {
-  const currentTabIndex = tabOrder.value.indexOf(activeTab.value);
+  const currentTabIndex = tabOrder.value.indexOf(activeTab.value)
   if (currentTabIndex > 0) {
-    activeTab.value = tabOrder.value[currentTabIndex - 1];
+    activeTab.value = tabOrder.value[currentTabIndex - 1]
   }
-};
+}
 
 const handleModalClose = () => {
-  showSuccessModal.value = false;
-  successMessage.value = '';
-};
+  showSuccessModal.value = false
+  successMessage.value = ''
+}
 
 const handleErrorModalClose = () => {
-  showErrorModal.value = false;
-  errorMessage.value = '';
-};
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
 
 async function showTimedSuccessMessage(message, duration = 1000) {
-  successMessage.value = message;
-  showSuccessModal.value = true;
-  await new Promise(resolve => setTimeout(resolve, duration + 100));
+  successMessage.value = message
+  showSuccessModal.value = true
+  await new Promise((resolve) => setTimeout(resolve, duration + 100))
 }
 
 async function showTimedErrorMessage(message, duration = 4000) {
-  errorMessage.value = message;
-  showErrorModal.value = true;
-  await new Promise(resolve => setTimeout(resolve, duration + 100));
+  errorMessage.value = message
+  showErrorModal.value = true
+  await new Promise((resolve) => setTimeout(resolve, duration + 100))
 }
 
 async function confirmAction(message, actionType, payload = null) {
-  ConfModalMessage.value = message;
-  confirmationActionType.value = actionType;
-  confirmationActionPayload.value = payload;
-  showConfirmationModal.value = true;
+  ConfModalMessage.value = message
+  confirmationActionType.value = actionType
+  confirmationActionPayload.value = payload
+  showConfirmationModal.value = true
 
-  return new Promise(resolve => {
-    confirmationResolver = resolve;
-  });
+  return new Promise((resolve) => {
+    confirmationResolver = resolve
+  })
 }
 
 const handleConfirmationConfirm = async () => {
-  showConfirmationModal.value = false;
+  showConfirmationModal.value = false
   if (confirmationResolver) {
-    confirmationResolver(true);
-    confirmationResolver = null;
+    confirmationResolver(true)
+    confirmationResolver = null
   }
   if (confirmationActionType.value === 'closeModal') {
-    clearLocalStorage();
-    emit('close');
+    clearLocalStorage()
+    emit('close')
   } else if (confirmationActionType.value === 'deleteCronograma') {
-    await performDeleteCronograma(confirmationActionPayload.value);
+    await performDeleteCronograma(confirmationActionPayload.value)
   } else if (confirmationActionType.value === 'deleteActividad') {
-    const { cronogramaTempId, actividadTempId } = confirmationActionPayload.value;
-    await performDeleteActividad(cronogramaTempId, actividadTempId);
+    const { cronogramaTempId, actividadTempId } = confirmationActionPayload.value
+    await performDeleteActividad(cronogramaTempId, actividadTempId)
   } else if (confirmationActionType.value === 'finalSave') {
-    await processFinalSave();
+    await processFinalSave()
   }
-  confirmationActionType.value = '';
-  confirmationActionPayload.value = null;
-};
+  confirmationActionType.value = ''
+  confirmationActionPayload.value = null
+}
 
 const handleConfirmationCancel = () => {
-  showConfirmationModal.value = false;
+  showConfirmationModal.value = false
   if (confirmationResolver) {
-    confirmationResolver(false);
-    confirmationResolver = null;
+    confirmationResolver(false)
+    confirmationResolver = null
   }
-  confirmationActionType.value = '';
-  confirmationActionPayload.value = null;
-};
+  confirmationActionType.value = ''
+  confirmationActionPayload.value = null
+}
 
 const promptCloseConfirmation = async () => {
   const confirmed = await confirmAction(
-    "Al cerrar el modal se borrará toda la información del evento que ingresaste. ¿Estás seguro de que quieres continuar?",
-    'closeModal'
-  );
+    'Al cerrar el modal se borrará toda la información del evento que ingresaste. ¿Estás seguro de que quieres continuar?',
+    'closeModal',
+  )
   if (confirmed) {
   }
-};
+}
 
-const isTabCompleted = tabName => {
-  const activeIndex = tabOrder.value.indexOf(activeTab.value);
-  const tabIndex = tabOrder.value.indexOf(tabName);
-  return tabIndex < activeIndex;
-};
+const isTabCompleted = (tabName) => {
+  const activeIndex = tabOrder.value.indexOf(activeTab.value)
+  const tabIndex = tabOrder.value.indexOf(tabName)
+  return tabIndex < activeIndex
+}
 
 const tabTitle = computed(() => {
   switch (activeTab.value) {
@@ -205,7 +204,7 @@ const tabTitle = computed(() => {
     default:
       return 'Información del Evento'
   }
-});
+})
 
 function testLoading() {
   loading.value = true
@@ -224,50 +223,50 @@ const saveToLocalStorage = () => {
     eventIdStore: eventIdStore.value,
     cronogramaIdStore: cronogramaIdStore.value,
     coverImage: { id: coverImage.id, url: coverImage.url },
-    additionalImages: additionalImages.value.map(img => ({ id: img.id, url: img.url })),
+    additionalImages: additionalImages.value.map((img) => ({ id: img.id, url: img.url })),
     deletedCronogramaIds: Array.from(deletedCronogramaIds.value),
     deletedActivityIds: Array.from(deletedActivityIds.value),
-  };
-  localStorage.setItem('eventDraft', JSON.stringify(dataToStore));
-};
+  }
+  localStorage.setItem('eventDraft', JSON.stringify(dataToStore))
+}
 
 const loadFromLocalStorage = () => {
-  const savedData = localStorage.getItem('eventDraft');
+  const savedData = localStorage.getItem('eventDraft')
   if (savedData) {
-    const parsedData = JSON.parse(savedData);
-    Object.assign(form, parsedData.form);
-    Object.assign(cronogramaForm, parsedData.cronogramaForm);
-    Object.assign(actividadForm, parsedData.actividadForm);
+    const parsedData = JSON.parse(savedData)
+    Object.assign(form, parsedData.form)
+    Object.assign(cronogramaForm, parsedData.cronogramaForm)
+    Object.assign(actividadForm, parsedData.actividadForm)
 
-    cronogramas.value = parsedData.cronogramas || [];
-    activeTab.value = parsedData.activeTab || 'info';
-    eventIdStore.value = parsedData.eventIdStore || null;
-    cronogramaIdStore.value = parsedData.cronogramaIdStore || [];
+    cronogramas.value = parsedData.cronogramas || []
+    activeTab.value = parsedData.activeTab || 'info'
+    eventIdStore.value = parsedData.eventIdStore || null
+    cronogramaIdStore.value = parsedData.cronogramaIdStore || []
 
     if (parsedData.coverImage) {
-      coverImage.id = parsedData.coverImage.id;
-      coverImage.url = parsedData.coverImage.url;
-      coverImage.file = null;
+      coverImage.id = parsedData.coverImage.id
+      coverImage.url = parsedData.coverImage.url
+      coverImage.file = null
     } else {
-      coverImage.id = null;
-      coverImage.url = imageHolder;
-      coverImage.file = null;
+      coverImage.id = null
+      coverImage.url = imageHolder
+      coverImage.file = null
     }
 
     if (parsedData.additionalImages) {
-      additionalImages.value = parsedData.additionalImages.map(img => ({ ...img, file: null }));
+      additionalImages.value = parsedData.additionalImages.map((img) => ({ ...img, file: null }))
     } else {
-      additionalImages.value = [];
+      additionalImages.value = []
     }
 
-    deletedCronogramaIds.value = new Set(parsedData.deletedCronogramaIds || []);
-    deletedActivityIds.value = new Set(parsedData.deletedActivityIds || []);
+    deletedCronogramaIds.value = new Set(parsedData.deletedCronogramaIds || [])
+    deletedActivityIds.value = new Set(parsedData.deletedActivityIds || [])
   }
-};
+}
 
 const clearLocalStorage = () => {
-  localStorage.removeItem('eventDraft');
-};
+  localStorage.removeItem('eventDraft')
+}
 
 const resetForm = () => {
   Object.assign(form, {
@@ -284,15 +283,15 @@ const resetForm = () => {
     hayEquipos: 0,
     hayFormulario: false,
     estado: 'Creado',
-    inscripcionesAbiertas: true
-  });
+    inscripcionesAbiertas: true,
+  })
   Object.assign(cronogramaForm, {
     evento_id: '',
     titulo: '',
     descripcion: '',
     fecha_inicio: '',
     fecha_fin: '',
-  });
+  })
   Object.assign(actividadForm, {
     cronograma_id: '',
     titulo: '',
@@ -300,278 +299,315 @@ const resetForm = () => {
     fecha_inicio: '',
     fecha_fin: '',
     dependencia_id: null,
-  });
-  cronogramas.value = [];
-  activeTab.value = 'info';
-  eventIdStore.value = null;
-  cronogramaIdStore.value = [];
-  coverImage.id = null;
-  coverImage.url = imageHolder;
-  coverImage.file = null;
-  additionalImages.value = [];
+  })
+  cronogramas.value = []
+  activeTab.value = 'info'
+  eventIdStore.value = null
+  cronogramaIdStore.value = []
+  coverImage.id = null
+  coverImage.url = imageHolder
+  coverImage.file = null
+  additionalImages.value = []
 
-  editingCronogramaTempId.value = null;
-  editingActividadTempId.value = null;
-  deletedCronogramaIds.value.clear();
-  deletedActivityIds.value.clear();
-};
+  editingCronogramaTempId.value = null
+  editingActividadTempId.value = null
+  deletedCronogramaIds.value.clear()
+  deletedActivityIds.value.clear()
+}
 
-watch([form, cronogramaForm, actividadForm, cronogramas, activeTab, eventIdStore, cronogramaIdStore, coverImage, additionalImages, deletedCronogramaIds, deletedActivityIds], () => {
-  saveToLocalStorage();
-}, { deep: true });
+watch(
+  [
+    form,
+    cronogramaForm,
+    actividadForm,
+    cronogramas,
+    activeTab,
+    eventIdStore,
+    cronogramaIdStore,
+    coverImage,
+    additionalImages,
+    deletedCronogramaIds,
+    deletedActivityIds,
+  ],
+  () => {
+    saveToLocalStorage()
+  },
+  { deep: true },
+)
 
-watch(() => props.show, newVal => {
-  if (!newVal) {
-    resetForm();
-    clearLocalStorage();
-  } else {
-    loadFromLocalStorage();
-  }
-});
-
-watch(() => props.eventData, newEventData => {
-  if (newEventData) {
-    console.log('newEventData received in ModalCrearEvento:', newEventData);
-
-    const foundCategory = categorias.value.find(
-      cat => cat.nombre === newEventData.categoria
-    );
-
-    let categoryIdToAssign = null;
-    if (foundCategory) {
-      categoryIdToAssign = foundCategory.id;
-      console.log('Found category ID:', categoryIdToAssign, 'for name:', newEventData.categoria);
+watch(
+  () => props.show,
+  (newVal) => {
+    if (!newVal) {
+      resetForm()
+      clearLocalStorage()
     } else {
-      console.warn(`Category name "${newEventData.categoria}" not found in fetched categories. Setting categoria_id to null.`);
+      loadFromLocalStorage()
     }
+  },
+)
 
-    Object.assign(form, {
-      id: newEventData.id,
-      nombre: newEventData.nombre,
-      descripcion: newEventData.descripcion,
-      fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
-      fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
-      capacidad: newEventData.capacidad,
-      espacio: newEventData.espacio,
-      modalidad: newEventData.modalidad,
-      sede_id: newEventData.sede_id,
-      categoria_id: categoryIdToAssign,
-      hayEquipos: newEventData.hayEquipos,
-      hayFormulario: newEventData.hayFormulario,
-      estado: newEventData.estado,
-      inscripcionesAbiertas: newEventData.inscripcionesAbiertas,
-    });
-    activeTab.value = 'info';
-    eventIdStore.value = newEventData.id;
+watch(
+  () => props.eventData,
+  (newEventData) => {
+    if (newEventData) {
+      console.log('newEventData received in ModalCrearEvento:', newEventData)
 
-    if (newEventData.archivos && newEventData.archivos.length > 0) {
-      const cover = newEventData.archivos.find(a => a.tipo === 'cover');
-      if (cover) {
-        coverImage.id = cover.id;
-        coverImage.url = cover.url;
+      const foundCategory = categorias.value.find((cat) => cat.nombre === newEventData.categoria)
+
+      let categoryIdToAssign = null
+      if (foundCategory) {
+        categoryIdToAssign = foundCategory.id
+        console.log('Found category ID:', categoryIdToAssign, 'for name:', newEventData.categoria)
       } else {
-        coverImage.id = null;
-        coverImage.url = imageHolder;
+        console.warn(
+          `Category name "${newEventData.categoria}" not found in fetched categories. Setting categoria_id to null.`,
+        )
       }
 
-      additionalImages.value = newEventData.archivos
-        .filter(a => a.tipo === 'additional')
-        .map(a => ({ id: a.id, url: a.url, file: null }));
-    } else {
-      coverImage.id = null;
-      coverImage.url = imageHolder;
-    }
+      Object.assign(form, {
+        id: newEventData.id,
+        nombre: newEventData.nombre,
+        descripcion: newEventData.descripcion,
+        fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
+        fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
+        capacidad: newEventData.capacidad,
+        espacio: newEventData.espacio,
+        modalidad: newEventData.modalidad,
+        sede_id: newEventData.sede_id,
+        categoria_id: categoryIdToAssign,
+        hayEquipos: newEventData.hayEquipos,
+        hayFormulario: newEventData.hayFormulario,
+        estado: newEventData.estado,
+        inscripcionesAbiertas: newEventData.inscripcionesAbiertas,
+      })
+      activeTab.value = 'info'
+      eventIdStore.value = newEventData.id
 
-    if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
-      cronogramas.value = newEventData.cronogramas.map(c => {
-        const tempCronogramaId = c.id;
-        return {
-          id: c.id,
-          tempId: tempCronogramaId,
-          evento_id: c.evento_id,
-          titulo: c.titulo,
-          descripcion: c.descripcion,
-          fecha_inicio: new Date(c.fecha_inicio).toISOString().slice(0, 16),
-          fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
-          actividades: c.actividades_cronogramas ? c.actividades_cronogramas.map(a => ({
-            id: a.id,
-            tempId: a.id,
-            cronograma_id: tempCronogramaId,
-            titulo: a.titulo,
-            descripcion: a.descripcion,
-            fecha_inicio: new Date(a.fecha_inicio).toISOString().slice(0, 16),
-            fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
-            orden: a.orden,
-            dependencia_id: a.dependencia_id,
-          })).sort((a, b) => a.orden - b.orden) : [],
-        };
-      });
-      if (cronogramas.value.length > 0) {
-        actividadForm.cronograma_id = cronogramas.value[0].tempId;
+      if (newEventData.archivos && newEventData.archivos.length > 0) {
+        const cover = newEventData.archivos.find((a) => a.tipo === 'cover')
+        if (cover) {
+          coverImage.id = cover.id
+          coverImage.url = cover.url
+        } else {
+          coverImage.id = null
+          coverImage.url = imageHolder
+        }
+
+        additionalImages.value = newEventData.archivos
+          .filter((a) => a.tipo === 'additional')
+          .map((a) => ({ id: a.id, url: a.url, file: null }))
+      } else {
+        coverImage.id = null
+        coverImage.url = imageHolder
       }
+
+      if (newEventData.cronogramas && newEventData.cronogramas.length > 0) {
+        cronogramas.value = newEventData.cronogramas.map((c) => {
+          const tempCronogramaId = c.id
+          return {
+            id: c.id,
+            tempId: tempCronogramaId,
+            evento_id: c.evento_id,
+            titulo: c.titulo,
+            descripcion: c.descripcion,
+            fecha_inicio: new Date(c.fecha_inicio).toISOString().slice(0, 16),
+            fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
+            actividades: c.actividades_cronogramas
+              ? c.actividades_cronogramas
+                  .map((a) => ({
+                    id: a.id,
+                    tempId: a.id,
+                    cronograma_id: tempCronogramaId,
+                    titulo: a.titulo,
+                    descripcion: a.descripcion,
+                    fecha_inicio: new Date(a.fecha_inicio).toISOString().slice(0, 16),
+                    fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
+                    orden: a.orden,
+                    dependencia_id: a.dependencia_id,
+                  }))
+                  .sort((a, b) => a.orden - b.orden)
+              : [],
+          }
+        })
+        if (cronogramas.value.length > 0) {
+          actividadForm.cronograma_id = cronogramas.value[0].tempId
+        }
+      } else {
+        cronogramas.value = []
+      }
+      deletedCronogramaIds.value.clear()
+      deletedActivityIds.value.clear()
     } else {
-      cronogramas.value = [];
+      console.log('newEventData is null, resetting form for new event creation.')
+      resetForm()
     }
-    deletedCronogramaIds.value.clear();
-    deletedActivityIds.value.clear();
-
-  } else {
-    console.log('newEventData is null, resetting form for new event creation.');
-    resetForm();
-  }
-}, { immediate: true });
-
+  },
+  { immediate: true },
+)
 
 const fetchCategorias = async () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    console.error("Token de autenticación no encontrado.");
-    return;
+    console.error('Token de autenticación no encontrado.')
+    return
   }
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/categoria`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    categorias.value = response.data;
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    categorias.value = response.data
   } catch (error) {
-    console.error("Error al obtener las categorías:", error);
+    console.error('Error al obtener las categorías:', error)
   }
-};
+}
 
 const fetchSede = async () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    console.error("Token de autenticación no encontrado.");
-    return;
+    console.error('Token de autenticación no encontrado.')
+    return
   }
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/sede`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    sede.value = response.data;
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    sede.value = response.data
   } catch (error) {
-    console.error("Error al obtener las sedes:", error);
+    console.error('Error al obtener las sedes:', error)
   }
-};
+}
 
 async function sendEventData(data, eventId = null) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
-    let response;
+    let response
     if (eventId) {
-      console.log('JSON enviado al backend (Actualizar Evento):', JSON.stringify(data, null, 2));
-      response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId}`, data, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+      console.log('JSON enviado al backend (Actualizar Evento):', JSON.stringify(data, null, 2))
+      response = await axios.put(
+        `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId}`,
+        data,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
-      console.log('Evento actualizado con éxito:', response.data);
+      )
+      console.log('Evento actualizado con éxito:', response.data)
     } else {
-      console.log('JSON enviado al backend (Crear Evento):', JSON.stringify(data, null, 2));
+      console.log('JSON enviado al backend (Crear Evento):', JSON.stringify(data, null, 2))
       response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/eventos`, data, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      });
-      console.log('Evento creado con éxito:', response.data);
+      })
+      console.log('Evento creado con éxito:', response.data)
     }
-    return response.data;
+    return response.data
   } catch (err) {
     if (err.response) {
-      console.error('Error del servidor (Axios):', err.response.data);
-      throw new Error(err.response.data?.message || 'Error al procesar el evento.');
+      console.error('Error del servidor (Axios):', err.response.data)
+      throw new Error(err.response.data?.message || 'Error al procesar el evento.')
     } else if (err.request) {
-      console.error('No se recibió respuesta del servidor (Axios):', err.request);
-      throw new Error('Fallo en la conexión con el servidor.');
+      console.error('No se recibió respuesta del servidor (Axios):', err.request)
+      throw new Error('Fallo en la conexión con el servidor.')
     } else {
-      console.error('Error al configurar la solicitud (Axios):', err.message);
-      throw new Error('Error interno al procesar la solicitud de evento.');
+      console.error('Error al configurar la solicitud (Axios):', err.message)
+      throw new Error('Error interno al procesar la solicitud de evento.')
     }
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function enviarCronogramas(cronogramaData, eventId) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       ...cronogramaData,
       evento_id: eventId,
       fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
       fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
-    };
-    console.log('JSON enviado al backend (Cronograma):', JSON.stringify(payload, null, 2));
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    }
+    console.log('JSON enviado al backend (Cronograma):', JSON.stringify(payload, null, 2))
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/cronogramas`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log('Cronograma creado con éxito:', response.data);
-    return response.data;
+    )
+    console.log('Cronograma creado con éxito:', response.data)
+    return response.data
   } catch (err) {
     if (err.response) {
-      console.error('Error del servidor al crear cronograma:', err.response.data);
-      throw new Error(err.response.data?.mensaje || 'Error al crear el cronograma.');
+      console.error('Error del servidor al crear cronograma:', err.response.data)
+      throw new Error(err.response.data?.mensaje || 'Error al crear el cronograma.')
     } else if (err.request) {
-      console.error('Error de red: No se recibió respuesta del servidor al crear cronograma.');
-      throw new Error('Fallo en la conexión con el servidor.');
+      console.error('Error de red: No se recibió respuesta del servidor al crear cronograma.')
+      throw new Error('Fallo en la conexión con el servidor.')
     } else {
-      console.error('Error al configurar la solicitud para crear cronograma:', err.message);
-      throw new Error('Error interno al procesar la solicitud de cronograma.');
+      console.error('Error al configurar la solicitud para crear cronograma:', err.message)
+      throw new Error('Error interno al procesar la solicitud de cronograma.')
     }
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function enviarActividad(activityData, cronogramaBackendId) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       ...activityData,
       cronograma_id: cronogramaBackendId,
       fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
       fecha_fin: new Date(activityData.fecha_fin).toISOString(),
-    };
-    console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2));
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    }
+    console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2))
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       },
-    });
-    console.log('Actividad creada con éxito:', response.data);
-    return response.data;
+    )
+    console.log('Actividad creada con éxito:', response.data)
+    return response.data
   } catch (error) {
-    console.error('Error al enviar actividad:', error);
-    throw new Error(error.response?.data?.message || 'Fallo al añadir la actividad.');
+    console.error('Error al enviar actividad:', error)
+    throw new Error(error.response?.data?.message || 'Fallo al añadir la actividad.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function updateCronograma(cronogramaData) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       evento_id: cronogramaData.evento_id,
@@ -579,29 +615,33 @@ async function updateCronograma(cronogramaData) {
       descripcion: cronogramaData.descripcion,
       fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
       fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
-    };
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaData.id}`, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    }
+    const response = await axios.put(
+      `${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaData.id}`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log('Cronograma actualizado con éxito:', response.data);
-    return response.data;
+    )
+    console.log('Cronograma actualizado con éxito:', response.data)
+    return response.data
   } catch (err) {
-    console.error('Error del servidor al actualizar cronograma:', err.response?.data || err.message);
-    throw new Error(err.response?.data?.mensaje || 'Error al actualizar el cronograma.');
+    console.error('Error del servidor al actualizar cronograma:', err.response?.data || err.message)
+    throw new Error(err.response?.data?.mensaje || 'Error al actualizar el cronograma.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function updateActividadBackend(activityData) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       cronograma_id: activityData.cronograma_id,
@@ -611,119 +651,146 @@ async function updateActividadBackend(activityData) {
       fecha_fin: new Date(activityData.fecha_fin).toISOString(),
       orden: activityData.orden,
       dependencia_id: activityData.dependencia_id,
-    };
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityData.id}`, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    }
+    const response = await axios.put(
+      `${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityData.id}`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log('Actividad actualizada con éxito:', response.data);
-    return response.data;
+    )
+    console.log('Actividad actualizada con éxito:', response.data)
+    return response.data
   } catch (err) {
-    console.error('Error del servidor al actualizar actividad:', err.response?.data || err.message);
-    throw new Error(err.response?.data?.message || 'Error al actualizar la actividad.');
+    console.error('Error del servidor al actualizar actividad:', err.response?.data || err.message)
+    throw new Error(err.response?.data?.message || 'Error al actualizar la actividad.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function deleteCronogramaBackend(id) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
-    const response = await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    console.log(`Cronograma ID ${id} eliminado con éxito:`, response.data);
-    return true;
+    const response = await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${id}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    console.log(`Cronograma ID ${id} eliminado con éxito:`, response.data)
+    return true
   } catch (err) {
-    console.error(`Error al eliminar cronograma ID ${id}:`, err.response?.data || err.message);
-    throw new Error(err.response?.data?.message || `Fallo al eliminar el cronograma ID ${id}.`);
+    console.error(`Error al eliminar cronograma ID ${id}:`, err.response?.data || err.message)
+    throw new Error(err.response?.data?.message || `Fallo al eliminar el cronograma ID ${id}.`)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function deleteActividadBackend(id) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
-    const response = await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    console.log(`Actividad ID ${id} eliminada con éxito:`, response.data);
-    return true;
+    const response = await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${id}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    console.log(`Actividad ID ${id} eliminada con éxito:`, response.data)
+    return true
   } catch (err) {
-    console.error(`Error al eliminar actividad ID ${id}:`, err.response?.data || err.message);
-    throw new Error(err.response?.data?.message || `Fallo al eliminar la actividad ID ${id}.`);
+    console.error(`Error al eliminar actividad ID ${id}:`, err.response?.data || err.message)
+    throw new Error(err.response?.data?.message || `Fallo al eliminar la actividad ID ${id}.`)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
-async function updateActivityOrderAndDependency(activityId, cronogramaBackendId, orden, dependenciaId) {
-  const token = localStorage.getItem('token');
+async function updateActivityOrderAndDependency(
+  activityId,
+  cronogramaBackendId,
+  orden,
+  dependenciaId,
+) {
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       cronograma_id: cronogramaBackendId,
       orden: orden,
       dependencia_id: dependenciaId,
-    };
-    const response = await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityId}`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    }
+    const response = await axios.put(
+      `${import.meta.env.VITE_URL_BACKEND}/api/actividades-cronograma/${activityId}`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       },
-    });
-    console.log(`Actividad ID ${activityId} orden y dependencia actualizadas:`, response.data);
-    return true;
+    )
+    console.log(`Actividad ID ${activityId} orden y dependencia actualizadas:`, response.data)
+    return true
   } catch (error) {
-    console.error(`Error al actualizar el orden/dependencia de la actividad ID ${activityId}:`, error);
-    throw new Error(error.response?.data?.message || `Fallo al actualizar la actividad ID ${activityId}.`);
+    console.error(
+      `Error al actualizar el orden/dependencia de la actividad ID ${activityId}:`,
+      error,
+    )
+    throw new Error(
+      error.response?.data?.message || `Fallo al actualizar la actividad ID ${activityId}.`,
+    )
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function linkArchivoToEvento(archivoId, eventoId) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error('Token de autenticación no encontrado.');
+    throw new Error('Token de autenticación no encontrado.')
   }
-  loading.value = true;
+  loading.value = true
   try {
     const payload = {
       archivo_id: archivoId,
       evento_id: eventoId,
-    };
-    console.log('JSON enviado al backend (Link Archivo-Evento):', JSON.stringify(payload, null, 2));
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    }
+    console.log('JSON enviado al backend (Link Archivo-Evento):', JSON.stringify(payload, null, 2))
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log('Archivo vinculado al evento con éxito:', response.data);
-    return response.data;
+    )
+    console.log('Archivo vinculado al evento con éxito:', response.data)
+    return response.data
   } catch (err) {
-    console.error('Error al vincular archivo al evento:', err.response?.data || err.message);
-    throw new Error(err.response?.data?.message || 'Fallo al vincular archivo al evento.');
+    console.error('Error al vincular archivo al evento:', err.response?.data || err.message)
+    throw new Error(err.response?.data?.message || 'Fallo al vincular archivo al evento.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
-
 
 async function handleSubmit() {
   if (
@@ -740,82 +807,88 @@ async function handleSubmit() {
     !form.estado ||
     form.inscripcionesAbiertas === null
   ) {
-    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios.');
-    return;
+    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios.')
+    return
   }
 
-  const fechaInicio = new Date(form.fecha_inicio);
-  const fechaFin = new Date(form.fecha_fin);
+  const fechaInicio = new Date(form.fecha_inicio)
+  const fechaFin = new Date(form.fecha_fin)
 
   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    await showTimedErrorMessage('Las fechas y horas ingresadas no son válidas.');
-    return;
+    await showTimedErrorMessage('Las fechas y horas ingresadas no son válidas.')
+    return
   }
 
   if (fechaInicio >= fechaFin) {
-    await showTimedErrorMessage('La fecha y hora de inicio debe ser anterior a la fecha y hora de fin.');
-    return;
+    await showTimedErrorMessage(
+      'La fecha y hora de inicio debe ser anterior a la fecha y hora de fin.',
+    )
+    return
   }
 
-  const currentTabIndex = tabOrder.value.indexOf(activeTab.value);
+  const currentTabIndex = tabOrder.value.indexOf(activeTab.value)
   if (currentTabIndex < tabOrder.value.length - 1) {
-    activeTab.value = tabOrder.value[currentTabIndex + 1];
+    activeTab.value = tabOrder.value[currentTabIndex + 1]
   }
-  saveToLocalStorage();
+  saveToLocalStorage()
 }
 
 async function uploadFileToBackend(file, type) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
   if (!token) {
-    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.');
-    return null;
+    await showTimedErrorMessage('Token de autenticación no encontrado. Por favor, inicie sesión.')
+    return null
   }
 
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('name', file.name.split('.')[0]);
-  formData.append('tipo', type);
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('name', file.name.split('.')[0])
+  formData.append('evento_id', eventIdStore.value)
 
-  loading.value = true;
+  loading.value = true
   try {
-    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`,
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
-    console.log(`File uploaded (${type}):`, response.data);
-    return { id: response.data.file.id, url: response.data.file.url };
+    )
+    console.log(`File uploaded (${type}):`, response.data)
+    return { id: response.data.file.id, url: response.data.file.url }
   } catch (error) {
-    console.error(`Error uploading ${type} file:`, error.response?.data || error.message);
-    await showTimedErrorMessage(`Error al subir la imagen (${type}).`);
-    return null;
+    console.error(`Error uploading ${type} file:`, error.response?.data || error.message)
+    await showTimedErrorMessage(`Error al subir la imagen (${type}).`)
+    return null
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 async function handleCoverChange(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const file = event.target.files[0]
+  if (!file) return
 
   if (file.size <= 10 * 1024 * 1024) {
-    coverImage.url = URL.createObjectURL(file);
-    coverImage.file = file;
-    coverImage.id = null;
+    coverImage.url = URL.createObjectURL(file)
+    coverImage.file = file
+    coverImage.id = null
   } else {
-    event.target.value = '';
-    coverImage.url = imageHolder;
-    coverImage.file = null;
-    coverImage.id = null;
-    await showTimedErrorMessage('La imagen de portada debe pesar menos de 10 MB.');
+    event.target.value = ''
+    coverImage.url = imageHolder
+    coverImage.file = null
+    coverImage.id = null
+    await showTimedErrorMessage('La imagen de portada debe pesar menos de 10 MB.')
   }
-  saveToLocalStorage();
+  saveToLocalStorage()
 }
 
 async function handleAdditionalChange(event) {
-  const files = Array.from(event.target.files);
-  const newAdditionalImages = [];
+  const files = Array.from(event.target.files)
+  const newAdditionalImages = []
 
   for (const file of files) {
     if (file.size <= 10 * 1024 * 1024) {
@@ -823,19 +896,21 @@ async function handleAdditionalChange(event) {
         id: null,
         url: URL.createObjectURL(file),
         file: file,
-      });
+      })
     } else {
-      await showTimedErrorMessage(`La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`);
+      await showTimedErrorMessage(
+        `La imagen "${file.name}" debe pesar menos de 10 MB y no se añadirá.`,
+      )
     }
   }
-  additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
-  event.target.value = '';
-  saveToLocalStorage();
+  additionalImages.value = [...additionalImages.value, ...newAdditionalImages]
+  event.target.value = ''
+  saveToLocalStorage()
 }
 
 async function handleDrop(event) {
-  const files = Array.from(event.dataTransfer.files);
-  const newAdditionalImages = [];
+  const files = Array.from(event.dataTransfer.files)
+  const newAdditionalImages = []
 
   for (const file of files) {
     if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
@@ -843,13 +918,15 @@ async function handleDrop(event) {
         id: null,
         url: URL.createObjectURL(file),
         file: file,
-      });
+      })
     } else {
-      await showTimedErrorMessage(`El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`);
+      await showTimedErrorMessage(
+        `El archivo "${file.name}" no es una imagen o excede los 10 MB y no se añadirá.`,
+      )
     }
   }
-  additionalImages.value = [...additionalImages.value, ...newAdditionalImages];
-  saveToLocalStorage();
+  additionalImages.value = [...additionalImages.value, ...newAdditionalImages]
+  saveToLocalStorage()
 }
 
 async function handleCronogramaSubmit() {
@@ -859,163 +936,174 @@ async function handleCronogramaSubmit() {
     !cronogramaForm.fecha_inicio ||
     !cronogramaForm.fecha_fin
   ) {
-    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios del cronograma.');
-    return;
+    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios del cronograma.')
+    return
   }
 
   // Convert all dates to UTC timestamps for consistent comparison
-  const fechaInicioUTC = new Date(cronogramaForm.fecha_inicio).getTime();
-  const fechaFinUTC = new Date(cronogramaForm.fecha_fin).getTime();
+  const fechaInicioUTC = new Date(cronogramaForm.fecha_inicio).getTime()
+  const fechaFinUTC = new Date(cronogramaForm.fecha_fin).getTime()
 
   if (isNaN(fechaInicioUTC) || isNaN(fechaFinUTC)) {
-    await showTimedErrorMessage('Las fechas y horas ingresadas para el cronograma no son válidas.');
-    return;
+    await showTimedErrorMessage('Las fechas y horas ingresadas para el cronograma no son válidas.')
+    return
   }
 
   if (fechaInicioUTC >= fechaFinUTC) {
-    await showTimedErrorMessage('La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.');
-    return;
+    await showTimedErrorMessage(
+      'La fecha y hora de inicio del cronograma debe ser anterior a la fecha y hora de fin.',
+    )
+    return
   }
 
-  const eventStartDateUTC = new Date(form.fecha_inicio).getTime();
-  const eventEndDateUTC = new Date(form.fecha_fin).getTime();
+  const eventStartDateUTC = new Date(form.fecha_inicio).getTime()
+  const eventEndDateUTC = new Date(form.fecha_fin).getTime()
 
   if (fechaInicioUTC < eventStartDateUTC || fechaFinUTC > eventEndDateUTC) {
-    await showTimedErrorMessage('Las fechas del cronograma deben estar dentro del rango de fechas del evento.');
-    return;
+    await showTimedErrorMessage(
+      'Las fechas del cronograma deben estar dentro del rango de fechas del evento.',
+    )
+    return
   }
 
   if (editingCronogramaTempId.value) {
-    const index = cronogramas.value.findIndex(c => c.tempId === editingCronogramaTempId.value);
+    const index = cronogramas.value.findIndex((c) => c.tempId === editingCronogramaTempId.value)
     if (index !== -1) {
       Object.assign(cronogramas.value[index], {
         ...JSON.parse(JSON.stringify(cronogramaForm)),
         tempId: editingCronogramaTempId.value,
         _edited: true,
-      });
-      await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaForm.titulo}</strong>" actualizado en el borrador.`);
+      })
+      await showTimedSuccessMessage(
+        `Cronograma "<strong>${cronogramaForm.titulo}</strong>" actualizado en el borrador.`,
+      )
     }
-    editingCronogramaTempId.value = null;
+    editingCronogramaTempId.value = null
   } else {
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     cronogramas.value.push({
       ...JSON.parse(JSON.stringify(cronogramaForm)),
       tempId: tempId,
       actividades: [],
       orden: cronogramas.value.length + 1,
-    });
-    await showTimedSuccessMessage(`El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`);
+    })
+    await showTimedSuccessMessage(
+      `El cronograma "<strong>${cronogramas.value[cronogramas.value.length - 1].titulo}</strong>" ha sido añadido a la lista.`,
+    )
   }
 
-  cronogramaForm.titulo = '';
-  cronogramaForm.descripcion = '';
-  cronogramaForm.fecha_inicio = '';
-  cronogramaForm.fecha_fin = '';
-  saveToLocalStorage();
+  cronogramaForm.titulo = ''
+  cronogramaForm.descripcion = ''
+  cronogramaForm.fecha_inicio = ''
+  cronogramaForm.fecha_fin = ''
+  saveToLocalStorage()
 }
 
 function cancelEditCronograma() {
-  editingCronogramaTempId.value = null;
-  cronogramaForm.titulo = '';
-  cronogramaForm.descripcion = '';
-  cronogramaForm.fecha_inicio = '';
-  cronogramaForm.fecha_fin = '';
-  saveToLocalStorage();
+  editingCronogramaTempId.value = null
+  cronogramaForm.titulo = ''
+  cronogramaForm.descripcion = ''
+  cronogramaForm.fecha_inicio = ''
+  cronogramaForm.fecha_fin = ''
+  saveToLocalStorage()
 }
 
 function editCronograma(cronograma) {
-  Object.assign(cronogramaForm, JSON.parse(JSON.stringify(cronograma)));
-  editingCronogramaTempId.value = cronograma.tempId;
+  Object.assign(cronogramaForm, JSON.parse(JSON.stringify(cronograma)))
+  editingCronogramaTempId.value = cronograma.tempId
 
   // Function to format a Date object into 'YYYY-MM-DDTHH:mm' local format
   const formatLocalDateTime = (dateString) => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const day = date.getDate().toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
 
-  cronogramaForm.fecha_inicio = formatLocalDateTime(cronograma.fecha_inicio);
-  cronogramaForm.fecha_fin = formatLocalDateTime(cronograma.fecha_fin);
+  cronogramaForm.fecha_inicio = formatLocalDateTime(cronograma.fecha_inicio)
+  cronogramaForm.fecha_fin = formatLocalDateTime(cronograma.fecha_fin)
 
-  saveToLocalStorage();
+  saveToLocalStorage()
 }
 
 async function deleteCronograma(tempId) {
-  const cronogramaToDelete = cronogramas.value.find(c => c.tempId === tempId);
+  const cronogramaToDelete = cronogramas.value.find((c) => c.tempId === tempId)
 
   if (cronogramaToDelete && cronogramaToDelete.actividades.length > 0) {
-    await showTimedErrorMessage('Para eliminar este cronograma, primero debes eliminar todas sus actividades asociadas.');
-    return;
+    await showTimedErrorMessage(
+      'Para eliminar este cronograma, primero debes eliminar todas sus actividades asociadas.',
+    )
+    return
   }
 
   const confirmed = await confirmAction(
-    "¿Estás seguro de que quieres eliminar este cronograma? Esta acción es irreversible.",
+    '¿Estás seguro de que quieres eliminar este cronograma? Esta acción es irreversible.',
     'deleteCronograma',
-    tempId
-  );
+    tempId,
+  )
 }
 
 async function performDeleteCronograma(tempId) {
-  const index = cronogramas.value.findIndex(c => c.tempId === tempId);
+  const index = cronogramas.value.findIndex((c) => c.tempId === tempId)
   if (index !== -1) {
-    const cronogramaToDelete = cronogramas.value[index];
+    const cronogramaToDelete = cronogramas.value[index]
 
     if (cronogramaToDelete.id) {
-      deletedCronogramaIds.value.add(cronogramaToDelete.id);
+      deletedCronogramaIds.value.add(cronogramaToDelete.id)
     }
 
-    cronogramaToDelete.actividades.forEach(activity => {
+    cronogramaToDelete.actividades.forEach((activity) => {
       if (activity.id) {
-        deletedActivityIds.value.add(activity.id);
+        deletedActivityIds.value.add(activity.id)
       }
-    });
+    })
 
-    cronogramas.value.splice(index, 1);
+    cronogramas.value.splice(index, 1)
 
     cronogramas.value.forEach((c, i) => {
-      c.orden = i + 1;
+      c.orden = i + 1
       if (c.id) {
-        c._edited = true;
+        c._edited = true
       }
-    });
+    })
 
-    await showTimedSuccessMessage(`Cronograma "<strong>${cronogramaToDelete.titulo}</strong>" y sus actividades eliminados del borrador.`);
-    saveToLocalStorage();
+    await showTimedSuccessMessage(
+      `Cronograma "<strong>${cronogramaToDelete.titulo}</strong>" y sus actividades eliminados del borrador.`,
+    )
+    saveToLocalStorage()
 
     if (actividadForm.cronograma_id === tempId) {
-      actividadForm.cronograma_id = cronogramas.value.length > 0 ? cronogramas.value[0].tempId : '';
+      actividadForm.cronograma_id = cronogramas.value.length > 0 ? cronogramas.value[0].tempId : ''
     }
   }
 }
 
 function proceedToActivities() {
   if (cronogramas.value.length === 0) {
-    showTimedErrorMessage('Debes añadir al menos un cronograma antes de pasar a las actividades.');
-    return;
+    showTimedErrorMessage('Debes añadir al menos un cronograma antes de pasar a las actividades.')
+    return
   }
-  activeTab.value = 'actividades';
-  saveToLocalStorage();
+  activeTab.value = 'actividades'
+  saveToLocalStorage()
 }
 
 const cronogramasOptions = computed(() => {
-  return cronogramas.value
-    .map(c => ({ id: c.tempId, titulo: c.titulo }));
-});
+  return cronogramas.value.map((c) => ({ id: c.tempId, titulo: c.titulo }))
+})
 
 const activitiesForSelectedCronograma = computed(() => {
   if (!actividadForm.cronograma_id) {
-    return [];
+    return []
   }
-  const selectedCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
-  return selectedCronograma ? selectedCronograma.actividades.sort((a, b) => a.orden - b.orden) : [];
-});
+  const selectedCronograma = cronogramas.value.find((c) => c.tempId === actividadForm.cronograma_id)
+  return selectedCronograma ? selectedCronograma.actividades.sort((a, b) => a.orden - b.orden) : []
+})
 
 async function handleActividadAdd() {
-  addingActividad.value = true;
+  addingActividad.value = true
 
   if (
     !actividadForm.titulo ||
@@ -1024,59 +1112,72 @@ async function handleActividadAdd() {
     !actividadForm.fecha_inicio ||
     !actividadForm.fecha_fin
   ) {
-    await showTimedErrorMessage('Por favor, completa todos los campos obligatorios de la actividad.');
-    addingActividad.value = false;
-    return;
+    await showTimedErrorMessage(
+      'Por favor, completa todos los campos obligatorios de la actividad.',
+    )
+    addingActividad.value = false
+    return
   }
 
-  const parentCronograma = cronogramas.value.find(c => c.tempId === actividadForm.cronograma_id);
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === actividadForm.cronograma_id)
 
   if (!parentCronograma) {
-    await showTimedErrorMessage('Cronograma padre seleccionado no encontrado en el borrador.');
-    addingActividad.value = false;
-    return;
+    await showTimedErrorMessage('Cronograma padre seleccionado no encontrado en el borrador.')
+    addingActividad.value = false
+    return
   }
 
   // Convert all dates to UTC timestamps for consistent comparison
-  const activityStartDateUTC = new Date(actividadForm.fecha_inicio).getTime();
-  const activityEndDateUTC = new Date(actividadForm.fecha_fin).getTime();
-  const cronogramaStartDateUTC = new Date(parentCronograma.fecha_inicio).getTime();
-  const cronogramaEndDateUTC = new Date(parentCronograma.fecha_fin).getTime();
+  const activityStartDateUTC = new Date(actividadForm.fecha_inicio).getTime()
+  const activityEndDateUTC = new Date(actividadForm.fecha_fin).getTime()
+  const cronogramaStartDateUTC = new Date(parentCronograma.fecha_inicio).getTime()
+  const cronogramaEndDateUTC = new Date(parentCronograma.fecha_fin).getTime()
 
   // Now compare the UTC timestamps
   if (activityStartDateUTC < cronogramaStartDateUTC || activityEndDateUTC > cronogramaEndDateUTC) {
-    await showTimedErrorMessage(`Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`);
-    addingActividad.value = false;
-    return;
+    await showTimedErrorMessage(
+      `Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`,
+    )
+    addingActividad.value = false
+    return
   }
 
-  if (activityStartDateUTC >= activityEndDateUTC) { // Use UTC timestamps for this comparison too
-    await showTimedErrorMessage('La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.');
-    addingActividad.value = false;
-    return;
+  if (activityStartDateUTC >= activityEndDateUTC) {
+    // Use UTC timestamps for this comparison too
+    await showTimedErrorMessage(
+      'La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.',
+    )
+    addingActividad.value = false
+    return
   }
 
   if (!parentCronograma.actividades) {
-    parentCronograma.actividades = [];
+    parentCronograma.actividades = []
   }
 
   if (editingActividadTempId.value) {
-    const index = parentCronograma.actividades.findIndex(a => a.tempId === editingActividadTempId.value);
+    const index = parentCronograma.actividades.findIndex(
+      (a) => a.tempId === editingActividadTempId.value,
+    )
     if (index !== -1) {
       Object.assign(parentCronograma.actividades[index], {
         ...JSON.parse(JSON.stringify(actividadForm)),
         tempId: editingActividadTempId.value,
         _edited: true,
-      });
-      parentCronograma.actividades.sort((a, b) => a.orden - b.orden);
-      await showTimedSuccessMessage(`Actividad "<strong>${actividadForm.titulo}</strong>" actualizada en el borrador.`);
+      })
+      parentCronograma.actividades.sort((a, b) => a.orden - b.orden)
+      await showTimedSuccessMessage(
+        `Actividad "<strong>${actividadForm.titulo}</strong>" actualizada en el borrador.`,
+      )
     }
-    editingActividadTempId.value = null;
+    editingActividadTempId.value = null
   } else {
-    const newOrder = parentCronograma.actividades.length > 0 ?
-      Math.max(...parentCronograma.actividades.map(a => a.orden || 0)) + 1 : 1;
+    const newOrder =
+      parentCronograma.actividades.length > 0
+        ? Math.max(...parentCronograma.actividades.map((a) => a.orden || 0)) + 1
+        : 1
 
-    const tempActivityId = `temp_act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tempActivityId = `temp_act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     const newActivity = {
       tempId: tempActivityId,
@@ -1087,173 +1188,193 @@ async function handleActividadAdd() {
       fecha_fin: actividadForm.fecha_fin,
       orden: newOrder,
       dependencia_id: null,
-    };
-    parentCronograma.actividades.push(newActivity);
-    parentCronograma.actividades.sort((a, b) => a.orden - b.orden);
-    await showTimedSuccessMessage(`La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`);
+    }
+    parentCronograma.actividades.push(newActivity)
+    parentCronograma.actividades.sort((a, b) => a.orden - b.orden)
+    await showTimedSuccessMessage(
+      `La actividad "<strong>${newActivity.titulo}</strong>" ha sido añadida a la lista.`,
+    )
   }
 
-  actividadForm.titulo = '';
-  actividadForm.descripcion = '';
-  actividadForm.fecha_inicio = '';
-  actividadForm.fecha_fin = '';
-  actividadForm.dependencia_id = null;
+  actividadForm.titulo = ''
+  actividadForm.descripcion = ''
+  actividadForm.fecha_inicio = ''
+  actividadForm.fecha_fin = ''
+  actividadForm.dependencia_id = null
 
-  addingActividad.value = false;
-  saveToLocalStorage();
+  addingActividad.value = false
+  saveToLocalStorage()
 }
 
 function cancelEditActividad() {
-  editingActividadTempId.value = null;
-  actividadForm.titulo = '';
-  actividadForm.descripcion = '';
-  actividadForm.fecha_inicio = '';
-  actividadForm.fecha_fin = '';
-  actividadForm.dependencia_id = null;
-  saveToLocalStorage();
+  editingActividadTempId.value = null
+  actividadForm.titulo = ''
+  actividadForm.descripcion = ''
+  actividadForm.fecha_inicio = ''
+  actividadForm.fecha_fin = ''
+  actividadForm.dependencia_id = null
+  saveToLocalStorage()
 }
 
 function editActividad(cronogramaTempId, actividad) {
-  actividadForm.cronograma_id = cronogramaTempId;
-  Object.assign(actividadForm, JSON.parse(JSON.stringify(actividad)));
-  editingActividadTempId.value = actividad.tempId;
+  actividadForm.cronograma_id = cronogramaTempId
+  Object.assign(actividadForm, JSON.parse(JSON.stringify(actividad)))
+  editingActividadTempId.value = actividad.tempId
 
   // Function to format a Date object into 'YYYY-MM-DDTHH:mm' local format
   const formatLocalDateTime = (dateString) => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const day = date.getDate().toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
 
-  actividadForm.fecha_inicio = formatLocalDateTime(actividad.fecha_inicio);
-  actividadForm.fecha_fin = formatLocalDateTime(actividad.fecha_fin);
+  actividadForm.fecha_inicio = formatLocalDateTime(actividad.fecha_inicio)
+  actividadForm.fecha_fin = formatLocalDateTime(actividad.fecha_fin)
 
-  saveToLocalStorage();
+  saveToLocalStorage()
 }
 
 async function deleteActividad(cronogramaTempId, actividadTempId) {
   const confirmed = await confirmAction(
-    "¿Estás seguro de que quieres eliminar esta actividad? Esta acción es irreversible.",
+    '¿Estás seguro de que quieres eliminar esta actividad? Esta acción es irreversible.',
     'deleteActividad',
-    { cronogramaTempId, actividadTempId }
-  );
+    { cronogramaTempId, actividadTempId },
+  )
 }
 
 async function performDeleteActividad(cronogramaTempId, actividadTempId) {
-  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === cronogramaTempId)
   if (parentCronograma) {
-    const index = parentCronograma.actividades.findIndex(a => a.tempId === actividadTempId);
+    const index = parentCronograma.actividades.findIndex((a) => a.tempId === actividadTempId)
     if (index !== -1) {
-      const activityToDelete = parentCronograma.actividades[index];
+      const activityToDelete = parentCronograma.actividades[index]
       if (activityToDelete.id) {
-        deletedActivityIds.value.add(activityToDelete.id);
+        deletedActivityIds.value.add(activityToDelete.id)
       }
-      parentCronograma.actividades.splice(index, 1);
+      parentCronograma.actividades.splice(index, 1)
 
       parentCronograma.actividades.forEach((act, i) => {
-        act.orden = i + 1;
+        act.orden = i + 1
         if (act.id) {
-          act._edited = true;
+          act._edited = true
         }
-      });
+      })
 
-      await showTimedSuccessMessage(`Actividad "<strong>${activityToDelete.titulo}</strong>" eliminada del borrador.`);
-      saveToLocalStorage();
+      await showTimedSuccessMessage(
+        `Actividad "<strong>${activityToDelete.titulo}</strong>" eliminada del borrador.`,
+      )
+      saveToLocalStorage()
     }
   }
 }
 
-
 function swapActivities(cronogramaTempId, idx1, idx2) {
-  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || !parentCronograma.actividades) return;
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === cronogramaTempId)
+  if (!parentCronograma || !parentCronograma.actividades) return
 
-  const activitiesArray = parentCronograma.actividades;
-  const temp = activitiesArray[idx1];
-  activitiesArray[idx1] = activitiesArray[idx2];
-  activitiesArray[idx2] = temp;
+  const activitiesArray = parentCronograma.actividades
+  const temp = activitiesArray[idx1]
+  activitiesArray[idx1] = activitiesArray[idx2]
+  activitiesArray[idx2] = temp
 
   activitiesArray.forEach((act, index) => {
-    act.orden = index + 1;
+    act.orden = index + 1
     if (act.id) {
-      act._edited = true;
+      act._edited = true
     }
-  });
-  saveToLocalStorage();
+  })
+  saveToLocalStorage()
 }
 
 function moverArriba(cronogramaTempId, idx) {
-  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || parentCronograma.actividades.length === 0 || idx === 0) return;
-  swapActivities(cronogramaTempId, idx, idx - 1);
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === cronogramaTempId)
+  if (!parentCronograma || parentCronograma.actividades.length === 0 || idx === 0) return
+  swapActivities(cronogramaTempId, idx, idx - 1)
 }
 
 function moverAbajo(cronogramaTempId, idx) {
-  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || parentCronograma.actividades.length === 0 || idx === parentCronograma.actividades.length - 1) return;
-  swapActivities(cronogramaTempId, idx, idx + 1);
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === cronogramaTempId)
+  if (
+    !parentCronograma ||
+    parentCronograma.actividades.length === 0 ||
+    idx === parentCronograma.actividades.length - 1
+  )
+    return
+  swapActivities(cronogramaTempId, idx, idx + 1)
 }
 
 function getDependenciaDisplayText(act, cronogramaTempId) {
-  const parentCronograma = cronogramas.value.find(c => c.tempId === cronogramaTempId);
-  if (!parentCronograma || !parentCronograma.actividades) return 'N/A';
+  const parentCronograma = cronogramas.value.find((c) => c.tempId === cronogramaTempId)
+  if (!parentCronograma || !parentCronograma.actividades) return 'N/A'
 
-  const activities = parentCronograma.actividades.slice().sort((a, b) => a.orden - b.orden);
-  const idx = activities.findIndex(a => a.tempId === act.tempId);
+  const activities = parentCronograma.actividades.slice().sort((a, b) => a.orden - b.orden)
+  const idx = activities.findIndex((a) => a.tempId === act.tempId)
 
   if (idx === 0) {
-    return '------';
+    return '------'
   } else {
-    const previousActivity = activities[idx - 1];
-    return previousActivity ? previousActivity.titulo : 'N/A';
+    const previousActivity = activities[idx - 1]
+    return previousActivity ? previousActivity.titulo : 'N/A'
   }
 }
 
-const formatDisplayDateTime = isoString => {
-  if (!isoString) return '';
-  const date = new Date(isoString);
-  const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
-  return date.toLocaleDateString('es-ES', options);
-};
-
+const formatDisplayDateTime = (isoString) => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }
+  return date.toLocaleDateString('es-ES', options)
+}
 
 async function handleSaveButtonClick() {
-  isClosingModal.value = false;
+  isClosingModal.value = false
   const confirmed = await confirmAction(
     '¿Deseas guardar la configuración actual de todas las actividades asociadas a tus cronogramas? Esta acción consolidará los cambios.',
-    'finalSave'
-  );
+    'finalSave',
+  )
 }
 
 async function processFinalSave() {
   try {
-    loading.value = true;
+    loading.value = true
 
-    const eventStartDate = new Date(form.fecha_inicio);
-    const eventEndDate = new Date(form.fecha_fin);
+    const eventStartDate = new Date(form.fecha_inicio)
+    const eventEndDate = new Date(form.fecha_fin)
 
     for (const cronograma of cronogramas.value) {
-      const cronogramaStartDate = new Date(cronograma.fecha_inicio);
-      const cronogramaEndDate = new Date(cronograma.fecha_fin);
+      const cronogramaStartDate = new Date(cronograma.fecha_inicio)
+      const cronogramaEndDate = new Date(cronograma.fecha_fin)
 
       if (cronogramaStartDate < eventStartDate || cronogramaEndDate > eventEndDate) {
-        await showTimedErrorMessage(`El cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango del evento principal. Por favor, ajusta las fechas.`, 3000);
-        loading.value = false;
-        return;
+        await showTimedErrorMessage(
+          `El cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango del evento principal. Por favor, ajusta las fechas.`,
+          3000,
+        )
+        loading.value = false
+        return
       }
 
       for (const activity of cronograma.actividades) {
-        const activityStartDate = new Date(activity.fecha_inicio);
-        const activityEndDate = new Date(activity.fecha_fin);
+        const activityStartDate = new Date(activity.fecha_inicio)
+        const activityEndDate = new Date(activity.fecha_fin)
 
         if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
-          await showTimedErrorMessage(`La actividad "<strong>${activity.titulo}</strong>" del cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango de su cronograma. Por favor, ajusta las fechas.`, 3000);
-          loading.value = false;
-          return;
+          await showTimedErrorMessage(
+            `La actividad "<strong>${activity.titulo}</strong>" del cronograma "<strong>${cronograma.titulo}</strong>" tiene fechas fuera del rango de su cronograma. Por favor, ajusta las fechas.`,
+            3000,
+          )
+          loading.value = false
+          return
         }
       }
     }
@@ -1263,34 +1384,33 @@ async function processFinalSave() {
       hayEquipos: Number(form.hayEquipos),
       hayFormulario: Boolean(form.hayFormulario),
       inscripcionesAbiertas: Boolean(form.inscripcionesAbiertas),
-      categoria_id: Number(form.categoria_id)
-    };
+      categoria_id: Number(form.categoria_id),
+    }
 
-    const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id);
-    eventIdStore.value = createdOrUpdatedEvent.id;
+    const createdOrUpdatedEvent = await sendEventData(eventPayload, form.id)
+    eventIdStore.value = createdOrUpdatedEvent.id
 
     if (!isEditing.value) {
-      const allImagesToLink = [];
+      const allImagesToLink = []
 
       if (coverImage.file) {
-        console.log('Uploading cover image...');
-        const uploadedCover = await uploadFileToBackend(coverImage.file, 'cover');
+        console.log('Uploading cover image...')
+        const uploadedCover = await uploadFileToBackend(coverImage.file, 'cover')
         if (uploadedCover) {
-          coverImage.id = uploadedCover.id;
-          coverImage.url = uploadedCover.url;
-          allImagesToLink.push(uploadedCover.id);
+          coverImage.id = uploadedCover.id
+          coverImage.url = uploadedCover.url
+          allImagesToLink.push(uploadedCover.id)
         }
       }
 
-
       for (const img of additionalImages.value) {
         if (img.file) {
-          console.log(`Uploading additional image: ${img.file.name}`);
-          const uploadedImg = await uploadFileToBackend(img.file, 'additional');
+          console.log(`Uploading additional image: ${img.file.name}`)
+          const uploadedImg = await uploadFileToBackend(img.file, 'additional')
           if (uploadedImg) {
-            img.id = uploadedImg.id;
-            img.url = uploadedImg.url;
-            allImagesToLink.push(uploadedImg.id);
+            img.id = uploadedImg.id
+            img.url = uploadedImg.url
+            allImagesToLink.push(uploadedImg.id)
           }
         }
       }
@@ -1298,8 +1418,8 @@ async function processFinalSave() {
       if (eventIdStore.value && allImagesToLink.length > 0) {
         for (const archivoId of allImagesToLink) {
           if (archivoId) {
-            console.log(`Linking archivo ID ${archivoId} to event ID ${eventIdStore.value}`);
-            await linkArchivoToEvento(archivoId, eventIdStore.value);
+            console.log(`Linking archivo ID ${archivoId} to event ID ${eventIdStore.value}`)
+            await linkArchivoToEvento(archivoId, eventIdStore.value)
           }
         }
       }
@@ -1307,96 +1427,118 @@ async function processFinalSave() {
 
     // --- Process Deletions: Activities BEFORE Chronograms ---
     for (const actId of deletedActivityIds.value) {
-      await deleteActividadBackend(actId);
+      await deleteActividadBackend(actId)
     }
-    deletedActivityIds.value.clear();
+    deletedActivityIds.value.clear()
 
     for (const cronoId of deletedCronogramaIds.value) {
-      await deleteCronogramaBackend(cronoId);
+      await deleteCronogramaBackend(cronoId)
     }
-    deletedCronogramaIds.value.clear();
-
+    deletedCronogramaIds.value.clear()
 
     for (const cronograma of cronogramas.value) {
-      let createdOrUpdatedCronograma = null;
+      let createdOrUpdatedCronograma = null
       if (cronograma.id && cronograma._edited) {
-        createdOrUpdatedCronograma = await updateCronograma(cronograma);
-        cronograma._edited = false;
+        createdOrUpdatedCronograma = await updateCronograma(cronograma)
+        cronograma._edited = false
       } else if (!cronograma.id) {
-        createdOrUpdatedCronograma = await enviarCronogramas(JSON.parse(JSON.stringify(cronograma)), eventIdStore.value);
-        cronograma.id = createdOrUpdatedCronograma.id;
-        cronograma.tempId = createdOrUpdatedCronograma.id;
+        createdOrUpdatedCronograma = await enviarCronogramas(
+          JSON.parse(JSON.stringify(cronograma)),
+          eventIdStore.value,
+        )
+        cronograma.id = createdOrUpdatedCronograma.id
+        cronograma.tempId = createdOrUpdatedCronograma.id
       } else {
-        createdOrUpdatedCronograma = cronograma;
+        createdOrUpdatedCronograma = cronograma
       }
 
-      if (createdOrUpdatedCronograma && cronograma.actividades && cronograma.actividades.length > 0) {
-        const sortedActivities = cronograma.actividades.slice().sort((a, b) => a.orden - b.orden);
+      if (
+        createdOrUpdatedCronograma &&
+        cronograma.actividades &&
+        cronograma.actividades.length > 0
+      ) {
+        const sortedActivities = cronograma.actividades.slice().sort((a, b) => a.orden - b.orden)
 
         for (let i = 0; i < sortedActivities.length; i++) {
-          const activity = sortedActivities[i];
-          let dependencyIdToSend = null;
+          const activity = sortedActivities[i]
+          let dependencyIdToSend = null
           if (i > 0) {
-            const previousActivityInOrder = sortedActivities[i - 1];
-            dependencyIdToSend = previousActivityInOrder.id;
+            const previousActivityInOrder = sortedActivities[i - 1]
+            dependencyIdToSend = previousActivityInOrder.id
           }
 
           if (activity.id && activity._edited) {
-            activity.cronograma_id = createdOrUpdatedCronograma.id;
-            activity.dependencia_id = dependencyIdToSend;
-            await updateActividadBackend(activity);
-            activity._edited = false;
+            activity.cronograma_id = createdOrUpdatedCronograma.id
+            activity.dependencia_id = dependencyIdToSend
+            await updateActividadBackend(activity)
+            activity._edited = false
           } else if (!activity.id) {
             const activityPayload = {
               ...JSON.parse(JSON.stringify(activity)),
               cronograma_id: createdOrUpdatedCronograma.id,
               dependencia_id: dependencyIdToSend,
-            };
-            const createdOrUpdatedActivity = await enviarActividad(activityPayload, createdOrUpdatedCronograma.id);
-            activity.id = createdOrUpdatedActivity.id;
-            activity.tempId = createdOrUpdatedActivity.id;
+            }
+            const createdOrUpdatedActivity = await enviarActividad(
+              activityPayload,
+              createdOrUpdatedCronograma.id,
+            )
+            activity.id = createdOrUpdatedActivity.id
+            activity.tempId = createdOrUpdatedActivity.id
           }
         }
       }
     }
 
-    await showTimedSuccessMessage(isEditing.value ? '¡Evento actualizado y configurado con éxito!' : '¡Evento, cronogramas y actividades creados y configurados con éxito!', 1000);
+    await showTimedSuccessMessage(
+      isEditing.value
+        ? '¡Evento actualizado y configurado con éxito!'
+        : '¡Evento, cronogramas y actividades creados y configurados con éxito!',
+      1000,
+    )
 
-    clearLocalStorage();
-    emit('submit', { id: eventIdStore.value });
-    emit('close');
+    clearLocalStorage()
+    emit('submit', { id: eventIdStore.value })
+    emit('close')
   } catch (err) {
-    console.error('Error during final save process:', err);
-    await showTimedErrorMessage(err.message || 'Error desconocido durante el proceso de guardado final.');
+    console.error('Error during final save process:', err)
+    await showTimedErrorMessage(
+      err.message || 'Error desconocido durante el proceso de guardado final.',
+    )
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 onMounted(async () => {
-  await fetchCategorias();
-  await fetchSede();
+  await fetchCategorias()
+  await fetchSede()
 
-  const firstCronograma = cronogramas.value[0];
+  const firstCronograma = cronogramas.value[0]
   if (firstCronograma && !actividadForm.cronograma_id) {
-    actividadForm.cronograma_id = firstCronograma.tempId;
+    actividadForm.cronograma_id = firstCronograma.tempId
   }
-});
+})
 </script>
 
 <template>
   <div v-if="show" class="modal-overlay" @click.self="promptCloseConfirmation">
     <div class="modal-content fade-in">
-      <h2 class="modal-title">Evento
+      <h2 class="modal-title">
+        Evento
         <i class="fa-solid fa-xmark close-modal-button" @click="promptCloseConfirmation"></i>
       </h2>
 
       <div class="modal-tabs">
-        <button v-for="tab in tabOrder" :key="tab" :class="[
-          'tab',
-          activeTab === tab ? 'active' : '',
-          isTabCompleted(tab) ? 'completed' : ''
-        ]" @click="activeTab = tab">
+        <button
+          v-for="tab in tabOrder"
+          :key="tab"
+          :class="[
+            'tab',
+            activeTab === tab ? 'active' : '',
+            isTabCompleted(tab) ? 'completed' : '',
+          ]"
+          @click="activeTab = tab"
+        >
           {{ tabTitleMap[tab] }}
         </button>
       </div>
@@ -1476,18 +1618,21 @@ onMounted(async () => {
                 <label>Sede *</label>
               </div>
 
-
               <div class="form-group span-1">
                 <input v-model.number="form.capacidad" type="number" min="0" required />
                 <label>Capacidad *</label>
               </div>
-
             </div>
 
             <div class="switch-group">
               <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" v-model="form.hayEquipos" :true-value="1"
-                  :false-value="0" />
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  v-model="form.hayEquipos"
+                  :true-value="1"
+                  :false-value="0"
+                />
                 <label class="form-check-label">Ingresos de Proyectos</label>
               </div>
 
@@ -1496,9 +1641,12 @@ onMounted(async () => {
                 <label class="form-check-label">Se necesita Rubricas</label>
               </div>
 
-
               <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" v-model="form.inscripcionesAbiertas" />
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  v-model="form.inscripcionesAbiertas"
+                />
                 <label class="form-check-label">Inscripciones Abiertas</label>
               </div>
             </div>
@@ -1520,12 +1668,22 @@ onMounted(async () => {
               <label class="imagenes-label">Cover del Evento *</label>
               <div class="imagenes-cover-row">
                 <div class="cover-preview-box">
-                  <img v-if="coverImage.url" :src="coverImage.url" class="cover-preview-img" alt="Cover Preview" />
+                  <img
+                    v-if="coverImage.url"
+                    :src="coverImage.url"
+                    class="cover-preview-img"
+                    alt="Cover Preview"
+                  />
                   <div v-else class="cover-preview-empty">Sin imagen</div>
                 </div>
                 <div class="imagenes-upload-box">
-                  <input type="file" accept="image/*" @change="handleCoverChange" class="imagenes-file-input"
-                    ref="coverInput" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    @change="handleCoverChange"
+                    class="imagenes-file-input"
+                    ref="coverInput"
+                  />
                   <button type="button" @click="coverInput.click()" class="imagenes-btn">
                     Elegir archivo...
                   </button>
@@ -1537,8 +1695,14 @@ onMounted(async () => {
             <div>
               <label class="imagenes-label">Imágenes adicionales *</label>
               <div class="imagenes-dropzone" @dragover.prevent @drop.prevent="handleDrop">
-                <input type="file" multiple accept=".jpg, .png, .webp" @change="handleAdditionalChange"
-                  class="imagenes-file-input" ref="additionalInput" />
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpg, .png, .webp"
+                  @change="handleAdditionalChange"
+                  class="imagenes-file-input"
+                  ref="additionalInput"
+                />
                 <div class="imagenes-dropzone-content">
                   <i class="fa-solid fa-folder imagenes-svg"></i>
                   <p>Puedes arrastrar y soltar archivos aquí para añadirlos</p>
@@ -1549,8 +1713,13 @@ onMounted(async () => {
                   <p class="imagenes-help-text">Solo se aceptan archivos .jpg, .png o .webp</p>
                 </div>
                 <div v-if="additionalImages.length" class="imagenes-grid">
-                  <img v-for="(img, idx) in additionalImages" :key="idx" :src="img.url" class="imagenes-thumb"
-                    alt="Imagen adicional" />
+                  <img
+                    v-for="(img, idx) in additionalImages"
+                    :key="idx"
+                    :src="img.url"
+                    class="imagenes-thumb"
+                    alt="Imagen adicional"
+                  />
                 </div>
               </div>
             </div>
@@ -1565,7 +1734,6 @@ onMounted(async () => {
           </div>
         </div>
 
-
         <div v-if="activeTab === 'cronograma'">
           <form class="cronograma-form" @submit.prevent="handleCronogramaSubmit">
             <div class="form-group span-3">
@@ -1574,32 +1742,59 @@ onMounted(async () => {
             </div>
 
             <div class="form-group textarea-group span-3">
-              <textarea id="cronograma-desc" v-model="cronogramaForm.descripcion" maxlength="225" required></textarea>
+              <textarea
+                id="cronograma-desc"
+                v-model="cronogramaForm.descripcion"
+                maxlength="225"
+                required
+              ></textarea>
               <label for="cronograma-desc">Descripción *</label>
               <div class="char-count">{{ descripcionCount }}/225</div>
             </div>
             <div class="cronograma-row">
               <div class="form-group">
-                <input v-model="cronogramaForm.fecha_inicio" type="datetime-local" placeholder=" " required />
+                <input
+                  v-model="cronogramaForm.fecha_inicio"
+                  type="datetime-local"
+                  placeholder=" "
+                  required
+                />
                 <label>Fecha y Hora de Inicio *</label>
                 <small class="text-muted">
-                  <i class="fas fa-info-circle"></i> Evento Inicia: {{ formatDisplayDateTime(form.fecha_inicio) }}
+                  <i class="fas fa-info-circle"></i> Evento Inicia:
+                  {{ formatDisplayDateTime(form.fecha_inicio) }}
                 </small>
               </div>
               <div class="form-group">
-                <input v-model="cronogramaForm.fecha_fin" type="datetime-local" placeholder=" " required />
+                <input
+                  v-model="cronogramaForm.fecha_fin"
+                  type="datetime-local"
+                  placeholder=" "
+                  required
+                />
                 <label>Fecha y Hora de Fin *</label>
                 <small class="text-muted">
-                  <i class="fas fa-info-circle"></i> Evento Finaliza: {{ formatDisplayDateTime(form.fecha_fin) }}
+                  <i class="fas fa-info-circle"></i> Evento Finaliza:
+                  {{ formatDisplayDateTime(form.fecha_fin) }}
                 </small>
               </div>
             </div>
             <div class="form-group span-3">
-              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 230px;">
-                {{ editingCronogramaTempId ? 'Actualizar Cronograma' : 'Crear cronograma' }} <i class="fas fa-plus"></i>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                style="display: block; margin: 0 auto; max-width: 230px"
+              >
+                {{ editingCronogramaTempId ? 'Actualizar Cronograma' : 'Crear cronograma' }}
+                <i class="fas fa-plus"></i>
               </button>
-              <button v-if="editingCronogramaTempId" type="button" class="btn btn-secondary mt-2"
-                @click="cancelEditCronograma" style="display: block; margin: 0 auto; max-width: 200px;">
+              <button
+                v-if="editingCronogramaTempId"
+                type="button"
+                class="btn btn-secondary mt-2"
+                @click="cancelEditCronograma"
+                style="display: block; margin: 0 auto; max-width: 200px"
+              >
                 Cancelar Edición
               </button>
             </div>
@@ -1629,7 +1824,10 @@ onMounted(async () => {
                     <button @click="editCronograma(cronograma)" class="btn btn-action-edit">
                       <i class="fas fa-pencil-alt"></i>
                     </button>
-                    <button @click="deleteCronograma(cronograma.tempId)" class="btn btn-action-delete">
+                    <button
+                      @click="deleteCronograma(cronograma.tempId)"
+                      class="btn btn-action-delete"
+                    >
                       <i class="fas fa-trash"></i>
                     </button>
                   </td>
@@ -1657,7 +1855,12 @@ onMounted(async () => {
             </div>
 
             <div class="form-group textarea-group span-3">
-              <textarea id="cronograma-desc" v-model="actividadForm.descripcion" maxlength="225" required></textarea>
+              <textarea
+                id="cronograma-desc"
+                v-model="actividadForm.descripcion"
+                maxlength="225"
+                required
+              ></textarea>
               <label for="cronograma-desc">Descripción *</label>
               <div class="char-count">{{ descripcionCount }}/225</div>
             </div>
@@ -1666,29 +1869,50 @@ onMounted(async () => {
               <div class="form-group">
                 <select v-model="actividadForm.cronograma_id" required>
                   <option disabled value="">Cronograma *</option>
-                  <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">{{ c.titulo }}</option>
+                  <option v-for="c in cronogramasOptions" :key="c.id" :value="c.id">
+                    {{ c.titulo }}
+                  </option>
                 </select>
                 <label>Cronograma *</label>
               </div>
-
             </div>
             <div class="form-row">
               <div class="form-group">
-                <input v-model="actividadForm.fecha_inicio" type="datetime-local" placeholder=" " required />
+                <input
+                  v-model="actividadForm.fecha_inicio"
+                  type="datetime-local"
+                  placeholder=" "
+                  required
+                />
                 <label>Fecha y Hora de Inicio *</label>
               </div>
               <div class="form-group">
-                <input v-model="actividadForm.fecha_fin" type="datetime-local" placeholder=" " required />
+                <input
+                  v-model="actividadForm.fecha_fin"
+                  type="datetime-local"
+                  placeholder=" "
+                  required
+                />
                 <label>Fecha y Hora de Fin *</label>
               </div>
             </div>
 
             <div class="form-group span-3">
-              <button type="submit" class="btn btn-primary" style="display: block; margin: 0 auto; max-width: 230px;">
-                {{ editingActividadTempId ? 'Actualizar Actividad' : 'Añadir Actividad' }} <i class="fas fa-plus"></i>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                style="display: block; margin: 0 auto; max-width: 230px"
+              >
+                {{ editingActividadTempId ? 'Actualizar Actividad' : 'Añadir Actividad' }}
+                <i class="fas fa-plus"></i>
               </button>
-              <button v-if="editingActividadTempId" type="button" class="btn btn-secondary mt-2"
-                @click="cancelEditActividad" style="display: block; margin: 0 auto; max-width: 200px;">
+              <button
+                v-if="editingActividadTempId"
+                type="button"
+                class="btn btn-secondary mt-2"
+                @click="cancelEditActividad"
+                style="display: block; margin: 0 auto; max-width: 200px"
+              >
                 Cancelar Edición
               </button>
             </div>
@@ -1696,7 +1920,8 @@ onMounted(async () => {
 
           <div class="tabla-actividades">
             <div v-if="reorderingActividades" class="overlay-loader">
-              <div class="spinner"></div> Actualizando orden...
+              <div class="spinner"></div>
+              Actualizando orden...
             </div>
             <table>
               <thead>
@@ -1711,23 +1936,34 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody>
-                <template v-for="(cronograma) in cronogramas" :key="cronograma.tempId">
+                <template v-for="cronograma in cronogramas" :key="cronograma.tempId">
                   <tr class="cronograma-header-row">
-                    <td colspan="7"><strong>Cronograma: {{ cronograma.titulo }} <br> Inicia: {{
-                      formatDisplayDateTime(cronograma.fecha_inicio) }} <br> Termina: {{
-                          formatDisplayDateTime(cronograma.fecha_fin) }} </strong></td>
+                    <td colspan="7">
+                      <strong
+                        >Cronograma: {{ cronograma.titulo }} <br />
+                        Inicia: {{ formatDisplayDateTime(cronograma.fecha_inicio) }} <br />
+                        Termina: {{ formatDisplayDateTime(cronograma.fecha_fin) }}
+                      </strong>
+                    </td>
                   </tr>
                   <tr v-for="(act, idx) in cronograma.actividades" :key="act.tempId">
                     <td>
                       <div class="order-controls-horizontal">
-                        <button @click="moverArriba(act.cronograma_id, idx)"
-                          :disabled="idx === 0 || reorderingActividades" class="order-btn">
+                        <button
+                          @click="moverArriba(act.cronograma_id, idx)"
+                          :disabled="idx === 0 || reorderingActividades"
+                          class="order-btn"
+                        >
                           <i class="fas fa-caret-up"></i>
                         </button>
                         <span class="order-number">{{ act.orden }}</span>
-                        <button @click="moverAbajo(act.cronograma_id, idx)"
-                          :disabled="idx === cronograma.actividades.length - 1 || reorderingActividades"
-                          class="order-btn">
+                        <button
+                          @click="moverAbajo(act.cronograma_id, idx)"
+                          :disabled="
+                            idx === cronograma.actividades.length - 1 || reorderingActividades
+                          "
+                          class="order-btn"
+                        >
                           <i class="fas fa-caret-down"></i>
                         </button>
                       </div>
@@ -1738,18 +1974,28 @@ onMounted(async () => {
                     <td>{{ formatDisplayDateTime(act.fecha_fin) }}</td>
                     <td>{{ getDependenciaDisplayText(act, act.cronograma_id) }}</td>
                     <td>
-                      <button @click="editActividad(act.cronograma_id, act)" class="btn btn-action-edit">
+                      <button
+                        @click="editActividad(act.cronograma_id, act)"
+                        class="btn btn-action-edit"
+                      >
                         <i class="fas fa-pencil-alt"></i>
                       </button>
-                      <button @click="deleteActividad(act.cronograma_id, act.tempId)" class="btn btn-action-delete">
+                      <button
+                        @click="deleteActividad(act.cronograma_id, act.tempId)"
+                        class="btn btn-action-delete"
+                      >
                         <i class="fas fa-trash"></i>
                       </button>
                     </td>
                   </tr>
                 </template>
-                <tr v-if="cronogramas.length === 0 || cronogramas.every(c => c.actividades.length === 0)">
-                  <td colspan="7" class="no-activities-message">No hay actividades para mostrar. Añade cronogramas y
-                    luego actividades.
+                <tr
+                  v-if="
+                    cronogramas.length === 0 || cronogramas.every((c) => c.actividades.length === 0)
+                  "
+                >
+                  <td colspan="7" class="no-activities-message">
+                    No hay actividades para mostrar. Añade cronogramas y luego actividades.
                   </td>
                 </tr>
               </tbody>
@@ -1768,20 +2014,34 @@ onMounted(async () => {
       </ScrollBar>
 
       <Loader v-if="loading" />
-
     </div>
-    <ConfirmationModal :show="showConfirmationModal" title="Confirmar" :message="ConfModalMessage"
-      confirm-text="Sí, continuar" cancel-text="No, quedarme" @confirm="handleConfirmationConfirm"
-      @cancel="handleConfirmationCancel" />
+    <ConfirmationModal
+      :show="showConfirmationModal"
+      title="Confirmar"
+      :message="ConfModalMessage"
+      confirm-text="Sí, continuar"
+      cancel-text="No, quedarme"
+      @confirm="handleConfirmationConfirm"
+      @cancel="handleConfirmationCancel"
+    />
 
-    <OkModal :show="showSuccessModal" title="Información" :message="successMessage" @close="handleModalClose"
-      :duration="1000" />
+    <OkModal
+      :show="showSuccessModal"
+      title="Información"
+      :message="successMessage"
+      @close="handleModalClose"
+      :duration="1000"
+    />
 
-    <ErrorModal :show="showErrorModal" title="Error" :message="errorMessage" @close="handleErrorModalClose"
-      :duration="4000" />
+    <ErrorModal
+      :show="showErrorModal"
+      title="Error"
+      :message="errorMessage"
+      @close="handleErrorModalClose"
+      :duration="4000"
+    />
   </div>
 </template>
-
 
 <style scoped>
 /* Styles for the Cronogramas Table */
@@ -1818,7 +2078,6 @@ onMounted(async () => {
   font-weight: 600;
   font-size: 0.7rem;
   white-space: nowrap;
-
 }
 
 .tabla-cronogramas tbody tr:nth-child(even) {
@@ -1895,9 +2154,6 @@ onMounted(async () => {
   }
 }
 
-
-
-
 .alert {
   padding: 10px 15px;
   border-radius: 5px;
@@ -1941,7 +2197,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
-
 
 .button-row {
   padding-top: 1rem;
@@ -2111,12 +2366,12 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.form-group input:focus+label,
-.form-group textarea:focus+label,
-.form-group select:focus+label,
-.form-group input:not(:placeholder-shown)+label,
-.form-group textarea:not(:placeholder-shown)+label,
-.form-group select:not(:placeholder-shown)+label {
+.form-group input:focus + label,
+.form-group textarea:focus + label,
+.form-group select:focus + label,
+.form-group input:not(:placeholder-shown) + label,
+.form-group textarea:not(:placeholder-shown) + label,
+.form-group select:not(:placeholder-shown) + label {
   top: -0.5rem;
   left: 0.5rem;
   background: white;
@@ -2464,7 +2719,7 @@ onMounted(async () => {
 .tabla-actividades table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.70rem;
+  font-size: 0.7rem;
   /* As per your request, keeps it small */
   background: #fff;
 }
@@ -2586,7 +2841,9 @@ onMounted(async () => {
   border-radius: 5px;
   font-size: 0.9rem;
   margin: 0 5px;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
