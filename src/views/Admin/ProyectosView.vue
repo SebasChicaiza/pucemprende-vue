@@ -21,6 +21,7 @@ async function fetchEquipos() {
   const token = localStorage.getItem('token')
   if (!token) return
 
+  loading.value = true
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -28,6 +29,8 @@ async function fetchEquipos() {
     equipos.value = response.data
   } catch (e) {
     console.error('Error cargando equipos', e)
+  } finally {
+    loading.value = false
   }
 }
 const equipoMap = computed(() =>
@@ -128,6 +131,7 @@ async function fetchProyectos() {
 async function fetchProyectosConEventos() {
   const token = localStorage.getItem('token')
   if (!token) return
+  loading.value = true
 
   try {
     const [proyEventoRes, eventosRes, equiposRes] = await Promise.all([
@@ -147,6 +151,8 @@ async function fetchProyectosConEventos() {
     equipos.value = equiposRes.data
   } catch (e) {
     console.error('Error al cargar proyectos con eventos:', e)
+  } finally {
+    loading.value = false
   }
 }
 
