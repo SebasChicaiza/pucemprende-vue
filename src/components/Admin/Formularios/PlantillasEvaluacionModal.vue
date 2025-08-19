@@ -9,7 +9,7 @@ import {
   onUnmounted,
   nextTick,
 } from 'vue'
-import { Modal, Collapse } from 'bootstrap' // Import Collapse
+import { Modal, Collapse } from 'bootstrap'
 import axios from 'axios'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
@@ -38,7 +38,7 @@ const plantillasModalRef = ref(null)
 let bsModal = null
 
 const allNewPlantillasInSession = ref([])
-const activeAccordionItem = ref(null) // Stores the ID of the currently open accordion item
+const activeAccordionItem = ref(null)
 const nextPlantillaTempId = ref(1)
 
 const currentCriterioName = ref('')
@@ -64,10 +64,10 @@ const editingPlantillaNameId = ref(null)
 const tempPlantillaName = ref('')
 const inPlaceEditInputRef = ref(null)
 
+const availableRoles = ref([])
+
 const currentPlantilla = computed(() => {
-  // console.log('Computed currentPlantilla. activeAccordionItem:', activeAccordionItem.value);
   const found = allNewPlantillasInSession.value.find((p) => p.id === activeAccordionItem.value)
-  // console.log('Found currentPlantilla:', found);
   return found
 })
 
@@ -98,12 +98,7 @@ watch(currentCriterioPeso, () => {
   if (errorMessage.value) errorMessage.value = ''
 })
 
-// Watch for changes in activeAccordionItem to reset criterion input fields
-// and to control Bootstrap's accordion state
 watch(activeAccordionItem, (newId, oldId) => {
-  // console.log('activeAccordionItem changed from', oldId, 'to', newId);
-
-  // Reset criterion input fields when a new accordion item becomes active
   currentCriterioName.value = ''
   currentCriterioDescription.value = ''
   currentCriterioPeso.value = 0
@@ -112,7 +107,6 @@ watch(activeAccordionItem, (newId, oldId) => {
   showErrorModal.value = false
 
   nextTick(() => {
-    // Hide old accordion item
     if (oldId) {
       const oldCollapseElement = document.getElementById(`collapse${oldId}`)
       if (oldCollapseElement) {
@@ -125,7 +119,6 @@ watch(activeAccordionItem, (newId, oldId) => {
       }
     }
 
-    // Show new accordion item
     if (newId) {
       const newCollapseElement = document.getElementById(`collapse${newId}`)
       if (newCollapseElement) {
@@ -147,8 +140,6 @@ const initializeModal = () => {
       emit('close')
       resetModalState()
     })
-    // We are now explicitly controlling Bootstrap's collapse state via the activeAccordionItem watch
-    // So, we don't need to listen to Bootstrap's 'shown.bs.collapse'/'hidden.bs.collapse' to SET activeAccordionItem
   }
 }
 
@@ -173,7 +164,8 @@ watch(
         }
         bsModal?.show()
         resetModalState()
-        fetchPlantillasData() // Fetch data when modal opens
+        fetchRolesData()
+        fetchPlantillasData()
       } else {
         bsModal?.hide()
       }
@@ -215,6 +207,27 @@ const handleErrorModalClose = () => {
   errorMessage.value = ''
 }
 
+const fetchRolesData = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    displayError('Token de autenticación no encontrado.')
+    return
+  }
+
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/rolEvento`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    availableRoles.value = response.data
+  } catch (err) {
+    console.error('Error fetching roles data:', err.response?.data || err.message)
+    displayError('Error al cargar los roles de usuario. Intente de nuevo más tarde.')
+  }
+}
+
 const fetchPlantillasData = async () => {
   modalLoading.value = true
   const token = localStorage.getItem('token')
@@ -240,28 +253,25 @@ const fetchPlantillasData = async () => {
 
     if (currentProceso && currentProceso.plantillas.length > 0) {
       allNewPlantillasInSession.value = currentProceso.plantillas.map((p) => ({
-        id: p.plantillaId, // Use backend ID
+        id: p.plantillaId,
         nombre_plantilla: p.plantillaNombre,
         criterios: p.criterios.map((c) => ({
-          id: c.criterioId, // Use backend ID
+          id: c.criterioId,
           nombre: c.criterioNombre,
           descripcion: c.criterioDescripcion,
           peso: c.criterioPeso,
         })),
+        roles_permitidos: p.roles || [], // Assuming the API returns a 'roles' array
       }))
-      // Set the first plantilla as active initially
       if (allNewPlantillasInSession.value.length > 0) {
         activeAccordionItem.value = allNewPlantillasInSession.value[0].id
-        // The watch on activeAccordionItem will now handle opening the accordion.
       }
     } else {
-      // If no existing plantillas, add a new one to start
       addNewPlantillaSession()
     }
   } catch (err) {
     console.error('Error fetching plantillas data:', err.response?.data || err.message)
     displayError('Error al cargar las plantillas existentes. Intente de nuevo más tarde.')
-    // Still add a new plantilla if fetching fails to allow creation
     addNewPlantillaSession()
   } finally {
     modalLoading.value = false
@@ -269,11 +279,12 @@ const fetchPlantillasData = async () => {
 }
 
 const addNewPlantillaSession = () => {
-  const newId = `temp-${nextPlantillaTempId.value++}` // Use string for temporary ID
+  const newId = `temp-${nextPlantillaTempId.value++}`
   const newPlantilla = {
     id: newId,
     nombre_plantilla: `Nueva Plantilla ${allNewPlantillasInSession.value.length + 1}`,
     criterios: [],
+    roles_permitidos: [],
   }
   allNewPlantillasInSession.value.push(newPlantilla)
   activeAccordionItem.value = newId
@@ -375,12 +386,14 @@ const addOrUpdateCriterio = () => {
     const oldPeso = currentPlantilla.value.criterios[editingCriterioIndex.value].peso
     if (totalPeso.value - oldPeso + newPeso > 100) {
       displayError(
-        `El peso total de los criterios no puede exceder 100%. Actualmente es ${totalPeso.value - oldPeso + newPeso}%.`,
+        `El peso total de los criterios no puede exceder 100%. Actualmente es ${
+          totalPeso.value - oldPeso + newPeso
+        }%.`,
       )
       return
     }
     currentPlantilla.value.criterios[editingCriterioIndex.value] = {
-      id: currentPlantilla.value.criterios[editingCriterioIndex.value].id, // Keep existing ID
+      id: currentPlantilla.value.criterios[editingCriterioIndex.value].id,
       nombre: currentCriterioName.value.trim(),
       descripcion: currentCriterioDescription.value.trim(),
       peso: newPeso,
@@ -393,7 +406,7 @@ const addOrUpdateCriterio = () => {
       return
     }
     currentPlantilla.value.criterios.push({
-      id: null, // New criteria won't have an ID until saved to DB
+      id: null,
       nombre: currentCriterioName.value.trim(),
       descripcion: currentCriterioDescription.value.trim(),
       peso: newPeso,
@@ -451,6 +464,12 @@ const submitAllPlantillas = async () => {
       )
       return
     }
+    if (plantilla.roles_permitidos.length === 0) {
+      displayError(
+        `La plantilla "${plantilla.nombre_plantilla}" debe tener al menos un rol de calificación asignado.`,
+      )
+      return
+    }
   }
 
   modalLoading.value = true
@@ -472,7 +491,6 @@ const submitAllPlantillas = async () => {
           descripcion: c.descripcion,
           peso: Number(c.peso),
         }
-        // Only include 'id' if it's an existing backend ID (number type)
         if (c.id && typeof c.id === 'number') {
           criterioData.id = c.id
         }
@@ -482,11 +500,11 @@ const submitAllPlantillas = async () => {
       const payload = {
         nombre_plantilla: plantilla.nombre_plantilla.trim(),
         criterios: criteriosPayload,
+        roles_permitidos: plantilla.roles_permitidos,
       }
 
       if (typeof plantilla.id === 'string' && plantilla.id.startsWith('temp-')) {
-        // This is a new plantilla, use POST
-        payload.proceso_id = props.procesoId // Add proceso_id only for new plantillas
+        payload.proceso_id = props.procesoId
         await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`, payload, {
           headers: {
             'Content-Type': 'application/json',
@@ -494,7 +512,6 @@ const submitAllPlantillas = async () => {
           },
         })
       } else {
-        // This is an existing plantilla, use PUT
         await axios.put(
           `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios/${plantilla.id}`,
           payload,
@@ -542,16 +559,12 @@ const displayError = (message) => {
   showErrorModal.value = true
 }
 
-// Function to toggle accordion manually
 const toggleAccordion = (plantillaId) => {
-  // If the clicked item is already active, close it
   if (activeAccordionItem.value === plantillaId) {
     activeAccordionItem.value = null
   } else {
-    // Otherwise, set it as the active item
     activeAccordionItem.value = plantillaId
   }
-  // The watch on activeAccordionItem will handle the Bootstrap Collapse show/hide.
 }
 </script>
 
@@ -797,6 +810,31 @@ const toggleAccordion = (plantillaId) => {
                             </tfoot>
                           </table>
                         </div>
+
+                        <hr />
+
+                        <div class="mt-4">
+                          <h6 class="mb-3">Quienes pueden calificar esta plantilla</h6>
+                          <div class="row g-2">
+                            <div v-for="rol in availableRoles" :key="rol.id" class="col-auto">
+                              <div class="form-check">
+                                <input
+                                  class="form-check-input"
+                                  type="checkbox"
+                                  :id="`rol-${plantilla.id}-${rol.id}`"
+                                  :value="rol.id"
+                                  v-model="plantilla.roles_permitidos"
+                                />
+                                <label
+                                  class="form-check-label"
+                                  :for="`rol-${plantilla.id}-${rol.id}`"
+                                >
+                                  {{ rol.nombre }}
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -848,7 +886,7 @@ const toggleAccordion = (plantillaId) => {
 .modal-dialog {
   max-width: 1200px;
   width: 95%;
-  height: 90vh; /* Set a fixed height for the dialog */
+  height: 90vh;
   display: flex;
   align-items: center;
 }
@@ -858,7 +896,7 @@ const toggleAccordion = (plantillaId) => {
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
   width: 100%;
-  height: 100%; /* Fill the constrained modal-dialog height */
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;

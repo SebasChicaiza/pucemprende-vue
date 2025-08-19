@@ -902,13 +902,6 @@ function closeDialog() {
                     Ya inscrito
                   </button>
                 </template>
-                <button
-                  v-if="eventDetails.inscripcionesAbiertas"
-                  class="btn btn-success mb-4 animated-btn"
-                  @click="redirectToCreateProject"
-                >
-                  Inscribirse
-                </button>
                 <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
               </div>
 
