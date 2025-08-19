@@ -146,7 +146,7 @@ const prevPage = () => {
         </div>
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
-          <div class="row" v-if="!loading">
+          <div class="row">
             <div
               class="col-12 col-sm-12 col-md-6 col-lg-3 mb-3"
               v-for="event in events"
@@ -162,7 +162,6 @@ const prevPage = () => {
               No se encontraron eventos.
             </div>
           </div>
-          <div v-else class="text-center text-muted mt-5">Cargando eventos...</div>
 
           <nav aria-label="Page navigation" v-if="totalPages > 1 && !loading">
             <ul class="pagination justify-content-center">

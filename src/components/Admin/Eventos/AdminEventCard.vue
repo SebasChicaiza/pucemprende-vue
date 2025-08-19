@@ -40,6 +40,10 @@ const emitViewEvent = () => {
   emit('view-event', props.event.id) // Emit just the ID for viewing
 }
 
+const emitEditEvent = () => {
+  emit('edit-event', props.event)
+}
+
 function handleInscribirse() {
   if (props.event.hayEquipos > 0) {
     // Solo redirige, NO inscribe aquí

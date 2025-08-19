@@ -365,12 +365,17 @@ watch(
         )
       }
 
+      const formatApiDate = (dateString) => {
+        if (!dateString) return ''
+        return dateString.split(':').slice(0, 2).join(':').replace(' ', 'T')
+      }
+
       Object.assign(form, {
         id: newEventData.id,
         nombre: newEventData.nombre,
         descripcion: newEventData.descripcion,
-        fecha_inicio: new Date(newEventData.fecha_inicio).toISOString().slice(0, 16),
-        fecha_fin: new Date(newEventData.fecha_fin).toISOString().slice(0, 16),
+        fecha_inicio: formatApiDate(newEventData.fecha_inicio),
+        fecha_fin: formatApiDate(newEventData.fecha_fin),
         capacidad: newEventData.capacidad,
         espacio: newEventData.espacio,
         modalidad: newEventData.modalidad,
@@ -411,8 +416,8 @@ watch(
             evento_id: c.evento_id,
             titulo: c.titulo,
             descripcion: c.descripcion,
-            fecha_inicio: new Date(c.fecha_inicio).toISOString().slice(0, 16),
-            fecha_fin: new Date(c.fecha_fin).toISOString().slice(0, 16),
+            fecha_inicio: formatApiDate(c.fecha_inicio),
+            fecha_fin: formatApiDate(c.fecha_fin),
             actividades: c.actividades_cronogramas
               ? c.actividades_cronogramas
                   .map((a) => ({
@@ -421,8 +426,8 @@ watch(
                     cronograma_id: tempCronogramaId,
                     titulo: a.titulo,
                     descripcion: a.descripcion,
-                    fecha_inicio: new Date(a.fecha_inicio).toISOString().slice(0, 16),
-                    fecha_fin: new Date(a.fecha_fin).toISOString().slice(0, 16),
+                    fecha_inicio: formatApiDate(a.fecha_inicio),
+                    fecha_fin: formatApiDate(a.fecha_fin),
                     orden: a.orden,
                     dependencia_id: a.dependencia_id,
                   }))
