@@ -4,12 +4,15 @@ import { useRouter } from 'vue-router'
 import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
 import { storeToRefs } from 'pinia'
+import LoaderComponent from '@/components/LoaderComponent.vue'
+import { useEventosStore } from '@/stores/eventos'
 
 const eventosInscritosStore = useEventosInscritosStore()
 const { eventos, cargado } = storeToRefs(eventosInscritosStore)
 const router = useRouter()
 const props = defineProps({ event: Object })
 const emit = defineEmits(['edit-event', 'view-event'])
+const loading = ref(false)
 
 const showConfirmDialog = ref(false)
 const toastMessage = ref('')
@@ -50,7 +53,7 @@ function handleInscribirse() {
     router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
   } else {
     // Si no permite proyectos, inscribe directamente
-    inscribirEnEvento()
+    showConfirmDialog.value = true
   }
 }
 
@@ -60,6 +63,7 @@ const inscribirEnEvento = async () => {
     toast('Token no encontrado', 'error')
     return
   }
+  loading.value = true
 
   try {
     await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
@@ -79,11 +83,18 @@ const inscribirEnEvento = async () => {
   } catch (error) {
     toast('Error al inscribirse al evento', 'error')
     console.error(error)
+  } finally {
+    showConfirmDialog.value = false
+    toast('Inscripción exitosa al evento sin proyecto.', 'success')
+    loading.value = false
+    await eventosInscritosStore.fetchEventosInscritos()
   }
 }
 
 const confirmarSinProyecto = () => {
-  toast('Inscripción exitosa al evento sin proyecto.', 'success')
+  inscribirEnEvento()
+}
+function closeDialog() {
   showConfirmDialog.value = false
 }
 
@@ -106,6 +117,7 @@ const puedeInscribirse = computed(() => {
 <template>
   <div class="card event-card">
     <div class="card-body">
+      <LoaderComponent v-if="loading" />
       <div class="d-flex justify-content-between">
         <small class="text-muted fw-bold">Evento</small>
         <i v-if="canEdit" class="fas fa-pen edit-icon" @click="emitEditEvent"></i>
@@ -163,7 +175,7 @@ const puedeInscribirse = computed(() => {
       :visible="showConfirmDialog"
       message="¿Deseas inscribirte al evento?"
       @confirm="confirmarSinProyecto"
-      @cancel="showConfirmDialog.value = false"
+      @cancel="closeDialog"
     />
 
     <div v-if="showToast" :class="['toast-notification', toastType, 'show']">

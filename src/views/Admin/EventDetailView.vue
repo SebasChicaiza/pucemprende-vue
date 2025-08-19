@@ -15,6 +15,8 @@ import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ErrorModal from '@/components/ErrorModal.vue'
 import { useProyectosEventosStore } from '@/stores/proyectos_eventos'
 import { usePlantillasEvaluacionStore } from '@/stores/plantillas_evaluacion' // Import the new store
+import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
+import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +29,7 @@ const isLoadingImagesInModal = ref(false)
 
 const mainImage = ref('')
 const DEFAULT_IMAGE_URL = DefaultImage
+const showConfirmDialog = ref(false)
 
 const universalDeleteModalRef = ref(null)
 const modalTitle = ref('')
@@ -694,6 +697,74 @@ const formatDate = (dateString) => {
   }
   return date.toLocaleDateString('es-ES', options)
 }
+
+const puedeInscribirse = computed(() => {
+  return (
+    eventDetails.value.inscripcionesAbiertas &&
+    !useEventosInscritosStore().estaInscrito(eventDetails.value.id) &&
+    !eventDetails.value.estado_borrado
+  )
+})
+
+function handleInscribirse() {
+  if (eventDetails.value.hayEquipos > 0) {
+    router.push({ name: 'crearProyecto', params: { eventoId: eventDetails.value.id } })
+  } else {
+    showConfirmDialog.value = true
+  }
+}
+
+const toastMessage = ref('')
+const showToast = ref(false)
+const toastType = ref('')
+
+const inscribirEnEvento = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    toast('Token no encontrado', 'error')
+    return
+  }
+  loading.value = true
+
+  try {
+    await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ evento_id: eventDetails.value.id }),
+    })
+    console.log('Inscripción exitosa al evento', eventDetails.value.event)
+    if (eventDetails.value.hayEquipos > 0) {
+      router.push({ name: 'crearProyecto', params: { eventoId: eventDetails.value.id } })
+    } else {
+      showConfirmDialog.value = true
+    }
+  } catch (error) {
+    toast('Error al inscribirse al evento', 'error')
+    console.error(error)
+  } finally {
+    showConfirmDialog.value = false
+    toast('Inscripción exitosa al evento sin proyecto.', 'success')
+    loading.value = false
+    await useEventosInscritosStore().fetchEventosInscritos()
+  }
+}
+
+const toast = (msg, type) => {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => (showToast.value = false), 3000)
+}
+
+const confirmarSinProyecto = () => {
+  inscribirEnEvento()
+}
+function closeDialog() {
+  showConfirmDialog.value = false
+}
 </script>
 
 <template>
@@ -818,7 +889,19 @@ const formatDate = (dateString) => {
                     <p class="info-content">{{ formatDate(eventDetails.fecha_fin) }}</p>
                   </div>
                 </div>
-
+                <!-- Botón solo si inscripciones están abiertas -->
+                <template v-if="eventDetails.inscripcionesAbiertas">
+                  <button
+                    v-if="puedeInscribirse"
+                    class="btn btn-success mb-4 animated-btn"
+                    @click="handleInscribirse"
+                  >
+                    Inscribirse
+                  </button>
+                  <button v-else class="btn btn-secondary mb-4 animated-btn" disabled>
+                    Ya inscrito
+                  </button>
+                </template>
                 <button
                   v-if="eventDetails.inscripcionesAbiertas"
                   class="btn btn-success mb-4 animated-btn"
@@ -1270,6 +1353,17 @@ const formatDate = (dateString) => {
     />
 
     <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
+
+    <ConfirmationDialog
+      :visible="showConfirmDialog"
+      message="¿Deseas inscribirte al evento?"
+      @confirm="confirmarSinProyecto"
+      @cancel="closeDialog"
+    />
+
+    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
+      {{ toastMessage }}
+    </div>
   </div>
 </template>
 
@@ -1733,5 +1827,30 @@ const formatDate = (dateString) => {
     flex-basis: 100%; /* Make full date take full line if it wraps */
     margin-top: 0.2rem;
   }
+}
+
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
 }
 </style>

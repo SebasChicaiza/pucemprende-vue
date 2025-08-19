@@ -62,10 +62,10 @@ const handleDeleteConfirmed = async () => {
   if (userToDeleteId) {
     const success = await store.deleteUserById(userToDeleteId)
     if (success) {
-      okModalMessage.value = `Usuario ${userToDeleteName} desactivado con éxito!`
+      okModalMessage.value = `Usuario ${userToDeleteName} eliminado con éxito!`
       showOkModal.value = true
     } else {
-      errorMessage.value = store.error || 'Error desconocido al desactivar el usuario.'
+      errorMessage.value = store.error || 'Error desconocido al eliminar el usuario.'
       showErrorModal.value = true
     }
   }
@@ -412,7 +412,11 @@ onMounted(() => {
               {{ user.status }}
             </div>
             <div class="user-actions-buttons">
-              <button @click="editUser(user)" class="btn btn-action-edit">
+              <button
+                v-if="user.status === 'Activo'"
+                @click="editUser(user)"
+                class="btn btn-action-edit"
+              >
                 <i class="fas fa-pencil-alt"></i>
               </button>
               <button
