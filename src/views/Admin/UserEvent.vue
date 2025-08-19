@@ -272,9 +272,9 @@ const editUser = (user) => {
 const deleteUser = (userId, userName) => {
   userToDeleteId = userId
   userToDeleteName = userName
-  modalTitle.value = 'Desactivar Usuario'
-  modalMessage.value = `¿Estás seguro de que quieres desactivar a ${userName} de este evento? Podrás reactivarlo más tarde.`
-  modalConfirmText.value = 'Sí, Desactivar'
+  modalTitle.value = 'Eliminar Usuario'
+  modalMessage.value = `¿Estás seguro de que quieres eliminar a ${userName} de este evento?, Esta accion no se puede deshacer.`
+  modalConfirmText.value = 'Sí, Eliminar'
   universalDeleteModalRef.value.show()
 }
 
