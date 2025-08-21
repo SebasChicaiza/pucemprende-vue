@@ -43,7 +43,7 @@ const teamSearchInputRef = ref(null)
 
 const selectedTeamName = computed(() => {
   const team = teams.value.find((t) => t.id === selectedTeamId.value)
-  return team ? team.nombre : 'Seleccionar Equipo'
+  return team ? team.nombre : 'Seleccionar un Proyecto'
 })
 
 const filteredTeams = computed(() => {
@@ -99,19 +99,29 @@ async function fetchTeams() {
   const token = localStorage.getItem('token')
 
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado para cargar equipos.'
+    errorMessage.value = 'Token de autenticación no encontrado para cargar proyectos.'
+    showErrorModal.value = true
+    loadingTeams.value = false
+    return
+  }
+
+  if (!props.procesoEventoId) {
+    errorMessage.value = 'No se ha proporcionado un ID de evento para cargar los proyectos.'
     showErrorModal.value = true
     loadingTeams.value = false
     return
   }
 
   try {
-    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/equipos/evento/${props.procesoEventoId}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       },
-    })
+    )
     teams.value = response.data
   } catch (err) {
     console.error('Error fetching teams:', err.response?.data || err.message)
@@ -174,7 +184,7 @@ const selectTeam = (team) => {
 
 const submitEvaluation = async () => {
   if (!selectedTeamId.value) {
-    errorMessage.value = 'Por favor, selecciona un equipo para evaluar.'
+    errorMessage.value = 'Por favor, selecciona un proyecto para evaluar.'
     showErrorModal.value = true
     return
   }
@@ -269,7 +279,7 @@ const handleErrorModalClose = () => {
           <LoaderComponent v-if="loadingTeams || isFullPageLoading" />
           <div v-else>
             <div class="mb-4">
-              <label for="teamSelect" class="form-label">Seleccionar Equipo a Evaluar:</label>
+              <label for="teamSelect" class="form-label">Seleccionar Proyecto a Evaluar:</label>
               <div class="custom-select-wrapper" :class="{ open: isTeamDropdownOpen }">
                 <div class="selected-item" @click="toggleTeamDropdown">
                   <span>{{ selectedTeamName }}</span>
@@ -284,13 +294,13 @@ const handleErrorModalClose = () => {
                     ref="teamSearchInputRef"
                     class="form-control search-input"
                     v-model="teamSearchQuery"
-                    placeholder="Buscar equipo..."
+                    placeholder="Buscar proyecto..."
                     @input="selectedTeamId = null"
                     @click.stop
                   />
                   <ul class="options-list">
                     <li v-if="filteredTeams.length === 0" class="option disabled">
-                      No se encontraron equipos activos o que coincidan con la búsqueda.
+                      No se encontraron proyectos activos o que coincidan con la búsqueda.
                     </li>
                     <li
                       v-for="team in filteredTeams"
