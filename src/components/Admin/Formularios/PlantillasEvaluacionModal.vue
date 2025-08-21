@@ -568,8 +568,59 @@ const submitAllPlantillas = async () => {
         currentPlantillaId = plantilla.id
       }
 
+      // Get all roles for the current plantilla and delete them one by one.
+      if (currentPlantillaId) {
+        try {
+          console.log(`[INFO] Fetching roles to delete for plantilla ID: ${currentPlantillaId}`)
+          const existingRolesResponse = await axios.get(
+            `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/plantilla/${currentPlantillaId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          )
+
+          const existingRoleIds = existingRolesResponse.data.map(role => role.id)
+          console.log(`[INFO] Found ${existingRoleIds.length} roles to delete.`)
+
+          if (existingRoleIds.length > 0) {
+            for (const roleId of existingRoleIds) {
+              try {
+                console.log(`[INFO] Deleting roles-plantilla record with ID: ${roleId}`)
+                await axios.delete(
+                  `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/${roleId}`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                    },
+                  },
+                )
+                console.log(`[SUCCESS] Deleted roles-plantilla record with ID: ${roleId}`)
+              } catch (deleteError) {
+                console.error(
+                  `[ERROR] Failed to delete roles-plantilla record ${roleId}:`,
+                  deleteError.response?.data || deleteError.message,
+                )
+                // Continue to the next deletion even if one fails
+              }
+            }
+            console.log(`[SUCCESS] All old roles for plantilla ID ${currentPlantillaId} have been processed.`)
+          } else {
+            console.log(`[INFO] No existing roles to delete for plantilla ID ${currentPlantillaId}.`)
+          }
+        } catch (fetchAndDeleteError) {
+          console.error(
+            `[ERROR] Failed to fetch or delete existing roles for plantilla ID ${currentPlantillaId}:`,
+            fetchAndDeleteError.response?.data || fetchAndDeleteError.message,
+          )
+          // Continue to the next step (creating new roles) even if deletion fails.
+        }
+      }
+
+      // Now, add the new roles.
       if (plantilla.roles_permitidos.length > 0) {
-        console.log(`[INFO] Asignando roles a la plantilla con ID: ${currentPlantillaId}`)
+        console.log(`[INFO] Asignando nuevos roles a la plantilla con ID: ${currentPlantillaId}`)
         for (const rolId of plantilla.roles_permitidos) {
           try {
             console.log(
@@ -588,9 +639,7 @@ const submitAllPlantillas = async () => {
                 },
               },
             )
-            console.log(
-              `[SUCCESS] Rol con ID ${rolId} asignado a la plantilla ${currentPlantillaId}.`,
-            )
+            console.log(`[SUCCESS] Rol con ID ${rolId} asignado a la plantilla ${currentPlantillaId}.`)
           } catch (rolError) {
             console.error(
               `[ERROR] No se pudo asignar el rol ${rolId} a la plantilla ${currentPlantillaId}:`,
@@ -647,6 +696,7 @@ const toggleAccordion = (plantillaId) => {
   }
 }
 </script>
+
 
 <template>
   <teleport to="body">
