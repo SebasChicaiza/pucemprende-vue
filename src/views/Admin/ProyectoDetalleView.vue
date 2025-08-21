@@ -21,37 +21,110 @@ const qrDataUrl = ref('')
 const showQr = ref(false)
 const generatingQr = ref(false)
 
-/* ===================== PERMISOS ===================== */
-const personaActualId = computed(() => {
-  const idStore = Number(user.value?.id ?? user.value?.persona_id ?? 0)
-  if (idStore) return idStore
-  try {
-    const raw =
-      localStorage.getItem('user') ||
-      localStorage.getItem('USER') ||
-      localStorage.getItem('currentUser')
-    if (!raw) return 0
-    const obj = JSON.parse(raw)
-    return Number(obj?.id ?? obj?.persona_id ?? 0)
-  } catch {
-    return 0
+/* ===================== TOAST ===================== */
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref('success') // success | error | info
+function notify(msg, type = 'success', ms = 2800) {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  window.clearTimeout(notify._t)
+  notify._t = window.setTimeout(() => (showToast.value = false), ms)
+}
+
+/* ===================== DIALOGO DE CONFIRMACION ===================== */
+const confirmState = ref({
+  visible: false,
+  message: '',
+  loading: false,
+  onConfirm: /** @type {null | (()=>Promise<void>|void)} */ (null),
+})
+function openConfirm(message, onConfirm) {
+  confirmState.value.message = message
+  confirmState.value.onConfirm = onConfirm
+  confirmState.value.visible = true
+}
+function closeConfirm() {
+  if (confirmState.value.loading) return
+  confirmState.value.visible = false
+  confirmState.value.message = ''
+  confirmState.value.onConfirm = null
+}
+
+/* ===================== OBTENER persona_id VÍA API ===================== */
+const currentPersonaId = ref(0) // persona_id real del usuario actual
+const loadingPersona = ref(true)
+
+/** Extrae el id de USUARIO (no persona) desde localStorage de forma robusta. */
+function getStoredUserId() {
+  const direct = Number(localStorage.getItem('user_id'))
+  if (direct) return direct
+
+  const keys = ['user', 'USER', 'currentUser', 'auth', 'session', 'account']
+  for (const k of keys) {
+    const raw = localStorage.getItem(k)
+    if (!raw) continue
+    try {
+      const obj = JSON.parse(raw)
+      const cand =
+        obj?.user_id ??
+        obj?.userId ??
+        obj?.id ??
+        obj?.usuario_id ??
+        obj?.usuarioId ??
+        obj?.user?.id ??
+        obj?.user?.user_id
+      if (cand) return Number(cand)
+    } catch {}
   }
-})
+
+  if (user.value?.id) return Number(user.value.id)
+  return 0
+}
+
+/** Llama a tu API: /api/persona/user/{userId} y guarda currentPersonaId */
+async function fetchCurrentPersonaId() {
+  loadingPersona.value = true
+  const token = localStorage.getItem('token')
+  const userId = getStoredUserId()
+  if (!token || !userId) {
+    loadingPersona.value = false
+    return
+  }
+  const headers = { Authorization: `Bearer ${token}` }
+  try {
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
+      { headers },
+    )
+    const pid = Number(data?.id ?? data?.persona_id ?? data?.persona?.id ?? 0)
+    currentPersonaId.value = pid || 0
+  } catch (e) {
+    console.error('[persona/user/:id] Error:', e?.response?.data || e.message)
+    currentPersonaId.value = 0
+    notify('No se pudo obtener los datos de la persona.', 'error')
+  } finally {
+    loadingPersona.value = false
+  }
+}
+
+/* ===================== PERMISOS ===================== */
 const esSuperadmin = computed(() => Number(user.value?.rol_id) === 8)
-const isMiembroProyecto = computed(() => {
-  const pid = personaActualId.value
-  return pid ? miembrosProyecto.value.some((m) => Number(m.persona_id) === pid) : false
+
+const miembroYo = computed(() => {
+  const pid = Number(currentPersonaId.value || 0)
+  if (!pid) return undefined
+  return miembrosProyecto.value.find((m) => Number(m.persona_id) === pid)
 })
-const puedeEditar = computed(() => {
-  if (esSuperadmin.value) return true
-  const pid = personaActualId.value
-  return pid
-    ? miembrosProyecto.value.some((m) => Number(m.persona_id) === pid && Number(m.rol_id) === 1)
-    : false
-})
+
+const isMiembroProyecto = computed(() => !!miembroYo.value)
+const isLiderActual = computed(() => !!miembroYo.value && Number(miembroYo.value.rol_id) === 1)
+const puedeEditar = computed(() => esSuperadmin.value || isLiderActual.value)
 const canGenerateQr = computed(
   () => esSuperadmin.value || isMiembroProyecto.value || puedeEditar.value,
 )
+const canLeaveProject = computed(() => isMiembroProyecto.value && !isLiderActual.value)
 
 /* ===================== UTIL ===================== */
 function formatDate(iso) {
@@ -67,13 +140,12 @@ function mapMiembro(m) {
     rol_id: Number(m.rol_id),
     nombre,
     apellido,
-    mp_id: undefined, // lo adjuntamos luego con el índice real
+    mp_id: undefined,
   }
 }
 
 /* ===================== INDEX de miembros-proyecto ===================== */
-/** Mapa (proyectoId|personaId) -> id real de miembros-proyecto */
-const mpIndex = ref({}) // { '31|14': 41, ... }
+const mpIndex = ref({}) // { 'proyectoId|personaId': mpId }
 const buildingIndex = ref(false)
 const keyPP = (pId, perId) => `${Number(pId)}|${Number(perId)}`
 
@@ -101,18 +173,13 @@ async function buildMiembrosProyectoIndex() {
     })
     mpIndex.value = map
 
-    // Adjuntamos mp_id a los miembros que mostramos
     miembrosProyecto.value = miembrosProyecto.value.map((m) => ({
       ...m,
       mp_id: map[keyPP(proyectoId, m.persona_id)] ?? m.mp_id ?? null,
     }))
-
-    console.log(
-      '[mpIndex] (solo este proyecto)',
-      Object.fromEntries(Object.entries(map).filter(([k]) => k.startsWith(`${proyectoId}|`))),
-    )
   } catch (e) {
     console.error('[Index miembros-proyecto] Error:', e?.response?.data || e.message)
+    notify('No se pudieron cargar los miembros del proyecto.', 'error')
   } finally {
     buildingIndex.value = false
   }
@@ -149,11 +216,12 @@ onMounted(async () => {
     document.title = `PUCEmprende – ${dynamicTitle.value}`
     error.value = ''
 
-    // Índice para obtener el id real (mp_id) por persona
     await buildMiembrosProyectoIndex()
+    await fetchCurrentPersonaId()
   } catch (err) {
     console.error('Error cargando detalles del proyecto', err)
     error.value = 'No se pudo cargar el proyecto.'
+    notify('No se pudo cargar el proyecto.', 'error')
   } finally {
     loading.value = false
   }
@@ -163,7 +231,7 @@ onMounted(async () => {
 async function generarQR() {
   const token = localStorage.getItem('token')
   if (!token) {
-    console.error('Token no encontrado')
+    notify('Token no encontrado', 'error')
     return
   }
   const headers = { Authorization: `Bearer ${token}` }
@@ -173,11 +241,32 @@ async function generarQR() {
       `${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}/qr`,
       { headers },
     )
-    qrDataUrl.value = `data:image/svg+xml;base64,${data.qr}`
+
+    const raw = data?.qr ?? ''
+    if (typeof raw !== 'string' || !raw.trim()) {
+      throw new Error('Respuesta de QR vacía')
+    }
+
+    // Si viene SVG crudo: "<svg ...></svg>"
+    if (raw.trim().startsWith('<svg')) {
+      qrDataUrl.value = 'data:image/svg+xml;utf8,' + encodeURIComponent(raw)
+    }
+    // Si viene base64 (sólo caracteres base64)
+    else if (/^[A-Za-z0-9+/=]+$/.test(raw.trim())) {
+      qrDataUrl.value = 'data:image/svg+xml;base64,' + raw.trim()
+    }
+    // (Opcional) Si tu backend algún día devuelve PNG en base64
+    else if (data.png) {
+      qrDataUrl.value = 'data:image/png;base64,' + String(data.png)
+    } else {
+      throw new Error('Formato de QR inesperado')
+    }
+
     showQr.value = true
+    notify('QR generado correctamente.', 'success')
   } catch (err) {
     console.error('Error generando QR:', err?.response?.data || err.message)
-    alert('No se pudo generar el QR del proyecto.')
+    notify('No se pudo generar/mostrar el QR del proyecto.', 'error')
   } finally {
     generatingQr.value = false
   }
@@ -192,15 +281,16 @@ const savingRole = ref({}) // { [personaId]: true|false }
 
 async function patchRolMiembroPorPersona(personaId, nuevoRol) {
   const token = localStorage.getItem('token')
-  if (!token) return alert('Token de autenticación no encontrado.')
+  if (!token) {
+    notify('Token de autenticación no encontrado.', 'error')
+    return false
+  }
   const headers = { Authorization: `Bearer ${token}` }
 
-  // 1) id real del registro miembros-proyecto
   let miembroId = miembrosProyecto.value.find(
     (m) => Number(m.persona_id) === Number(personaId),
   )?.mp_id
   if (!miembroId) {
-    // Reintentar reconstruyendo el índice
     await buildMiembrosProyectoIndex()
     miembroId = mpIndex.value[keyPP(proyectoId, personaId)]
   }
@@ -208,12 +298,11 @@ async function patchRolMiembroPorPersona(personaId, nuevoRol) {
     console.warn(
       `[PATCH rol] No se encontró registro miembros-proyecto para persona ${personaId} en proyecto ${proyectoId}`,
     )
-    alert('No se encontró el registro del miembro en el proyecto.')
+    notify('No se encontró el registro del miembro en el proyecto.', 'error')
     return false
   }
 
   try {
-    // 2) IMPORTANTE: enviar también proyecto_id y persona_id (tu backend lo valida)
     await axios.patch(
       `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/${miembroId}`,
       {
@@ -223,9 +312,11 @@ async function patchRolMiembroPorPersona(personaId, nuevoRol) {
       },
       { headers },
     )
+    notify('Rol actualizado correctamente.', 'success')
     return true
   } catch (e) {
     console.error('Error actualizando rol:', e?.response?.data || e.message)
+    notify('No se pudo actualizar el rol.', 'error')
     return false
   }
 }
@@ -235,7 +326,6 @@ async function onChangeRol(miembro, event) {
   if (nuevoRol === miembro.rol_id) return
   if (!puedeEditar.value && !esSuperadmin.value) return
 
-  // Optimista + rollback
   const oldRol = miembro.rol_id
   miembro.rol_id = nuevoRol
   savingRole.value[miembro.persona_id] = true
@@ -243,12 +333,46 @@ async function onChangeRol(miembro, event) {
   const ok = await patchRolMiembroPorPersona(miembro.persona_id, nuevoRol)
   if (!ok) {
     miembro.rol_id = oldRol
-    alert('No se pudo actualizar el rol. Intenta nuevamente.')
   }
   savingRole.value[miembro.persona_id] = false
 }
 
-/* (opcional) debug para verificar IDs que mapea el índice */
+/* ===================== SALIR DEL PROYECTO (DELETE) ===================== */
+const leaving = ref(false)
+
+function pedirSalir() {
+  if (loadingPersona.value || !canLeaveProject.value || !miembroYo.value) return
+  openConfirm('¿Seguro que deseas salir del proyecto?', async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      notify('Token de autenticación no encontrado.', 'error')
+      return
+    }
+    const headers = { Authorization: `Bearer ${token}` }
+
+    const personaId = Number(miembroYo.value.persona_id)
+    confirmState.value.loading = true
+    try {
+      await axios.delete(
+        `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/salir/${personaId}/${proyectoId}`,
+        { headers },
+      )
+      miembrosProyecto.value = miembrosProyecto.value.filter(
+        (m) => Number(m.persona_id) !== personaId,
+      )
+      delete mpIndex.value[keyPP(proyectoId, personaId)]
+      closeConfirm()
+      notify('Has salido del proyecto.', 'success')
+    } catch (e) {
+      console.error('Error al salir del proyecto:', e?.response?.data || e.message)
+      notify('No se pudo salir del proyecto.', 'error')
+    } finally {
+      confirmState.value.loading = false
+    }
+  })
+}
+
+/* Debug opcional del índice */
 watch([miembrosProyecto, mpIndex], () => {
   const keys = {}
   miembrosProyecto.value.forEach((m) => {
@@ -298,9 +422,10 @@ watch([miembrosProyecto, mpIndex], () => {
               <strong>Fin:</strong> {{ formatDate(proyecto.fecha_fin) }}
             </div>
 
-            <!-- Generar QR -->
-            <div class="mb-4 text-end" v-if="canGenerateQr">
+            <!-- Acciones superiores -->
+            <div class="mb-4 d-flex justify-content-end gap-2">
               <button
+                v-if="canGenerateQr"
                 @click="generarQR"
                 class="btn btn-outline-primary"
                 :disabled="generatingQr"
@@ -309,6 +434,33 @@ watch([miembrosProyecto, mpIndex], () => {
                 <i class="bi bi-qr-code me-1"></i>
                 {{ generatingQr ? 'Generando...' : 'Generar QR' }}
               </button>
+
+              <button
+                v-if="canLeaveProject"
+                @click="pedirSalir"
+                class="btn btn-outline-danger"
+                :disabled="loadingPersona"
+                title="Salir del proyecto"
+              >
+                <i class="bi bi-box-arrow-right me-1"></i>
+                Salir del proyecto
+              </button>
+            </div>
+            <!-- Vista previa / descarga del QR -->
+            <div v-if="showQr && qrDataUrl" class="text-center mb-4">
+              <img :src="qrDataUrl" alt="QR del proyecto" style="max-width: 220px" />
+              <div class="mt-2 d-flex justify-content-center gap-2">
+                <a
+                  :href="qrDataUrl"
+                  :download="`qr-proyecto-${proyectoId}.svg`"
+                  class="btn btn-sm btn-secondary"
+                >
+                  <i class="bi bi-download me-1"></i> Descargar QR
+                </a>
+                <button class="btn btn-sm btn-outline-secondary" @click="showQr = false">
+                  Ocultar
+                </button>
+              </div>
             </div>
 
             <!-- Miembros (con edición de rol) -->
@@ -326,7 +478,6 @@ watch([miembrosProyecto, mpIndex], () => {
                       <i class="bi bi-person-circle fs-1 text-primary mb-2"></i>
                       <p class="fw-bold mb-1">{{ miembro.nombre }} {{ miembro.apellido }}</p>
 
-                      <!-- Selector si puede editar; badge si no -->
                       <template v-if="puedeEditar || esSuperadmin">
                         <div class="d-flex align-items-center justify-content-center gap-2">
                           <select
@@ -364,6 +515,32 @@ watch([miembrosProyecto, mpIndex], () => {
         <div v-else class="text-danger">Proyecto no encontrado.</div>
       </div>
     </div>
+
+    <!-- Toast -->
+    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
+      {{ toastMessage }}
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div v-if="confirmState.visible" class="modal-backdrop">
+      <div class="modal-card">
+        <h5 class="mb-2">Confirmación</h5>
+        <p class="mb-3">{{ confirmState.message }}</p>
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-light" :disabled="confirmState.loading" @click="closeConfirm">
+            Cancelar
+          </button>
+          <button
+            class="btn btn-danger"
+            :disabled="confirmState.loading"
+            @click="confirmState.onConfirm && confirmState.onConfirm()"
+          >
+            <span v-if="confirmState.loading" class="spinner-border spinner-border-sm me-2" />
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -394,5 +571,52 @@ watch([miembrosProyecto, mpIndex], () => {
 }
 .miembro-card:hover {
   transform: scale(1.03);
+}
+
+/* Toast */
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
+}
+.toast-notification.info {
+  background-color: #0d6efd;
+}
+
+/* Modal confirm */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3100;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px;
+  width: min(92vw, 440px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
 }
 </style>

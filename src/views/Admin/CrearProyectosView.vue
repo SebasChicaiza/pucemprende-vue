@@ -579,7 +579,7 @@ onMounted(async () => {
             ></textarea>
           </div>
 
-          <!-- Equipo -->
+          <!-- Equipo
           <h4 class="text-dark mb-3">Equipo</h4>
           <div class="mb-3">
             <label class="form-label">Nombre del equipo (opcional)</label>
@@ -590,6 +590,7 @@ onMounted(async () => {
               placeholder="Si lo dejas vacío, usaremos el título del proyecto"
             />
           </div>
+          -->
 
           <!-- Buscador por cédula -->
           <div class="mb-3">

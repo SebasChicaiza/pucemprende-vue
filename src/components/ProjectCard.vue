@@ -2,92 +2,64 @@
   <div class="project-card">
     <div class="project-scroll-content">
       <div class="project-header">
-        <h3 class="project-title">{{ proyecto.titulo }}</h3>
+        <h3 class="project-title">{{ proyecto.titulo || 'Proyecto' }}</h3>
+
         <div class="project-logo">
           <img
-            v-if="proyecto.logoUrl"
-            :src="proyecto.logoUrl"
+            v-if="logoSrc"
+            :src="logoSrc"
             alt="Logo del proyecto"
             class="logo-img m-2"
+            loading="lazy"
           />
           <span v-else class="logo-placeholder">Logo</span>
         </div>
 
         <div
           v-if="puedeEditar"
-          class="edit-icon"
+          class="edit-icon bg-color-black"
           @click="$router.push(`/admin/proyectos/${proyecto.id}/editar`)"
         >
           <i class="bi bi-pencil-square"></i>
         </div>
       </div>
-      <div class="project-subtitle">
-        <span>Evento: {{ nombreEvento }}</span
-        ><br />
 
-        <span>Equipo: {{ equipoNombre || 'Sin equipo' }}</span>
+      <div class="project-subtitle">
+        <span>Evento: {{ proyecto.nombre_evento || '—' }}</span
+        ><br />
+        <span>Equipo: {{ proyecto.equipo_nombre || 'Sin equipo' }}</span>
       </div>
 
       <div class="project-description">
         <strong>Descripción</strong>
-        <p>{{ proyecto.descripcion }}</p>
+        <p>{{ proyecto.descripcion || 'Sin descripción' }}</p>
       </div>
+
       <div class="project-dates">
         <small>
           <b>Inicio:</b> {{ formatDate(proyecto.fecha_inicio) }}<br />
           <b>Fin:</b> {{ formatDate(proyecto.fecha_fin) }}
         </small>
       </div>
+
       <button class="details-btn" @click="$router.push(`/admin/proyectos/${proyecto.id}`)">
         Ver Detalles
       </button>
     </div>
   </div>
 </template>
+
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
-import { puedeEditarProyecto } from '@/stores/userPermisos'
-
+import { computed } from 'vue'
 const props = defineProps({
-  proyecto: { type: Object, required: true },
-  equipoNombre: { type: String, default: '' },
-  nombreEvento: { type: String, default: '' },
+  proyecto: { type: Object, required: true, default: () => ({}) },
+  puedeEditar: { type: Boolean, default: false },
 })
-
-const miembrosProyecto = ref([])
-const cargandoMiembros = ref(true)
-
-const puedeEditar = computed(() => {
-  const proyectoConDatos = {
-    ...props.proyecto,
-    equipo: miembrosProyecto.value, // usamos esta lista como si fuera 'equipo'
-  }
-
-  return puedeEditarProyecto(proyectoConDatos)
-})
-
-onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) return
-
-  try {
-    const res = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    miembrosProyecto.value = res.data.filter((m) => m.proyecto_id === props.proyecto.id)
-    console.log('Miembros del proyecto:', miembrosProyecto.value)
-  } catch (err) {
-    console.error('Error cargando miembros del proyecto:', err)
-  } finally {
-    cargandoMiembros.value = false
-  }
-})
-
+const logoSrc = computed(() => props.proyecto?.logoUrl || props.proyecto?.logotipo || null)
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString()
+  const d = new Date(dateStr)
+  return isNaN(d) ? '' : d.toLocaleDateString()
 }
 </script>
 
@@ -102,9 +74,8 @@ function formatDate(dateStr) {
   transition: color 0.2s;
 }
 .edit-icon:hover {
-  color: white;
+  color: #fff;
 }
-
 .logo-img {
   width: 4rem;
   height: 4rem;
@@ -112,12 +83,11 @@ function formatDate(dateStr) {
   object-fit: cover;
   background: #fff;
 }
-
 .project-card {
   background: #174384;
   color: #fff;
   border-radius: 12px;
-  padding: 1.2rem 1rem 1rem 1rem;
+  padding: 1.2rem 1rem 1rem;
   width: 270px;
   min-height: 360px;
   max-height: 360px;
@@ -139,16 +109,9 @@ function formatDate(dateStr) {
   font-weight: 700;
   margin: 0;
 }
-.project-dot {
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border-radius: 50%;
-  display: inline-block;
-}
 .project-subtitle {
   font-size: 0.95rem;
-  margin: 0.2rem 0 0.7rem 0;
+  margin: 0.2rem 0 0.7rem;
   color: #cbe2ff;
 }
 .project-logo {
@@ -174,7 +137,7 @@ function formatDate(dateStr) {
   font-size: 0.97rem;
 }
 .project-description p {
-  margin: 0.2rem 0 0 0;
+  margin: 0.2rem 0 0;
   font-size: 0.93rem;
   color: #e2eaf7;
 }
