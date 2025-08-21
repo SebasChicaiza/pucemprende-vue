@@ -204,6 +204,7 @@ const submitEvaluation = async () => {
         puntaje: data.score,
         comentarios: data.comment,
         rolEvento_id: rolEventoId,
+        plantilla_id: props.plantilla.plantillaId,
       }
       console.log('Payload for evaluation:', payload)
       return axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-evaluacion`, payload, {
@@ -221,6 +222,7 @@ const submitEvaluation = async () => {
       plantilla_id: props.plantilla.plantillaId,
       equipo_id: selectedTeamId.value,
       rolEvento_id: rolEventoId,
+      plantilla_id: props.plantilla.plantillaId,
     }
     console.log('Payload for rubrica:', rubricaPayload)
     await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
