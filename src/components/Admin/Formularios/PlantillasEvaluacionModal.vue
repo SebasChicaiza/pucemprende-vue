@@ -252,7 +252,7 @@ const fetchPlantillasData = async () => {
     const currentProceso = procesosDetalle.find((p) => p.procesoId === props.procesoId)
 
     if (currentProceso && currentProceso.plantillas.length > 0) {
-      allNewPlantillasInSession.value = currentProceso.plantillas.map((p) => ({
+      const plantillasToProcess = currentProceso.plantillas.map((p) => ({
         id: p.plantillaId,
         nombre_plantilla: p.plantillaNombre,
         criterios: p.criterios.map((c) => ({
@@ -261,8 +261,38 @@ const fetchPlantillasData = async () => {
           descripcion: c.criterioDescripcion,
           peso: c.criterioPeso,
         })),
-        roles_permitidos: p.roles || [], // Assuming the API returns a 'roles' array
+        roles_permitidos: [],
       }))
+
+      const rolesFetchPromises = plantillasToProcess.map(async (plantilla) => {
+        try {
+          console.log(`[INFO] Fetching roles for plantilla ID: ${plantilla.id}`)
+          const rolesResponse = await axios.get(
+            `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/plantilla/${plantilla.id}`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          )
+          plantilla.roles_permitidos = rolesResponse.data.map((role) => role.rol_id)
+          console.log(
+            `[SUCCESS] Roles fetched for plantilla ID ${plantilla.id}:`,
+            plantilla.roles_permitidos,
+          )
+        } catch (error) {
+          console.error(
+            `[ERROR] Failed to fetch roles for plantilla ID ${plantilla.id}:`,
+            error.response?.data || error.message,
+          )
+        }
+      })
+
+      await Promise.all(rolesFetchPromises)
+
+      allNewPlantillasInSession.value = plantillasToProcess
+
       if (allNewPlantillasInSession.value.length > 0) {
         activeAccordionItem.value = allNewPlantillasInSession.value[0].id
       }
@@ -497,21 +527,33 @@ const submitAllPlantillas = async () => {
         return criterioData
       })
 
-      const payload = {
-        nombre_plantilla: plantilla.nombre_plantilla.trim(),
-        criterios: criteriosPayload,
-        roles_permitidos: plantilla.roles_permitidos,
-      }
+      let currentPlantillaId = plantilla.id
 
       if (typeof plantilla.id === 'string' && plantilla.id.startsWith('temp-')) {
-        payload.proceso_id = props.procesoId
-        await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        console.log(`[INFO] Creando nueva plantilla: "${plantilla.nombre_plantilla}"`)
+        const payload = {
+          nombre_plantilla: plantilla.nombre_plantilla.trim(),
+          criterios: criteriosPayload,
+          proceso_id: props.procesoId,
+        }
+        const response = await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`,
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
           },
-        })
+        )
+        currentPlantillaId = response.data.plantillaId
+        console.log(`[SUCCESS] Plantilla creada con ID: ${currentPlantillaId}`)
       } else {
+        console.log(`[INFO] Actualizando plantilla con ID: ${plantilla.id}`)
+        const payload = {
+          nombre_plantilla: plantilla.nombre_plantilla.trim(),
+          criterios: criteriosPayload,
+        }
         await axios.put(
           `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios/${plantilla.id}`,
           payload,
@@ -522,15 +564,53 @@ const submitAllPlantillas = async () => {
             },
           },
         )
+        console.log(`[SUCCESS] Plantilla con ID ${plantilla.id} actualizada.`)
+        currentPlantillaId = plantilla.id
+      }
+
+      if (plantilla.roles_permitidos.length > 0) {
+        console.log(`[INFO] Asignando roles a la plantilla con ID: ${currentPlantillaId}`)
+        for (const rolId of plantilla.roles_permitidos) {
+          try {
+            console.log(
+              `[INFO] Enviando POST a /api/roles-plantilla con plantilla_id: ${currentPlantillaId} y rol_id: ${rolId}`,
+            )
+            await axios.post(
+              `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla`,
+              {
+                plantilla_id: currentPlantillaId,
+                rol_id: rolId,
+              },
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              },
+            )
+            console.log(
+              `[SUCCESS] Rol con ID ${rolId} asignado a la plantilla ${currentPlantillaId}.`,
+            )
+          } catch (rolError) {
+            console.error(
+              `[ERROR] No se pudo asignar el rol ${rolId} a la plantilla ${currentPlantillaId}:`,
+              rolError.response?.data || rolError.message,
+            )
+          }
+        }
+      } else {
+        console.log(
+          `[INFO] No hay roles seleccionados para la plantilla con ID: ${currentPlantillaId}.`,
+        )
       }
     }
 
-    okModalMessage.value = `Todas las plantillas han sido procesadas con éxito!`
+    okModalMessage.value = `Todas las plantillas y sus roles han sido guardados con éxito!`
     showOkModal.value = true
     emit('success', { message: okModalMessage.value })
     handleModalClose()
   } catch (err) {
-    console.error('Error processing plantillas:', err.response?.data || err.message)
+    console.error('Error general al procesar las plantillas:', err.response?.data || err.message)
     let errorToDisplay = 'Error desconocido al procesar las plantillas.'
 
     if (err.response && err.response.data) {
