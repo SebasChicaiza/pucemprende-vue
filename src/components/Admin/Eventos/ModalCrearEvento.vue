@@ -541,8 +541,6 @@ async function enviarCronogramas(cronogramaData, eventId) {
     const payload = {
       ...cronogramaData,
       evento_id: eventId,
-      fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
-      fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
     }
     console.log('JSON enviado al backend (Cronograma):', JSON.stringify(payload, null, 2))
     const response = await axios.post(
@@ -583,8 +581,6 @@ async function enviarActividad(activityData, cronogramaBackendId) {
     const payload = {
       ...activityData,
       cronograma_id: cronogramaBackendId,
-      fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
-      fecha_fin: new Date(activityData.fecha_fin).toISOString(),
     }
     console.log('JSON enviado al backend (Actividad):', JSON.stringify(payload, null, 2))
     const response = await axios.post(
@@ -618,8 +614,8 @@ async function updateCronograma(cronogramaData) {
       evento_id: cronogramaData.evento_id,
       titulo: cronogramaData.titulo,
       descripcion: cronogramaData.descripcion,
-      fecha_inicio: new Date(cronogramaData.fecha_inicio).toISOString(),
-      fecha_fin: new Date(cronogramaData.fecha_fin).toISOString(),
+      fecha_inicio: cronogramaData.fecha_inicio,
+      fecha_fin: cronogramaData.fecha_fin,
     }
     const response = await axios.put(
       `${import.meta.env.VITE_URL_BACKEND}/api/cronogramas/${cronogramaData.id}`,
@@ -652,8 +648,8 @@ async function updateActividadBackend(activityData) {
       cronograma_id: activityData.cronograma_id,
       titulo: activityData.titulo,
       descripcion: activityData.descripcion,
-      fecha_inicio: new Date(activityData.fecha_inicio).toISOString(),
-      fecha_fin: new Date(activityData.fecha_fin).toISOString(),
+      fecha_inicio: activityData.fecha_inicio,
+      fecha_fin: activityData.fecha_fin,
       orden: activityData.orden,
       dependencia_id: activityData.dependencia_id,
     }
@@ -816,13 +812,8 @@ async function handleSubmit() {
     return
   }
 
-  const fechaInicio = new Date(form.fecha_inicio)
-  const fechaFin = new Date(form.fecha_fin)
-
-  if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-    await showTimedErrorMessage('Las fechas y horas ingresadas no son válidas.')
-    return
-  }
+  const fechaInicio = form.fecha_inicio
+  const fechaFin = form.fecha_fin
 
   if (fechaInicio >= fechaFin) {
     await showTimedErrorMessage(
@@ -1132,25 +1123,20 @@ async function handleActividadAdd() {
     return
   }
 
-  // Convert all dates to UTC timestamps for consistent comparison
-  const activityStartDateUTC = new Date(actividadForm.fecha_inicio).getTime()
-  const activityEndDateUTC = new Date(actividadForm.fecha_fin).getTime()
-  const cronogramaStartDateUTC = new Date(parentCronograma.fecha_inicio).getTime()
-  const cronogramaEndDateUTC = new Date(parentCronograma.fecha_fin).getTime()
-
-  // Now compare the UTC timestamps
-  if (activityStartDateUTC < cronogramaStartDateUTC || activityEndDateUTC > cronogramaEndDateUTC) {
+  if (actividadForm.fecha_inicio >= actividadForm.fecha_fin) {
     await showTimedErrorMessage(
-      `Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`,
+      'La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.',
     )
     addingActividad.value = false
     return
   }
 
-  if (activityStartDateUTC >= activityEndDateUTC) {
-    // Use UTC timestamps for this comparison too
+  if (
+    actividadForm.fecha_inicio < parentCronograma.fecha_inicio ||
+    actividadForm.fecha_fin > parentCronograma.fecha_fin
+  ) {
     await showTimedErrorMessage(
-      'La fecha y hora de inicio de la actividad debe ser anterior a la fecha y hora de fin.',
+      `Las fechas de la actividad deben estar dentro del rango de fechas del cronograma "<strong>${parentCronograma.titulo}</strong>".`,
     )
     addingActividad.value = false
     return
@@ -1353,12 +1339,12 @@ async function processFinalSave() {
   try {
     loading.value = true
 
-    const eventStartDate = new Date(form.fecha_inicio)
-    const eventEndDate = new Date(form.fecha_fin)
+    const eventStartDate = form.fecha_inicio
+    const eventEndDate = form.fecha_fin
 
     for (const cronograma of cronogramas.value) {
-      const cronogramaStartDate = new Date(cronograma.fecha_inicio)
-      const cronogramaEndDate = new Date(cronograma.fecha_fin)
+      const cronogramaStartDate = cronograma.fecha_inicio
+      const cronogramaEndDate = cronograma.fecha_fin
 
       if (cronogramaStartDate < eventStartDate || cronogramaEndDate > eventEndDate) {
         await showTimedErrorMessage(
@@ -1370,8 +1356,8 @@ async function processFinalSave() {
       }
 
       for (const activity of cronograma.actividades) {
-        const activityStartDate = new Date(activity.fecha_inicio)
-        const activityEndDate = new Date(activity.fecha_fin)
+        const activityStartDate = activity.fecha_inicio
+        const activityEndDate = activity.fecha_fin
 
         if (activityStartDate < cronogramaStartDate || activityEndDate > cronogramaEndDate) {
           await showTimedErrorMessage(

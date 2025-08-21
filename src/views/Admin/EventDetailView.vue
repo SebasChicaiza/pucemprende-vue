@@ -974,7 +974,7 @@ function closeDialog() {
                     aria-controls="pills-equipos"
                     aria-selected="false"
                   >
-                    Equipos
+                    Proyectos
                   </button>
                 </li>
                 <li class="nav-item" role="presentation">

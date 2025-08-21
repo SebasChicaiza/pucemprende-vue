@@ -8,7 +8,7 @@ import AppFooter from '@/components/AppFooter.vue'
   <AppNavbar />
   <LoaderComponent v-if="loading" />
   <div
-    class="vh-100 d-flex justify-content-center align-items-center"
+    class="login-container d-flex justify-content-center align-items-center"
     style="background: linear-gradient(to right, #61c0ff, #007bff)"
   >
     <div class="bg-white p-5 rounded-4 shadow-lg" style="width: 100%; max-width: 380px">
@@ -129,7 +129,7 @@ export default {
           this.$router.push('/')
         }
       } catch (err) {
-        this.error = 'Correo o contraseña incorrectos.'
+        this.error = err.message || 'Error al iniciar sesión'
         console.error('Login error:', err)
       } finally {
         this.loading = false
@@ -138,3 +138,9 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.login-container {
+  min-height: 100vh;
+}
+</style>
