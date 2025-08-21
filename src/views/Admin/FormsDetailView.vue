@@ -18,8 +18,8 @@ const loading = ref(true)
 
 const procesoId = ref(null)
 const procesoDetails = ref(null)
-
 const eventDetails = ref(null)
+const plantillasWithRoles = ref([])
 
 const showErrorModal = ref(false)
 const errorMessage = ref('')
@@ -48,48 +48,6 @@ const currentProcesoEventoId = ref(null)
 const user = ref(null)
 const userEventPermissions = ref([])
 
-const canEvaluate = computed(() => {
-  if (!user.value) {
-    console.warn('canEvaluate: El objeto de usuario es nulo. No se pueden determinar los permisos.')
-    return false
-  }
-  const globalRoleId = user.value.rol_id
-  console.log(`canEvaluate check para usuario con rol_id global: ${globalRoleId}`)
-  if (globalRoleId === 1 || globalRoleId === 8) {
-    console.log(`- El rol_id global es ${globalRoleId}. Permiso concedido.`)
-    return true
-  }
-  if (globalRoleId === 2) {
-    if (!procesoDetails.value || !procesoDetails.value.procesoEventoId) {
-      console.error(
-        "- El usuario tiene rol_id global 2, pero 'procesoEventoId' falta en la respuesta de la API. No se pueden validar los permisos específicos del evento.",
-      )
-      return false
-    }
-    const eventId = procesoDetails.value.procesoEventoId
-    console.log(`- ID de evento asociado para la validación: ${eventId}`)
-    const eventPermission = userEventPermissions.value.find((perm) => perm.evento_id === eventId)
-    if (eventPermission) {
-      const eventRoleId = eventPermission.rol_id
-      console.log(`- Permiso de evento encontrado con rol_id: ${eventRoleId}`)
-      const canSee = eventRoleId !== 4
-      if (!canSee) {
-        console.log(`- El rol_id del evento es 4. Permiso denegado.`)
-      } else {
-        console.log(`- El rol_id del evento no es 4. Permiso concedido.`)
-      }
-      return canSee
-    } else {
-      console.warn(
-        '- El usuario tiene rol_id global 2, pero no se encontró un permiso específico para este evento en localStorage. Suponiendo que el acceso no está restringido por rol_id 4, se concede el permiso.',
-      )
-      return true
-    }
-  }
-  console.log(`- El rol_id global ${globalRoleId} no tiene acceso. Permiso denegado.`)
-  return false
-})
-
 const handleOkModalClose = () => {
   showOkModal.value = false
 }
@@ -111,6 +69,46 @@ const handleDynamicConfirm = () => {
 const handleDynamicCancel = () => {
   showConfirmationModal.value = false
 }
+
+const userEventRoleId = computed(() => {
+  if (!user.value || !procesoDetails.value || !procesoDetails.value.procesoEventoId) {
+    console.log('User or event details not available. User role for event is null.')
+    return null
+  }
+  const eventPermission = userEventPermissions.value.find(
+    (perm) => perm.evento_id === procesoDetails.value.procesoEventoId,
+  )
+  const roleId = eventPermission ? eventPermission.rol_id : null
+  console.log(`Current Event ID: ${procesoDetails.value.procesoEventoId}`)
+  console.log(`Determined Role for this Event: ${roleId}`)
+  return roleId
+})
+
+const canViewPlantilla = (plantilla) => {
+  if (!plantilla) {
+    return false
+  }
+
+  console.log('--- Checking User and Plantilla data ---')
+  console.log('Current User Object:', user.value)
+  console.log(`User's role for this event: ${userEventRoleId.value}`)
+  console.log(`Allowed roles for this plantilla: ${plantilla.allowedRoles}`)
+
+  const hasAllowedRole =
+    plantilla.allowedRoles &&
+    userEventRoleId.value !== null &&
+    plantilla.allowedRoles.includes(userEventRoleId.value)
+
+  const result = hasAllowedRole
+  console.log(`- Has permission: ${result}`)
+  console.log('---------------------------------------')
+
+  return result
+}
+
+const hasVisiblePlantillas = computed(() => {
+  return plantillasWithRoles.value.some((plantilla) => canViewPlantilla(plantilla))
+})
 
 async function fetchEventDetails(eventId) {
   const token = localStorage.getItem('token')
@@ -162,6 +160,31 @@ async function fetchProcesoDetails() {
     if (procesoDetails.value.procesoEventoId) {
       await fetchEventDetails(procesoDetails.value.procesoEventoId)
     }
+
+    const plantillas = procesoDetails.value.plantillas || []
+    const plantillasWithRolesData = await Promise.all(
+      plantillas.map(async (plantilla) => {
+        try {
+          const rolesResponse = await axios.get(
+            `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/plantilla/${
+              plantilla.plantillaId
+            }`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          )
+          const allowedRoles = rolesResponse.data.map((r) => r.rol_id)
+          return { ...plantilla, allowedRoles }
+        } catch (err) {
+          console.error(`Error fetching roles for plantilla ${plantilla.plantillaId}:`, err)
+          return { ...plantilla, allowedRoles: [] }
+        }
+      }),
+    )
+    plantillasWithRoles.value = plantillasWithRolesData
   } catch (err) {
     console.error('Error al obtener los detalles del proceso:', err.response?.data || err.message)
     errorMessage.value = `Error al cargar los detalles del proceso de evaluación: ${
@@ -218,6 +241,7 @@ const loadUserPermissions = () => {
   if (eventosString) {
     try {
       userEventPermissions.value = JSON.parse(eventosString)
+      console.log('Event permissions loaded from localStorage:', userEventPermissions.value)
     } catch (e) {
       console.error('Error al analizar eventos desde localStorage', e)
       userEventPermissions.value = []
@@ -296,74 +320,83 @@ const goBack = () => {
                 No se pudo cargar la información del evento asociado.
               </p>
             </div>
-            <h5 class="mb-3">Plantillas de Evaluación</h5>
-            <div v-if="procesoDetails.plantillas && procesoDetails.plantillas.length > 0">
-              <div class="accordion" id="plantillasAccordion">
-                <div
-                  v-for="plantilla in procesoDetails.plantillas"
-                  :key="plantilla.plantillaId"
-                  class="accordion-item mb-3"
-                >
-                  <h2 class="accordion-header" :id="`plantillaHeading${plantilla.plantillaId}`">
-                    <button
-                      class="accordion-button nested-accordion-button"
-                      type="button"
-                      aria-expanded="true"
-                      :aria-controls="`plantillaCollapse${plantilla.plantillaId}`"
-                    >
-                      <i class="fas fa-clipboard-list text-info me-2 nested-accordion-icon"></i>
-                      {{ plantilla.plantillaNombre }}
-                    </button>
-                  </h2>
-                  <div
-                    :id="`plantillaCollapse${plantilla.plantillaId}`"
-                    class="accordion-collapse collapse show"
-                    :aria-labelledby="`plantillaHeading${plantilla.plantillaId}`"
-                  >
-                    <div class="accordion-body nested-accordion-body">
-                      <h6 class="mt-3 mb-2 cronograma-activities-title">
-                        <i class="fas fa-check-square text-success me-2"></i>Criterios de
-                        Evaluación:
-                      </h6>
-                      <div v-if="plantilla.criterios && plantilla.criterios.length > 0">
-                        <ul class="list-group list-group-flush">
-                          <li
-                            v-for="criterio in plantilla.criterios"
-                            :key="criterio.criterioId"
-                            class="list-group-item d-flex justify-content-between align-items-center"
-                          >
-                            <div>
-                              <i class="fas fa-star me-2 text-warning"></i>
-                              <strong>{{ criterio.criterioNombre }}</strong
-                              >:
-                              {{ criterio.criterioDescripcion }}
-                            </div>
-                            <span class="badge bg-primary rounded-pill"
-                              >{{ criterio.criterioPeso }}%</span
-                            >
-                          </li>
-                        </ul>
-                      </div>
-                      <p v-else class="text-muted text-center py-2">
-                        No hay criterios definidos para esta plantilla.
-                      </p>
-                      <div class="d-flex justify-content-end mt-4">
-                        <button
-                          v-if="canEvaluate"
-                          class="btn btn-primary animated-btn"
-                          @click="openEvaluateTemplateModal(plantilla)"
-                        >
-                          <i class="fas fa-edit me-2"></i>Evaluar plantilla
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div v-if="userEventRoleId === null">
+              <div class="card card-body p-4 border-0 shadow-sm custom-tab-content mb-4">
+                <p class="text-muted text-center py-2">
+                  Tienes que estar inscrito en el evento para ver las plantillas.
+                </p>
               </div>
             </div>
-            <p v-else class="text-muted text-center py-4">
-              Este proceso de evaluación no tiene plantillas asociadas.
-            </p>
+            <div v-else>
+              <h5 class="mb-3">Plantillas de Evaluación</h5>
+              <div v-if="plantillasWithRoles && plantillasWithRoles.length > 0">
+                <div class="accordion" id="plantillasAccordion">
+                  <template v-for="plantilla in plantillasWithRoles" :key="plantilla.plantillaId">
+                    <div v-if="canViewPlantilla(plantilla)" class="accordion-item mb-3">
+                      <h2 class="accordion-header" :id="`plantillaHeading${plantilla.plantillaId}`">
+                        <button
+                          class="accordion-button nested-accordion-button"
+                          type="button"
+                          aria-expanded="true"
+                          :aria-controls="`plantillaCollapse${plantilla.plantillaId}`"
+                        >
+                          <i class="fas fa-clipboard-list text-info me-2 nested-accordion-icon"></i>
+                          {{ plantilla.plantillaNombre }}
+                        </button>
+                      </h2>
+                      <div
+                        :id="`plantillaCollapse${plantilla.plantillaId}`"
+                        class="accordion-collapse collapse show"
+                        :aria-labelledby="`plantillaHeading${plantilla.plantillaId}`"
+                      >
+                        <div class="accordion-body nested-accordion-body">
+                          <h6 class="mt-3 mb-2 cronograma-activities-title">
+                            <i class="fas fa-check-square text-success me-2"></i>Criterios de
+                            Evaluación:
+                          </h6>
+                          <div v-if="plantilla.criterios && plantilla.criterios.length > 0">
+                            <ul class="list-group list-group-flush">
+                              <li
+                                v-for="criterio in plantilla.criterios"
+                                :key="criterio.criterioId"
+                                class="list-group-item d-flex justify-content-between align-items-center"
+                              >
+                                <div>
+                                  <i class="fas fa-star me-2 text-warning"></i>
+                                  <strong>{{ criterio.criterioNombre }}</strong
+                                  >:
+                                  {{ criterio.criterioDescripcion }}
+                                </div>
+                                <span class="badge bg-primary rounded-pill"
+                                  >{{ criterio.criterioPeso }}%</span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <p v-else class="text-muted text-center py-2">
+                            No hay criterios definidos para esta plantilla.
+                          </p>
+                          <div class="d-flex justify-content-end mt-4">
+                            <button
+                              class="btn btn-primary animated-btn"
+                              @click="openEvaluateTemplateModal(plantilla)"
+                            >
+                              <i class="fas fa-edit me-2"></i>Evaluar plantilla
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+                <p v-if="!hasVisiblePlantillas" class="text-muted text-center py-4">
+                  No tienes permiso para ver ninguna de las plantillas de este evento.
+                </p>
+              </div>
+              <p v-else class="text-muted text-center py-4">
+                Este proceso de evaluación no tiene plantillas asociadas.
+              </p>
+            </div>
           </div>
           <div v-else-if="!loading" class="container text-center text-muted mt-5">
             No se pudieron cargar los detalles del proceso de evaluación o el proceso no existe.
