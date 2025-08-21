@@ -225,11 +225,16 @@ async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
     return
   }
   try {
-    await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
-      { evento_id: Number(eventoId), persona_id: personaId },
-      { headers },
-    )
+    const payload = {
+      persona_id: personaId,
+      evento_id: eventoId,
+      rol_id: 4,
+      estado_borrado: false,
+    }
+    console.log('Inscribiendo miembro:', JSON.stringify(payload))
+    await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
+      headers,
+    })
     return
   } catch (e) {
     if (e?.response?.status !== 409) {
