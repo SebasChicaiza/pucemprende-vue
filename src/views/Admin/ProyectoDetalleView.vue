@@ -351,12 +351,19 @@ function pedirSalir() {
     const headers = { Authorization: `Bearer ${token}` }
 
     const personaId = Number(miembroYo.value.persona_id)
+    const user_id = getStoredUserId()
     confirmState.value.loading = true
     try {
       await axios.delete(
         `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/salir/${personaId}/${proyectoId}`,
         { headers },
       )
+      console.log('Miembro salio de proyecto')
+      /*await axios.delete(
+        `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${user_id}/borrar`,
+        { headers },
+      )
+      console.log('Miembro salio del evento')*/
       miembrosProyecto.value = miembrosProyecto.value.filter(
         (m) => Number(m.persona_id) !== personaId,
       )
@@ -368,6 +375,7 @@ function pedirSalir() {
       notify('No se pudo salir del proyecto.', 'error')
     } finally {
       confirmState.value.loading = false
+      closeConfirm()
     }
   })
 }

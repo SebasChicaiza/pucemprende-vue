@@ -123,6 +123,7 @@ async function ensureSelfMemberPresent() {
     )
     miembrosEquipo.value.unshift({
       persona: {
+        id: persona?.id,
         nombre: persona?.nombre,
         apellido: persona?.apellido,
         identificacion: persona?.identificacion,
@@ -132,6 +133,7 @@ async function ensureSelfMemberPresent() {
       rol_id: 1, // por defecto Líder (editable)
       _isOwner: true,
     })
+    console.log(miembrosEquipo.value)
   } catch (e) {
     console.error('No se pudieron cargar tus datos con API/persona/id', e)
     showNotification('No se pudieron cargar tus datos de persona.', 'error')
@@ -280,8 +282,7 @@ async function confirmarCreacion() {
     await ensureAllInscripcionesActivas(headers)
 
     // (1) Crear equipo "por detrás"
-    const nombreEquipoFinal =
-      nombreEquipo.value.trim() || `${titulo.value.trim() || 'Proyecto'} - Equipo`
+    const nombreEquipoFinal = nombreEquipo.value.trim() || `${titulo.value.trim() || 'Proyecto'}`
 
     const equipoRes = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
@@ -301,7 +302,7 @@ async function confirmarCreacion() {
 
     for (const miembro of miembrosEquipo.value) {
       try {
-        await axios.post(
+        const miembrosEquipo = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
           {
             equipo_id: equipoId,
@@ -311,6 +312,7 @@ async function confirmarCreacion() {
           },
           { headers },
         )
+        console.log('Miembro al equipo registrado:', JSON.stringify(miembrosEquipo.data))
       } catch (e) {
         console.warn(`Error registrando miembro-equipo (${miembro.persona_id}):`, e)
         showNotification(
@@ -347,7 +349,7 @@ async function confirmarCreacion() {
     const fechaFinP = proyectoCreado.fecha_fin.split('T')[0]
     for (const miembro of miembrosEquipo.value) {
       try {
-        await axios.post(
+        const miembrosProyecto = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
           {
             rol_id: miembro.rol_id,
@@ -358,6 +360,7 @@ async function confirmarCreacion() {
           },
           { headers },
         )
+        console.log('Miembro al proyecto registrado:', JSON.stringify(miembrosProyecto.data))
       } catch (e) {
         console.warn(`Error al registrar miembro-proyecto (${miembro.persona_id}):`, e)
         showNotification(
@@ -485,6 +488,7 @@ async function seleccionarPersona(persona) {
       persona_id: personaCompleta.id,
       rol_id: 2, // por defecto Integrante
     })
+    console.log(miembrosEquipo.value)
 
     showNotification('Integrante añadido correctamente.', 'success')
   } catch (error) {
