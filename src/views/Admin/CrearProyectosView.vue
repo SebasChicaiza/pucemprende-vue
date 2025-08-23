@@ -358,7 +358,7 @@ async function confirmarCreacion() {
     const fechaInicioP = proyectoCreado.fecha_inicio.split('T')[0]
     const fechaFinP = proyectoCreado.fecha_fin.split('T')[0]
     for (const miembro of miembrosEquipo.value) {
-      console.log(miembrosEquipo.value)
+      console.log("Registrando miembro-proyecto:", miembro)
       try {
         const miembrosProyecto = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,

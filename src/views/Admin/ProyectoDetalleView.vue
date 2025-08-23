@@ -177,6 +177,7 @@ async function buildMiembrosProyectoIndex() {
       ...m,
       mp_id: map[keyPP(proyectoId, m.persona_id)] ?? m.mp_id ?? null,
     }))
+    console.log('Miembros del proyecto:', miembrosProyecto.value)
   } catch (e) {
     console.error('[Index miembros-proyecto] Error:', e?.response?.data || e.message)
     notify('No se pudieron cargar los miembros del proyecto.', 'error')
@@ -359,11 +360,11 @@ function pedirSalir() {
         { headers },
       )
       console.log('Miembro salio de proyecto')
-      /*await axios.delete(
+      await axios.delete(
         `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${user_id}/borrar`,
         { headers },
       )
-      console.log('Miembro salio del evento')*/
+      console.log('Miembro salio del evento')
       miembrosProyecto.value = miembrosProyecto.value.filter(
         (m) => Number(m.persona_id) !== personaId,
       )
