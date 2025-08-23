@@ -60,13 +60,11 @@ function isSelfMember(m) {
 
 function getCurrentPersonaId() {
   try {
-    const raw =
-      localStorage.getItem('user') ||
-      localStorage.getItem('USER') ||
-      localStorage.getItem('currentUser')
+    const raw = localStorage.getItem('user')
     if (!raw) return null
     const obj = JSON.parse(raw)
-    return obj?.persona_id ?? obj?.id ?? null
+    console.log(obj)
+    return obj?.id ?? null
   } catch {
     return null
   }
@@ -102,8 +100,24 @@ function logAxiosError(err, label = 'Axios error') {
 
 // --- Cargar al creador como miembro fijo (API/persona/:id) ---
 async function ensureSelfMemberPresent() {
-  const personaId = getCurrentPersonaId()
+  const token = localStorage.getItem('token')
+  if (!token) {
+    showNotification('Token no encontrado para cargar tus datos.', 'error')
+    return
+  }
+
+  var userId = getCurrentPersonaId()
+  const datosPersona = await axios.get(
+    `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  console.log('Datos de persona del usuario actual:', datosPersona.data)
+  const personaId = datosPersona?.data?.id
+
+  console.log('Persona ID del usuario actual:', datosPersona?.data?.id)
   currentPersonaId.value = personaId
+
+  console.log('Current persona ID:', currentPersonaId.value)
 
   if (!personaId) {
     showNotification('No se pudo identificar tu usuario (persona_id).', 'error')
@@ -111,14 +125,9 @@ async function ensureSelfMemberPresent() {
   }
   if (miembrosEquipo.value.some((m) => m.persona_id === personaId)) return
 
-  const token = localStorage.getItem('token')
-  if (!token) {
-    showNotification('Token no encontrado para cargar tus datos.', 'error')
-    return
-  }
   try {
     const { data: persona } = await axios.get(
-      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${personaId}`,
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
     miembrosEquipo.value.unshift({
@@ -129,7 +138,7 @@ async function ensureSelfMemberPresent() {
         identificacion: persona?.identificacion,
         email: persona?.email,
       },
-      persona_id: personaId,
+      persona_id: persona?.id,
       rol_id: 1, // por defecto Líder (editable)
       _isOwner: true,
     })
@@ -173,6 +182,7 @@ async function getEventoRolPersonaId(eventoId, personaId, headers) {
       { headers },
     )
     const d = res.data
+    console.log('GET evento-rol-persona result:', d)
     return d?.id ?? d?.evento_rol_persona_id ?? (Array.isArray(d) ? d[0]?.id : null)
   } catch (e) {
     if (e?.response?.status === 404) return null
@@ -193,12 +203,12 @@ async function activarEventoRolPersonaById(eventoRolPersonaId, headers) {
 async function ensureInscripcionActivaCreador(eventoId, personaId, headers) {
   let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
   if (erpId) {
-    try {
+    /*try {
       await activarEventoRolPersonaById(erpId, headers)
       return
     } catch (e) {
       logAxiosError(e, `ACTIVAR CREADOR erpId=${erpId}`)
-    }
+    }*/
   }
   // No existe => self-inscribe (sin persona_id)
   try {
@@ -216,16 +226,16 @@ async function ensureInscripcionActivaCreador(eventoId, personaId, headers) {
   }
   // Buscar y activar
   erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-  if (erpId) await activarEventoRolPersonaById(erpId, headers)
+  /*if (erpId) await activarEventoRolPersonaById(erpId, headers)*/
 }
 
 /** OTRO MIEMBRO: inscribe con persona_id si no existe; si 409, re-GET + activar */
 async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
   let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-  if (erpId) {
+  /*if (erpId) {
     await activarEventoRolPersonaById(erpId, headers)
     return
-  }
+  }*/
   try {
     const payload = {
       persona_id: personaId,
@@ -246,7 +256,7 @@ async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
   }
   // 409 => intentar activar
   erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-  if (erpId) await activarEventoRolPersonaById(erpId, headers)
+  /*if (erpId) await activarEventoRolPersonaById(erpId, headers)*/
 }
 
 /** Valida/activa TODOS antes de crear proyecto */
@@ -348,6 +358,7 @@ async function confirmarCreacion() {
     const fechaInicioP = proyectoCreado.fecha_inicio.split('T')[0]
     const fechaFinP = proyectoCreado.fecha_fin.split('T')[0]
     for (const miembro of miembrosEquipo.value) {
+      console.log(miembrosEquipo.value)
       try {
         const miembrosProyecto = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
