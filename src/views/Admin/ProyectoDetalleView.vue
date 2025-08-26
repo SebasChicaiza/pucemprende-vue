@@ -381,6 +381,40 @@ function pedirSalir() {
   })
 }
 
+/* ===================== ELIMINAR MIEMBRO (DELETE) ===================== */
+function pedirEliminarMiembro(miembro) {
+  openConfirm(
+    `¿Seguro que deseas eliminar a ${miembro.nombre} ${miembro.apellido} del proyecto?`,
+    async () => {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        notify('Token de autenticación no encontrado.', 'error')
+        return
+      }
+      const headers = { Authorization: `Bearer ${token}` }
+      confirmState.value.loading = true
+      try {
+        await axios.delete(
+          `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/salir/${miembro.persona_id}/${proyectoId}`,
+          { headers },
+        )
+        miembrosProyecto.value = miembrosProyecto.value.filter(
+          (m) => Number(m.persona_id) !== Number(miembro.persona_id),
+        )
+        delete mpIndex.value[keyPP(proyectoId, miembro.persona_id)]
+        closeConfirm()
+        notify('Miembro eliminado del proyecto.', 'success')
+      } catch (e) {
+        console.error('Error al eliminar miembro:', e?.response?.data || e.message)
+        notify('No se pudo eliminar el miembro.', 'error')
+      } finally {
+        confirmState.value.loading = false
+        closeConfirm()
+      }
+    },
+  )
+}
+
 /* Debug opcional del índice */
 watch([miembrosProyecto, mpIndex], () => {
   const keys = {}
@@ -504,6 +538,19 @@ watch([miembrosProyecto, mpIndex], () => {
                             class="spinner-border spinner-border-sm"
                             role="status"
                           />
+                          <!-- Botón eliminar solo si el miembro no es líder y no eres tú -->
+                          <button
+                            v-if="
+                              isLiderActual &&
+                              miembro.rol_id !== 1 &&
+                              Number(miembro.persona_id) !== Number(currentPersonaId)
+                            "
+                            class="btn btn-sm btn-outline-danger ms-2"
+                            title="Eliminar miembro"
+                            @click="pedirEliminarMiembro(miembro)"
+                          >
+                            <i class="bi bi-trash"></i>
+                          </button>
                         </div>
                       </template>
                       <template v-else>
