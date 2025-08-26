@@ -243,6 +243,22 @@ function puedeEditarDe(proy, myUserId) {
   )
 }
 
+/* --------- Editables IDs --------- */
+const editablesIds = ref([])
+
+async function fetchEditablesIds() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    const res = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyectos/editables`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    editablesIds.value = Array.isArray(res.data.proyecto_ids) ? res.data.proyecto_ids : []
+  } catch (e) {
+    editablesIds.value = []
+  }
+}
+
 /* --------- Reacciones --------- */
 watch(
   () => orden.value,
@@ -264,6 +280,7 @@ watch(
 watch(visibleIds, fetchDetallesVisibles)
 
 onMounted(async () => {
+  await fetchEditablesIds()
   await fetchIndice()
   await fetchDetallesVisibles()
 })
@@ -304,7 +321,7 @@ onBeforeUnmount(() => {
               v-for="proyecto in visibles"
               :key="proyecto.id"
             >
-              <ProjectCard :proyecto="proyecto" :puedeEditar="proyecto.__puedeEditar" />
+              <ProjectCard :proyecto="proyecto" :puedeEditar="editablesIds.includes(proyecto.id)" />
             </div>
           </div>
 

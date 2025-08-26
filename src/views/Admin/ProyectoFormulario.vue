@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
+import LoaderComponent from '@/components/LoaderComponent.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -286,7 +287,10 @@ function eliminarProyecto() {
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column">
       <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'ProyectoEditar'" />
-      <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
+      <!-- Loader mientras loading es true -->
+      <LoaderComponent v-if="loading" />
+      <!-- El resto solo se muestra cuando loading es false -->
+      <div v-else class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <h3 class="mb-4">Editar Proyecto</h3>
         <button class="btn btn-danger" @click="eliminarProyecto">Eliminar Proyecto</button>
         <div class="card p-4">
