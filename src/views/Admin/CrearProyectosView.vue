@@ -310,7 +310,11 @@ async function confirmarCreacion() {
     const fechaInicio = hoy.toISOString().split('T')[0]
     const fechaFin = new Date(hoy.getTime() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-    for (const miembro of miembrosEquipo.value) {
+    const miembrosUnicos = miembrosEquipo.value.filter(
+      (m, i, arr) => arr.findIndex((x) => x.persona_id === m.persona_id) === i,
+    )
+    console.log('Miembros únicos a registrar en equipo:', miembrosUnicos)
+    for (const miembro of miembrosUnicos) {
       try {
         const miembrosEquipo = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
@@ -357,10 +361,17 @@ async function confirmarCreacion() {
     // (4) Registrar miembros del proyecto (con rol)
     const fechaInicioP = proyectoCreado.fecha_inicio.split('T')[0]
     const fechaFinP = proyectoCreado.fecha_fin.split('T')[0]
+
+    // Consulta los miembros ya existentes en el proyecto (opcional, si el backend lo permite)
+    // const { data: miembrosExistentes } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto?proyecto_id=${proyectoCreado.id}`, { headers })
+
+    // Si sabes que el backend agrega al creador automáticamente, omite agregarlo aquí:
     for (const miembro of miembrosEquipo.value) {
-      console.log("Registrando miembro-proyecto:", miembro)
+      // Omitir el líder/creador si el backend ya lo agrega
+      if (miembro.persona_id === currentPersonaId.value) continue
+
       try {
-        const miembrosProyecto = await axios.post(
+        await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
           {
             rol_id: miembro.rol_id,
@@ -371,9 +382,12 @@ async function confirmarCreacion() {
           },
           { headers },
         )
-        console.log('Miembro al proyecto registrado:', JSON.stringify(miembrosProyecto.data))
       } catch (e) {
-        console.warn(`Error al registrar miembro-proyecto (${miembro.persona_id}):`, e)
+        // Manejo de error...
+        console.warn(
+          `Error registrando miembro-proyecto (${miembro.persona_id}):`,
+          e?.response?.data || e,
+        )
         showNotification(
           `No se pudo registrar en el proyecto a ${miembro.persona?.nombre ?? ''} ${miembro.persona?.apellido ?? ''}.`,
           'error',
