@@ -1336,9 +1336,8 @@ function closeDialog() {
 
     <ManageCertificate
       :show="showManageCertificateModal"
-      :eventId="currentEventId"
+      :eventId="eventId"
       @close="closeManageCertificateModal"
-      @save="handleManageCertificateSave"
     />
 
     <ImageManagementModal
