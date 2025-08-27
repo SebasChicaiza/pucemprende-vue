@@ -17,6 +17,7 @@ import { useProyectosEventosStore } from '@/stores/proyectos_eventos'
 import { usePlantillasEvaluacionStore } from '@/stores/plantillas_evaluacion' // Import the new store
 import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
 import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
+import ManageCertificate from '@/components/Admin/Eventos/ManageCertificate.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,7 @@ const modalWarning = ref('')
 const modalConfirmText = ref('')
 const currentDeleteAction = ref(null)
 
+const showManageCertificateModal = ref(false)
 const showOkModal = ref(false)
 const okModalMessage = ref('')
 
@@ -544,6 +546,15 @@ const getCurrentPerson = async () => {
   }
 }
 
+const handleCertificateEditButtonClick = async () => {
+  console.log('Navigating to certificate management for event ID:', eventId.value)
+  showManageCertificateModal.value = true
+}
+
+const closeManageCertificateModal = () => {
+  showManageCertificateModal.value = false
+}
+
 const handleCertificateButtonClick = async () => {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -795,6 +806,13 @@ function closeDialog() {
                   @click="handleCertificateButtonClick"
                 >
                   <i class="fa-solid fa-file-pdf me-2"></i>Generar certificado
+                </button>
+                <button
+                  v-if="canEditEvent"
+                  class="btn btn-primary btn-m me-2 animated-btn"
+                  @click="handleCertificateEditButtonClick"
+                >
+                  <i class="fa-solid fa-file-pdf me-2"></i>Administrar certificado
                 </button>
                 <button
                   v-if="canEditEvent"
@@ -1314,6 +1332,13 @@ function closeDialog() {
       :eventData="currentEventToEdit"
       @close="handleModalClose"
       @submit="handleModalSubmit"
+    />
+
+    <ManageCertificate
+      :show="showManageCertificateModal"
+      :eventId="currentEventId"
+      @close="closeManageCertificateModal"
+      @save="handleManageCertificateSave"
     />
 
     <ImageManagementModal
