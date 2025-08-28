@@ -4,6 +4,8 @@ import axios from 'axios'
 import ErrorModal from '@/components/ErrorModal.vue'
 import ScrollBar from '@/components/ScrollBar.vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import LoaderComponent from '@/components/LoaderComponent.vue'
+import OkModal from '@/components/OkModal.vue'
 
 const props = defineProps({
   show: {
@@ -26,6 +28,8 @@ const availableRoles = ref([])
 // Map to store selected roles for each certificate: { certId: Set<roleId> }
 const selectedRolesByCert = ref({})
 const loadingRoles = ref(false)
+const showOkModal = ref(false)
+const okModalMessage = ref('')
 
 // PDF Certificates
 const existingCertificates = ref([])
@@ -33,7 +37,6 @@ const selectedCertificateId = ref(null)
 const loadingCertificates = ref(false)
 const isUploading = ref(false)
 const localPdfs = ref([])
-const certificateDescriptions = ref({})
 
 // Generic
 const fileInputKey = ref(Date.now())
@@ -71,18 +74,13 @@ const activeSelectedRoles = computed({
   },
 })
 
-// The description for the active certificate
-const activeCertificateDescription = computed({
-  get: () => {
-    return selectedCertificateId.value
-      ? certificateDescriptions.value[selectedCertificateId.value] || ''
-      : ''
-  },
-  set: (newDesc) => {
-    if (selectedCertificateId.value) {
-      certificateDescriptions.value[selectedCertificateId.value] = newDesc
-    }
-  },
+// Determines if the selected certificate is a locally uploaded one (not from the API)
+const isLocalCertSelected = computed(() => {
+  return String(selectedCertificateId.value).startsWith('local-')
+})
+
+const showLoader = computed(() => {
+  return isUploading.value || loadingRoles.value || loadingCertificates.value
 })
 
 // --- API FUNCTIONS ---
@@ -125,8 +123,8 @@ const fetchEventCertificates = async () => {
       const urlParts = cert.url.split('/')
       const fileName = urlParts[urlParts.length - 1]
 
-      selectedRolesByCert.value[cert.id] = new Set(cert.roles_array)
-      certificateDescriptions.value[cert.id] = cert.descripcion || ''
+      const rolesArray = cert.roles_array || []
+      selectedRolesByCert.value[cert.id] = new Set(rolesArray.map(String))
 
       return {
         id: cert.id,
@@ -150,11 +148,15 @@ const fetchEventCertificates = async () => {
 
 // --- EVENT HANDLERS ---
 const toggleRole = (roleId) => {
+  if (!isLocalCertSelected.value) {
+    return
+  }
   const roles = activeSelectedRoles.value
-  if (roles.has(roleId)) {
-    roles.delete(roleId)
+  const roleIdString = String(roleId)
+  if (roles.has(roleIdString)) {
+    roles.delete(roleIdString)
   } else {
-    roles.add(roleId)
+    roles.add(roleIdString)
   }
   activeSelectedRoles.value = roles
 }
@@ -177,7 +179,6 @@ const handleFileUpload = (event) => {
       url: URL.createObjectURL(file),
     })
     selectedRolesByCert.value[fileId] = new Set()
-    certificateDescriptions.value[fileId] = ''
   }
 
   fileInputKey.value = Date.now()
@@ -210,12 +211,13 @@ const handleConfirmationConfirm = async () => {
   }
 
   delete selectedRolesByCert.value[certificateId]
-  delete certificateDescriptions.value[certificateId]
 
   if (selectedCertificateId.value === certificateId) {
     selectedCertificateId.value = null
   }
   showConfirmationModal.value = false
+  showOkModal.value = true
+  okModalMessage.value = 'Certificado eliminado exitosamente.'
   certToDeleteId.value = null
 }
 
@@ -254,7 +256,7 @@ const handleSaveChanges = async () => {
       Array.from(selectedRolesByCert.value[localPdf.id]).join(','),
     )
     formData.append('tipo', 'pdf')
-    formData.append('descripcion', certificateDescriptions.value[localPdf.id] || '')
+    formData.append('descripcion', localPdf.name)
 
     const promise = axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${props.eventId}/certificados`,
@@ -283,7 +285,6 @@ const handleSaveChanges = async () => {
     isUploading.value = false
     localPdfs.value = []
     selectedRolesByCert.value = {}
-    certificateDescriptions.value = {}
   }
 }
 
@@ -296,7 +297,6 @@ watch(
       fetchEventCertificates()
       localPdfs.value = []
       selectedRolesByCert.value = {}
-      certificateDescriptions.value = {}
     }
   },
 )
@@ -305,9 +305,6 @@ watch(selectedCertificateId, (newId) => {
   if (newId) {
     if (!selectedRolesByCert.value[newId]) {
       selectedRolesByCert.value[newId] = new Set()
-    }
-    if (certificateDescriptions.value[newId] === undefined) {
-      certificateDescriptions.value[newId] = ''
     }
   }
 })
@@ -407,18 +404,6 @@ watch(selectedCertificateId, (newId) => {
 
             <div v-if="selectedCertificateId">
               <div class="mb-4">
-                <h6><i class="fas fa-file-alt me-2"></i>Descripción del Certificado</h6>
-                <input
-                  type="text"
-                  class="form-control"
-                  v-model="activeCertificateDescription"
-                  placeholder="Ej: Certificado de participación al evento."
-                />
-              </div>
-
-              <hr />
-
-              <div class="mb-4">
                 <h6>
                   <i class="fas fa-users me-2"></i>Roles para
                   <span class="text-primary fw-bold">{{ selectedCertificate?.name }}</span>
@@ -441,8 +426,9 @@ watch(selectedCertificateId, (newId) => {
                       class="form-check-input"
                       type="checkbox"
                       :id="`role-${role.id}`"
-                      :checked="activeSelectedRoles.has(role.id)"
+                      :checked="activeSelectedRoles.has(String(role.id))"
                       @change="toggleRole(role.id)"
+                      :disabled="!isLocalCertSelected"
                     />
                     <label class="form-check-label" :for="`role-${role.id}`">{{
                       role.nombre
@@ -465,6 +451,7 @@ watch(selectedCertificateId, (newId) => {
     </div>
   </div>
   <ErrorModal :show="showErrorModal" :message="errorMessage" @close="showErrorModal = false" />
+  <LoaderComponent v-if="showLoader" />
   <ConfirmationModal
     :show="showConfirmationModal"
     title="Confirmar"
@@ -474,16 +461,22 @@ watch(selectedCertificateId, (newId) => {
     @confirm="handleConfirmationConfirm"
     @cancel="handleConfirmationCancel"
   />
+  <OkModal :show="showOkModal" :message="okModalMessage" @close="showOkModal = false" style="z-index: 1060;" />
 </template>
 
 <style scoped>
 .modal-backdrop {
+  z-index: 1050;
   opacity: 0.5;
+}
+.modal {
+  z-index: 1055;
 }
 .role-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
+  margin-left: 20px;
 }
 .form-check-inline {
   padding: 8px 12px;
