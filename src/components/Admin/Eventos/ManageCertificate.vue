@@ -33,7 +33,7 @@ const selectedCertificateId = ref(null)
 const loadingCertificates = ref(false)
 const isUploading = ref(false)
 const localPdfs = ref([])
-const certificateDescriptions = ref({}) // NEW: Stores descriptions for each certificate
+const certificateDescriptions = ref({})
 
 // Generic
 const fileInputKey = ref(Date.now())
@@ -58,7 +58,6 @@ const selectedCertificate = computed(() => {
 // The roles currently selected for the active certificate
 const activeSelectedRoles = computed({
   get: () => {
-    // Return a Set for the currently selected certificate, or an empty Set if none exist
     if (!selectedCertificateId.value) return new Set()
     if (!selectedRolesByCert.value[selectedCertificateId.value]) {
       selectedRolesByCert.value[selectedCertificateId.value] = new Set()
@@ -66,7 +65,6 @@ const activeSelectedRoles = computed({
     return selectedRolesByCert.value[selectedCertificateId.value]
   },
   set: (newRoles) => {
-    // Update the roles for the current certificate
     if (selectedCertificateId.value) {
       selectedRolesByCert.value[selectedCertificateId.value] = newRoles
     }
@@ -88,7 +86,6 @@ const activeCertificateDescription = computed({
 })
 
 // --- API FUNCTIONS ---
-// Fetch all available roles
 const fetchRoles = async () => {
   loadingRoles.value = true
   const token = localStorage.getItem('token')
@@ -112,24 +109,31 @@ const fetchRoles = async () => {
   }
 }
 
-// Fetch existing PDF certificates for the event
 const fetchEventCertificates = async () => {
   if (!props.eventId) return
   loadingCertificates.value = true
   const token = localStorage.getItem('token')
-  // This is a mock API endpoint. Replace with your actual endpoint.
-  // For demonstration, I'll populate it with mock data.
-  console.log(`Fetching certificates for event ${props.eventId}...`)
   try {
-    // ---- START MOCK DATA ----
-    // const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${props.eventId}/certificados`, { headers: { Authorization: `Bearer ${token}` } });
-    // existingCertificates.value = response.data;
-    await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate network delay
-    existingCertificates.value = [
-      { id: 1, name: 'Certificado_Asistencia_General.pdf', url: '#' },
-      { id: 2, name: 'Certificado_Ganador_Primer_Lugar.pdf', url: '#' },
-    ]
-    // ---- END MOCK DATA ----
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${props.eventId}/certificados`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    existingCertificates.value = response.data.certificados.map((cert) => {
+      const urlParts = cert.url.split('/')
+      const fileName = urlParts[urlParts.length - 1]
+
+      selectedRolesByCert.value[cert.id] = new Set(cert.roles_array)
+      certificateDescriptions.value[cert.id] = cert.descripcion || ''
+
+      return {
+        id: cert.id,
+        name: fileName,
+        url: cert.url,
+      }
+    })
 
     if (existingCertificates.value.length > 0 && !selectedCertificateId.value) {
       selectedCertificateId.value = existingCertificates.value[0].id
@@ -179,14 +183,12 @@ const handleFileUpload = (event) => {
   fileInputKey.value = Date.now()
 }
 
-// Prepare to delete a certificate by showing the confirmation modal
 const prepareDeleteCertificate = (certificateId) => {
   certToDeleteId.value = certificateId
   ConfModalMessage.value = '¿Estás seguro de que quieres eliminar este certificado de evento?'
   showConfirmationModal.value = true
 }
 
-// Handle the confirmation to delete
 const handleConfirmationConfirm = async () => {
   const certificateId = certToDeleteId.value
   if (!certificateId) return
@@ -217,7 +219,6 @@ const handleConfirmationConfirm = async () => {
   certToDeleteId.value = null
 }
 
-// Handle cancellation of the deletion
 const handleConfirmationCancel = () => {
   showConfirmationModal.value = false
   certToDeleteId.value = null
@@ -254,8 +255,6 @@ const handleSaveChanges = async () => {
     )
     formData.append('tipo', 'pdf')
     formData.append('descripcion', certificateDescriptions.value[localPdf.id] || '')
-
-    console.log('Payload de certificados', formData)
 
     const promise = axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${props.eventId}/certificados`,
@@ -294,7 +293,7 @@ watch(
   (newVal) => {
     if (newVal) {
       fetchRoles()
-      // fetchEventCertificates()
+      fetchEventCertificates()
       localPdfs.value = []
       selectedRolesByCert.value = {}
       certificateDescriptions.value = {}
