@@ -1,284 +1,343 @@
 <script setup>
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
 import LoaderComponent from '@/components/LoaderComponent.vue'
 
+// --- Router / Route ---
 const route = useRoute()
 const router = useRouter()
-const proyectoId = parseInt(route.params.id)
+const proyectoId = Number(route.params.id ?? 0)
 
-const titulo = ref('')
-const descripcion = ref('')
-const selectedEquipo = ref(null)
-const equipos = ref([])
-const logoImage = ref({ file: null, url: '', id: null })
-const loading = ref(true)
-const error = ref('')
-const dynamicTitle = ref('Editar Proyecto')
-const estado = ref('ACTIVO') // default
-const guardando = ref(false)
-
-const showConfirmDialog = ref(false)
-const confirmDialogMessage = ref('')
-const onConfirmAction = ref(null)
-
-const toastMensaje = ref('')
-const showToast = ref(false)
-
-function mostrarToast(mensaje) {
-  toastMensaje.value = mensaje
-  showToast.value = true
-  setTimeout(() => {
-    showToast.value = false
-    toastMensaje.value = ''
-  }, 2500)
+// --- API auth headers ---
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) return
+// --- UI State ---
+const loading = ref(true)
+const guardando = ref(false)
+const error = ref('')
+const showToast = ref(false)
+const toastMensaje = ref('')
+const toastType = ref('success')
 
+// --- Confirm modal (único) ---
+const confirmState = ref({
+  visible: false,
+  message: '',
+  loading: false,
+  onConfirm: null,
+})
+
+// --- Proyecto (form + meta) ---
+const proyecto = ref({})
+const titulo = ref('')
+const descripcion = ref('')
+const estado = ref('ACTIVO') // 'ACTIVO' | 'INACTIVO'
+const dynamicTitle = ref('Proyecto')
+const logoUrl = ref('')
+
+// --- Miembros ---
+const miembrosProyecto = ref([])
+const miembroIndexByPersonaId = ref({})
+const currentPersonaId = ref(0)
+const savingRole = reactive({})
+
+// --- Búsqueda por cédula ---
+const cedulaBusqueda = ref('')
+const resultadosBusqueda = ref([])
+const busquedaError = ref('')
+
+// --- Logo (preview / upload) ---
+const logoImage = ref({ file: null, id: null, url: '' })
+let _objectUrl = null
+
+// --- Utils ---
+function notify(msg, type = 'success', ms = 2500) {
+  toastMensaje.value = msg
+  toastType.value = type
+  showToast.value = true
+  window.clearTimeout(notify._t)
+  notify._t = window.setTimeout(() => (showToast.value = false), ms)
+}
+function openConfirm(message, onConfirm) {
+  confirmState.value.message = message
+  confirmState.value.onConfirm = onConfirm
+  confirmState.value.visible = true
+}
+function closeConfirm() {
+  if (confirmState.value.loading) return
+  confirmState.value.visible = false
+  confirmState.value.message = ''
+  confirmState.value.onConfirm = null
+}
+
+// --- Helpers miembros ---
+function mapMiembro(m) {
+  return {
+    persona_id: Number(m.persona_id ?? m.persona?.id),
+    nombre: m.nombre ?? m.persona?.nombre ?? '',
+    apellido: m.apellido ?? m.persona?.apellido ?? '',
+    email: m.email ?? m.persona?.email ?? '',
+    rol_id: Number(m.rol_id ?? m.rol?.id ?? 2),
+    mp_id: Number(m.id) || null,
+  }
+}
+async function buildMiembrosProyectoIndex() {
+  const idx = {}
+  for (const [i, m] of miembrosProyecto.value.entries()) {
+    if (m?.persona_id != null) idx[m.persona_id] = i
+  }
+  miembroIndexByPersonaId.value = idx
+}
+
+async function fetchCurrentPersonaId() {
   try {
-    const [
-      { data: proyectos },
-      { data: equiposData },
-      { data: archivosProyecto },
-      { data: archivos },
-    ] = await Promise.all([
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/equipos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/archivos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-    ])
+    const userId = Number(localStorage.getItem('user_id'))
+    if (!userId) return
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
+      { headers: authHeaders() },
+    )
+    currentPersonaId.value = Number(data?.id ?? 0)
+  } catch {
+    currentPersonaId.value = 0
+  }
+}
 
-    equipos.value = equiposData.filter((e) => !e.estado_borrado)
+// --- Carga de proyecto (USANDO /proyectos-completos/:id) ---
+async function cargarProyectoCompleto() {
+  const headers = authHeaders()
+  try {
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/proyectos-completos/${proyectoId}`,
+      { headers },
+    )
 
-    const proyecto = proyectos.find((p) => p.id === proyectoId)
-    if (!proyecto) throw new Error('Proyecto no encontrado')
-
-    titulo.value = proyecto.titulo
-    descripcion.value = proyecto.descripcion
-    selectedEquipo.value = proyecto.equipo_id
-    estado.value = proyecto.estado
-
-    // Logo
-    const relacion = archivosProyecto.find((r) => r.proyecto_id === proyecto.id)
-    const archivo = archivos.find((a) => a.id === relacion?.archivo_id && !a.estado_borrado)
-    if (archivo) {
-      logoImage.value.url = archivo.url
-      logoImage.value.id = archivo.id
+    const logo = data.logoUrl ?? data.logotipo ?? null
+    proyecto.value = {
+      ...data,
+      evento_id: data.evento_id,
+      nombre_evento: data.evento_nombre ?? 'Evento desconocido',
+      equipo_nombre: data.equipo_nombre ?? 'Sin equipo',
+      logoUrl: logo,
     }
+
+    // Sincroniza form
+    titulo.value = data.titulo ?? ''
+    descripcion.value = data.descripcion ?? ''
+    estado.value = String(data.estado ?? 'ACTIVO').toUpperCase()
+
+    // Miembros
+    miembrosProyecto.value = Array.isArray(data.miembros) ? data.miembros.map(mapMiembro) : []
+    await buildMiembrosProyectoIndex()
+    await fetchCurrentPersonaId()
+
+    // Logo (vista + valor)
+    logoUrl.value = logo ?? ''
+    logoImage.value.url = logo ?? ''
+
+    // Título dinámico + <title>
+    dynamicTitle.value = data.titulo ?? 'Proyecto'
+    document.title = `PUCEmprende – ${dynamicTitle.value}`
+
+    error.value = ''
   } catch (err) {
-    console.error(err)
-    error.value = 'Error al cargar el proyecto.'
+    console.error('Error cargando detalles del proyecto', err)
+    error.value = 'No se pudo cargar el proyecto.'
+    notify('No se pudo cargar el proyecto.', 'error')
+  }
+}
+
+// --- Lifecycle ---
+onMounted(async () => {
+  loading.value = true
+  try {
+    await cargarProyectoCompleto()
   } finally {
     loading.value = false
   }
 })
 
-function onLogoChange(event) {
-  const file = event.target.files[0]
-  if (!file) return
-  logoImage.value.file = file
-  logoImage.value.url = URL.createObjectURL(file)
-}
-async function subirLogoProyecto(file, proyectoId) {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    mostrarToast('Token no encontrado')
-    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-    return null
-  }
+onBeforeUnmount(() => {
+  if (_objectUrl) URL.revokeObjectURL(_objectUrl)
+})
 
-  try {
-    //  Subir el archivo (ya crea el registro en la tabla archivos)
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('name', file.name.split('.')[0])
-    formData.append('proyecto_id', proyectoId)
-
-    const uploadResponse = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/proyecto/upload`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    )
-
-    console.log('Archivo subido:', uploadResponse.data)
-
-    // Crear la relación en archivos-proyecto usando el ID devuelto
-    const archivoId = uploadResponse.data.file.id // ID del archivo creado
-
-    const relacionData = {
-      proyecto_id: proyectoId,
-      archivo_id: archivoId,
-    }
-
-    const relacionResponse = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-      relacionData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    )
-
-    console.log('Relación proyecto-archivo creada:', relacionResponse.data)
-
-    return {
-      archivo: uploadResponse.data.file,
-      relacion: relacionResponse.data,
-    }
-  } catch (err) {
-    console.error('Error al subir y vincular el logo:', err.response?.data || err.message)
-    mostrarToast('Error al subir el logo del proyecto.')
-    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-
-    return null
-  }
+// --- Roles y permisos ---
+function puedeEliminar(miembro) {
+  return (
+    Number(miembro.rol_id) !== 1 && // no líder
+    miembrosProyecto.value.length > 1 &&
+    Number(miembro.persona_id) !== Number(currentPersonaId.value)
+  )
 }
 
-async function submitEdicion() {
-  if (guardando.value) return // Previene doble clic
-  guardando.value = true
-
-  const token = localStorage.getItem('token')
-  if (!titulo.value || !descripcion.value || !selectedEquipo.value) {
-    mostrarToast('Todos los campos son obligatorios.')
-    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-    return
-  }
-
+async function onChangeRol(miembro, event) {
+  const nuevoRol = Number(event.target.value)
+  if (nuevoRol === Number(miembro.rol_id)) return
+  savingRole[miembro.persona_id] = true
   try {
-    loading.value = true
-
-    // Actualizar el proyecto
-    await axios.put(
-      `${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`,
+    await axios.patch(
+      `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/rol`,
       {
-        titulo: titulo.value,
-        descripcion: descripcion.value,
-        equipo_id: selectedEquipo.value,
-        estado: estado.value,
+        persona_id: miembro.persona_id,
+        proyecto_id: proyectoId,
+        rol_id: nuevoRol,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-      },
+      { headers: authHeaders() },
     )
-
-    if (logoImage.value.file) {
-      try {
-        const relacionesResponse = await axios.get(
-          `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-
-        // Filtrar todas las relaciones de este proyecto
-        const relacionesProyecto = relacionesResponse.data.data?.filter(
-          (r) => r.proyecto_id === proyectoId,
-        )
-
-        for (const relacion of relacionesProyecto) {
-          // 1. Eliminar la relación
-          await axios.delete(
-            `${import.meta.env.VITE_URL_BACKEND}/api/archivos-proyecto/${relacion.id}`,
-            { headers: { Authorization: `Bearer ${token}` } },
-          )
-
-          // 2. Eliminar el archivo si existe
-          if (relacion.archivo_id) {
-            await axios.delete(
-              `${import.meta.env.VITE_URL_BACKEND}/api/archivos/${relacion.archivo_id}`,
-              { headers: { Authorization: `Bearer ${token}` } },
-            )
-          }
-        }
-
-        console.log('Relaciones y archivos anteriores eliminados')
-      } catch (deleteErr) {
-        console.warn('Error eliminando logos anteriores:', deleteErr)
-      }
-
-      // Subir el nuevo logo y crear la nueva relación
-      const resultado = await subirLogoProyecto(logoImage.value.file, proyectoId)
-      if (resultado) {
-        console.log('Logo actualizado exitosamente:', resultado)
-      }
-    }
-
-    mostrarToast('Proyecto actualizado correctamente')
-    setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-
-    router.push(`/admin/proyectos/${proyectoId}`)
-  } catch (err) {
-    console.error('Error completo:', err)
-    console.error('Respuesta del servidor:', err.response?.data)
-
-    if (err.response?.status === 403) {
-      mostrarToast('No tienes permisos para actualizar este proyecto')
-      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-    } else if (err.response?.status === 404) {
-      mostrarToast('Proyecto no encontrado')
-      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-    } else {
-      mostrarToast('Error actualizando proyecto: ' + (err.response?.data?.message || err.message))
-      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-    }
+    miembro.rol_id = nuevoRol
+    notify('Rol actualizado correctamente.')
+  } catch {
+    notify('No se pudo actualizar el rol.', 'error')
   } finally {
-    loading.value = false
+    savingRole[miembro.persona_id] = false
+  }
+}
+
+// --- Búsqueda y alta de miembros ---
+async function buscarPersona() {
+  busquedaError.value = ''
+  resultadosBusqueda.value = []
+  const q = cedulaBusqueda.value?.trim()
+  if (!q) return
+  try {
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${q}`,
+      { headers: authHeaders() },
+    )
+    if (!data) {
+      busquedaError.value = 'No se encontró persona con esa cédula.'
+      return
+    }
+    if (miembrosProyecto.value.some((m) => Number(m.persona_id) === Number(data.id))) {
+      busquedaError.value = 'Esta persona ya es miembro del proyecto.'
+      return
+    }
+    resultadosBusqueda.value = [data]
+  } catch {
+    busquedaError.value = 'No se encontró persona con esa cédula.'
+  }
+}
+
+async function agregarMiembro(persona) {
+  try {
+    await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
+      {
+        persona_id: persona.id,
+        proyecto_id: proyectoId,
+        rol_id: 2,
+      },
+      { headers: authHeaders() },
+    )
+    const nuevo = mapMiembro({ ...persona, rol_id: 2 })
+    miembrosProyecto.value.push(nuevo)
+    await buildMiembrosProyectoIndex()
+    resultadosBusqueda.value = []
+    cedulaBusqueda.value = ''
+    notify('Miembro añadido al proyecto.')
+  } catch {
+    notify('No se pudo añadir al miembro.', 'error')
+  }
+}
+
+// --- Eliminar miembro ---
+function pedirEliminarMiembro(miembro) {
+  openConfirm(
+    `¿Seguro que deseas eliminar a ${miembro.nombre} ${miembro.apellido} del proyecto?`,
+    async () => {
+      const headers = authHeaders()
+      confirmState.value.loading = true
+      try {
+        await axios.delete(
+          `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto/salir/${miembro.persona_id}/${proyectoId}`,
+          { headers },
+        )
+        miembrosProyecto.value = miembrosProyecto.value.filter(
+          (m) => Number(m.persona_id) !== Number(miembro.persona_id),
+        )
+        await buildMiembrosProyectoIndex()
+        notify('Miembro eliminado del proyecto.', 'success')
+        closeConfirm()
+      } catch {
+        notify('No se pudo eliminar el miembro.', 'error')
+      } finally {
+        confirmState.value.loading = false
+        closeConfirm()
+      }
+    },
+  )
+}
+
+// --- Logo ---
+function onLogoChange(e) {
+  const f = e.target?.files?.[0]
+  if (!f) return
+  logoImage.value.file = f
+  if (_objectUrl) URL.revokeObjectURL(_objectUrl)
+  _objectUrl = URL.createObjectURL(f)
+  logoImage.value.url = _objectUrl
+}
+
+// --- Guardar / Eliminar proyecto ---
+async function submitEdicion() {
+  guardando.value = true
+  try {
+    if (logoImage.value.file) {
+      const fd = new FormData()
+      fd.append('titulo', titulo.value)
+      fd.append('descripcion', descripcion.value)
+      fd.append('estado', estado.value)
+      fd.append('logo', logoImage.value.file)
+      await axios.post(
+        `${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}?_method=PUT`,
+        fd,
+        { headers: { ...authHeaders() } },
+      )
+    } else {
+      await axios.put(
+        `${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}`,
+        {
+          titulo: titulo.value,
+          descripcion: descripcion.value,
+          estado: estado.value,
+        },
+        { headers: authHeaders() },
+      )
+    }
+    notify('Proyecto actualizado.')
+  } catch {
+    notify('No se pudo guardar el proyecto.', 'error')
+  } finally {
     guardando.value = false
   }
 }
+
 function eliminarProyecto() {
-  confirmDialogMessage.value =
-    '¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer.'
-  onConfirmAction.value = async () => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      mostrarToast('Token no encontrado.')
-      setTimeout(() => {}, 2000) // Tiempo suficiente para que el usuario lo vea
-
-      return
-    }
-
-    try {
-      loading.value = true
-      await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      mostrarToast('Proyecto eliminado correctamente.')
-      setTimeout(() => router.push('/admin/proyectos'), 2000)
-    } catch (err) {
-      console.error('Error eliminando proyecto:', err.response?.data || err.message)
-      mostrarToast('No se pudo eliminar el proyecto.')
-    } finally {
-      loading.value = false
-    }
-  }
-  showConfirmDialog.value = true
+  openConfirm(
+    '¿Seguro que deseas eliminar este proyecto? Esta acción no se puede deshacer.',
+    async () => {
+      confirmState.value.loading = true
+      try {
+        await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}`, {
+          headers: authHeaders(),
+        })
+        notify('Proyecto eliminado.', 'success')
+        closeConfirm()
+        router.push({ name: 'ProyectosListado' }).catch(() => router.push('/admin/proyectos'))
+      } catch {
+        notify('No se pudo eliminar el proyecto.', 'error')
+      } finally {
+        confirmState.value.loading = false
+        closeConfirm()
+      }
+    },
+  )
 }
 </script>
 
@@ -287,85 +346,196 @@ function eliminarProyecto() {
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column">
       <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'ProyectoEditar'" />
-      <!-- Loader mientras loading es true -->
+
       <LoaderComponent v-if="loading" />
-      <!-- El resto solo se muestra cuando loading es false -->
+
       <div v-else class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <h3 class="mb-4">Editar Proyecto</h3>
         <button class="btn btn-danger" @click="eliminarProyecto">Eliminar Proyecto</button>
+
         <div class="card p-4">
           <div class="mb-3 text-center">
-            <img v-if="logoImage.url" :src="logoImage.url" class="rounded-circle" width="80" />
+            <img
+              v-if="logoImage && logoImage.url"
+              :src="logoImage.url"
+              class="rounded-circle"
+              width="80"
+              alt="Logo del proyecto"
+            />
             <input type="file" class="form-control mt-2" @change="onLogoChange" accept="image/*" />
           </div>
 
           <div class="mb-3">
-            <label>Título</label>
+            <label class="form-label">Título</label>
             <input v-model="titulo" type="text" class="form-control" />
           </div>
 
           <div class="mb-3">
-            <label>Descripción</label>
+            <label class="form-label">Descripción</label>
             <textarea v-model="descripcion" class="form-control" rows="3"></textarea>
           </div>
 
           <div class="mb-3">
-            <label>Equipo</label>
-            <select v-model="selectedEquipo" class="form-select">
-              <option value="" disabled>Selecciona un equipo</option>
-              <option v-for="e in equipos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label>Estado</label>
+            <label class="form-label">Estado</label>
             <select v-model="estado" class="form-select">
               <option value="ACTIVO">Activo</option>
               <option value="INACTIVO">Inactivo</option>
             </select>
           </div>
+
+          <!-- Miembros del proyecto -->
+          <div class="mb-3">
+            <label class="form-label">Miembros del proyecto</label>
+            <div class="row">
+              <div
+                class="col-12 col-md-6 col-lg-4 mb-3"
+                v-for="miembro in miembrosProyecto"
+                :key="miembro.persona_id"
+              >
+                <div class="card p-2 d-flex flex-row align-items-center gap-2">
+                  <i class="bi bi-person-circle fs-2 text-primary" aria-hidden="true"></i>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">{{ miembro.nombre }} {{ miembro.apellido }}</div>
+                    <div class="text-muted small">{{ miembro.email }}</div>
+                  </div>
+
+                  <select
+                    class="form-select form-select-sm"
+                    :value="miembro.rol_id"
+                    :disabled="savingRole[miembro.persona_id]"
+                    @change="(e) => onChangeRol(miembro, e)"
+                    style="max-width: 110px"
+                    aria-label="Cambiar rol"
+                  >
+                    <option :value="1">Líder</option>
+                    <option :value="2">Integrante</option>
+                  </select>
+
+                  <button
+                    class="btn btn-outline-danger btn-sm"
+                    @click="pedirEliminarMiembro(miembro)"
+                    v-if="puedeEliminar(miembro)"
+                    title="Eliminar miembro"
+                    aria-label="Eliminar miembro"
+                  >
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Añadir miembro -->
+            <div class="input-group mt-2">
+              <input
+                v-model="cedulaBusqueda"
+                type="text"
+                class="form-control"
+                placeholder="Buscar por cédula"
+                @keyup.enter="buscarPersona"
+              />
+              <button class="btn btn-outline-primary" @click="buscarPersona">Buscar</button>
+            </div>
+            <div v-if="busquedaError" class="text-danger small mt-1">{{ busquedaError }}</div>
+
+            <div v-if="resultadosBusqueda.length">
+              <div
+                v-for="persona in resultadosBusqueda"
+                :key="persona.id"
+                class="d-flex align-items-center gap-2 mt-2"
+              >
+                <span>{{ persona.nombre }} {{ persona.apellido }} ({{ persona.email }})</span>
+                <button class="btn btn-success btn-sm" @click="agregarMiembro(persona)">
+                  Añadir
+                </button>
+              </div>
+            </div>
+          </div>
+
           <button class="btn btn-primary" @click="submitEdicion" :disabled="guardando">
             <span v-if="guardando">
               <i class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></i>
               Guardando...
             </span>
-            <span v-else>Guardar equipo</span>
+            <span v-else>Guardar proyecto</span>
           </button>
         </div>
       </div>
     </div>
   </div>
-  <ConfirmationDialog
-    :visible="showConfirmDialog"
-    :message="confirmDialogMessage"
-    @confirm="
-      () => {
-        showConfirmDialog = false
-        onConfirmAction?.()
-      }
-    "
-    @cancel="
-      () => {
-        showConfirmDialog = false
-      }
-    "
-  />
 
-  <div v-if="showToast" class="toast-modal-custom position-fixed bottom-0 end-0 m-4">
+  <!-- Toast -->
+  <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
     {{ toastMensaje }}
   </div>
+
+  <!-- Confirm Dialog -->
+  <div v-if="confirmState.visible" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h5 class="mb-2">Confirmación</h5>
+      <p class="mb-3">{{ confirmState.message }}</p>
+      <div class="d-flex justify-content-end gap-2">
+        <button class="btn btn-light" :disabled="confirmState.loading" @click="closeConfirm">
+          Cancelar
+        </button>
+        <button
+          class="btn btn-danger"
+          :disabled="confirmState.loading"
+          @click="confirmState.onConfirm && confirmState.onConfirm()"
+        >
+          <span v-if="confirmState.loading" class="spinner-border spinner-border-sm me-2" />
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
+
 <style scoped>
 .btn-danger {
   margin-bottom: 1rem;
   width: 20rem;
 }
-.toast-modal-custom {
-  background-color: #198754;
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
   color: white;
-  padding: 0.75rem 1.25rem;
+  padding: 12px 24px;
   border-radius: 8px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.toast-notification.show {
+  opacity: 1;
+}
+.toast-notification.success {
+  background-color: #28a745;
+}
+.toast-notification.error {
+  background-color: #dc3545;
+}
+.toast-notification.info {
+  background-color: #0d6efd;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3100;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px;
+  width: min(92vw, 440px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
 }
 </style>
