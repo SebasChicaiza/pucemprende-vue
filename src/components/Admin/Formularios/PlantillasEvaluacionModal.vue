@@ -45,6 +45,7 @@ const currentCriterioName = ref('')
 const currentCriterioDescription = ref('')
 const currentCriterioPeso = ref(0)
 const editingCriterioIndex = ref(null)
+const currentPlantillaPeso = ref(0)
 
 const modalLoading = ref(false)
 const showErrorModal = ref(false)
@@ -71,10 +72,17 @@ const currentPlantilla = computed(() => {
   return found
 })
 
-const totalPeso = computed(() => {
+const totalCriteriosPeso = computed(() => {
   if (!currentPlantilla.value) return 0
   return currentPlantilla.value.criterios.reduce(
     (sum, criterio) => sum + (Number(criterio.peso) || 0),
+    0,
+  )
+})
+
+const totalPlantillasPeso = computed(() => {
+  return allNewPlantillasInSession.value.reduce(
+    (sum, plantilla) => sum + (Number(plantilla.peso) || 0),
     0,
   )
 })
@@ -98,7 +106,14 @@ watch(currentCriterioPeso, () => {
   if (errorMessage.value) errorMessage.value = ''
 })
 
-watch(activeAccordionItem, (newId, oldId) => {
+watch(activeAccordionItem, (newId) => {
+  if (newId) {
+    const plantilla = allNewPlantillasInSession.value.find((p) => p.id === newId)
+    if (plantilla) {
+      currentPlantillaPeso.value = plantilla.peso || 0
+    }
+  }
+
   currentCriterioName.value = ''
   currentCriterioDescription.value = ''
   currentCriterioPeso.value = 0
@@ -107,17 +122,14 @@ watch(activeAccordionItem, (newId, oldId) => {
   showErrorModal.value = false
 
   nextTick(() => {
-    if (oldId) {
-      const oldCollapseElement = document.getElementById(`collapse${oldId}`)
-      if (oldCollapseElement) {
-        const bsCollapseInstance = Collapse.getInstance(oldCollapseElement)
+    document.querySelectorAll('.accordion-collapse.show').forEach((el) => {
+      if (el.id !== `collapse${newId}`) {
+        const bsCollapseInstance = Collapse.getInstance(el)
         if (bsCollapseInstance) {
           bsCollapseInstance.hide()
-        } else {
-          new Collapse(oldCollapseElement, { toggle: false }).hide()
         }
       }
-    }
+    })
 
     if (newId) {
       const newCollapseElement = document.getElementById(`collapse${newId}`)
@@ -181,6 +193,7 @@ const resetModalState = () => {
   currentCriterioName.value = ''
   currentCriterioDescription.value = ''
   currentCriterioPeso.value = 0
+  currentPlantillaPeso.value = 0
   editingCriterioIndex.value = null
   errorMessage.value = ''
   showErrorModal.value = false
@@ -213,7 +226,6 @@ const fetchRolesData = async () => {
     displayError('Token de autenticación no encontrado.')
     return
   }
-
   try {
     const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/rolEvento`, {
       headers: {
@@ -239,7 +251,7 @@ const fetchPlantillasData = async () => {
 
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_URL_BACKEND}/api/procesos-evaluacion-detalle`,
+      `${import.meta.env.VITE_URL_BACKEND}/api/procesos-evaluacion/${props.procesoId}/detalle`,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -248,13 +260,12 @@ const fetchPlantillasData = async () => {
       },
     )
 
-    const procesosDetalle = response.data
-    const currentProceso = procesosDetalle.find((p) => p.procesoId === props.procesoId)
-
-    if (currentProceso && currentProceso.plantillas.length > 0) {
-      const plantillasToProcess = currentProceso.plantillas.map((p) => ({
+    const procesoDetalle = response.data
+    if (procesoDetalle && procesoDetalle.plantillas.length > 0) {
+      const plantillasToProcess = procesoDetalle.plantillas.map((p) => ({
         id: p.plantillaId,
         nombre_plantilla: p.plantillaNombre,
+        peso: p.plantillaPeso,
         criterios: p.criterios.map((c) => ({
           id: c.criterioId,
           nombre: c.criterioNombre,
@@ -266,7 +277,6 @@ const fetchPlantillasData = async () => {
 
       const rolesFetchPromises = plantillasToProcess.map(async (plantilla) => {
         try {
-          console.log(`[INFO] Fetching roles for plantilla ID: ${plantilla.id}`)
           const rolesResponse = await axios.get(
             `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/plantilla/${plantilla.id}`,
             {
@@ -277,10 +287,6 @@ const fetchPlantillasData = async () => {
             },
           )
           plantilla.roles_permitidos = rolesResponse.data.map((role) => role.rol_id)
-          console.log(
-            `[SUCCESS] Roles fetched for plantilla ID ${plantilla.id}:`,
-            plantilla.roles_permitidos,
-          )
         } catch (error) {
           console.error(
             `[ERROR] Failed to fetch roles for plantilla ID ${plantilla.id}:`,
@@ -288,13 +294,11 @@ const fetchPlantillasData = async () => {
           )
         }
       })
-
       await Promise.all(rolesFetchPromises)
-
       allNewPlantillasInSession.value = plantillasToProcess
-
       if (allNewPlantillasInSession.value.length > 0) {
         activeAccordionItem.value = allNewPlantillasInSession.value[0].id
+        currentPlantillaPeso.value = allNewPlantillasInSession.value[0].peso
       }
     } else {
       addNewPlantillaSession()
@@ -313,6 +317,7 @@ const addNewPlantillaSession = () => {
   const newPlantilla = {
     id: newId,
     nombre_plantilla: `Nueva Plantilla ${allNewPlantillasInSession.value.length + 1}`,
+    peso: 0,
     criterios: [],
     roles_permitidos: [],
   }
@@ -414,10 +419,10 @@ const addOrUpdateCriterio = () => {
 
   if (editingCriterioIndex.value !== null) {
     const oldPeso = currentPlantilla.value.criterios[editingCriterioIndex.value].peso
-    if (totalPeso.value - oldPeso + newPeso > 100) {
+    if (totalCriteriosPeso.value - oldPeso + newPeso > 100) {
       displayError(
         `El peso total de los criterios no puede exceder 100%. Actualmente es ${
-          totalPeso.value - oldPeso + newPeso
+          totalCriteriosPeso.value - oldPeso + newPeso
         }%.`,
       )
       return
@@ -429,9 +434,11 @@ const addOrUpdateCriterio = () => {
       peso: newPeso,
     }
   } else {
-    if (totalPeso.value + newPeso > 100) {
+    if (totalCriteriosPeso.value + newPeso > 100) {
       displayError(
-        `El peso total de los criterios no puede exceder 100%. Actualmente es ${totalPeso.value + newPeso}%.`,
+        `El peso total de los criterios no puede exceder 100%. Actualmente es ${
+          totalCriteriosPeso.value + newPeso
+        }%.`,
       )
       return
     }
@@ -472,6 +479,14 @@ const deleteCriterio = (index) => {
 const submitAllPlantillas = async () => {
   if (allNewPlantillasInSession.value.length === 0) {
     displayError('Debe crear al menos una plantilla para guardar.')
+    return
+  }
+
+  const calculatedTotalPeso = totalPlantillasPeso.value
+  if (calculatedTotalPeso !== 100) {
+    displayError(
+      `El peso total de las plantillas debe ser exactamente 100%. Actualmente es ${calculatedTotalPeso}%.`,
+    )
     return
   }
 
@@ -530,7 +545,6 @@ const submitAllPlantillas = async () => {
       let currentPlantillaId = plantilla.id
 
       if (typeof plantilla.id === 'string' && plantilla.id.startsWith('temp-')) {
-        console.log(`[INFO] Creando nueva plantilla: "${plantilla.nombre_plantilla}"`)
         const payload = {
           nombre_plantilla: plantilla.nombre_plantilla.trim(),
           criterios: criteriosPayload,
@@ -547,9 +561,17 @@ const submitAllPlantillas = async () => {
           },
         )
         currentPlantillaId = response.data.plantillaId
-        console.log(`[SUCCESS] Plantilla creada con ID: ${currentPlantillaId}`)
+        await axios.patch(
+          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas/${currentPlantillaId}/peso`,
+          { peso: Number(plantilla.peso) },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
       } else {
-        console.log(`[INFO] Actualizando plantilla con ID: ${plantilla.id}`)
         const payload = {
           nombre_plantilla: plantilla.nombre_plantilla.trim(),
           criterios: criteriosPayload,
@@ -564,14 +586,21 @@ const submitAllPlantillas = async () => {
             },
           },
         )
-        console.log(`[SUCCESS] Plantilla con ID ${plantilla.id} actualizada.`)
+        await axios.patch(
+          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas/${plantilla.id}/peso`,
+          { peso: Number(plantilla.peso) },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
         currentPlantillaId = plantilla.id
       }
 
-      // Get all roles for the current plantilla and delete them one by one.
       if (currentPlantillaId) {
         try {
-          console.log(`[INFO] Fetching roles to delete for plantilla ID: ${currentPlantillaId}`)
           const existingRolesResponse = await axios.get(
             `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/plantilla/${currentPlantillaId}`,
             {
@@ -581,51 +610,30 @@ const submitAllPlantillas = async () => {
             },
           )
 
-          const existingRoleIds = existingRolesResponse.data.map(role => role.id)
-          console.log(`[INFO] Found ${existingRoleIds.length} roles to delete.`)
-
+          const existingRoleIds = existingRolesResponse.data.map((role) => role.id)
           if (existingRoleIds.length > 0) {
             for (const roleId of existingRoleIds) {
-              try {
-                console.log(`[INFO] Deleting roles-plantilla record with ID: ${roleId}`)
-                await axios.delete(
-                  `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/${roleId}`,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${token}`,
-                    },
+              await axios.delete(
+                `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla/${roleId}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
                   },
-                )
-                console.log(`[SUCCESS] Deleted roles-plantilla record with ID: ${roleId}`)
-              } catch (deleteError) {
-                console.error(
-                  `[ERROR] Failed to delete roles-plantilla record ${roleId}:`,
-                  deleteError.response?.data || deleteError.message,
-                )
-                // Continue to the next deletion even if one fails
-              }
+                },
+              )
             }
-            console.log(`[SUCCESS] All old roles for plantilla ID ${currentPlantillaId} have been processed.`)
-          } else {
-            console.log(`[INFO] No existing roles to delete for plantilla ID ${currentPlantillaId}.`)
           }
         } catch (fetchAndDeleteError) {
           console.error(
             `[ERROR] Failed to fetch or delete existing roles for plantilla ID ${currentPlantillaId}:`,
             fetchAndDeleteError.response?.data || fetchAndDeleteError.message,
           )
-          // Continue to the next step (creating new roles) even if deletion fails.
         }
       }
 
-      // Now, add the new roles.
       if (plantilla.roles_permitidos.length > 0) {
-        console.log(`[INFO] Asignando nuevos roles a la plantilla con ID: ${currentPlantillaId}`)
         for (const rolId of plantilla.roles_permitidos) {
           try {
-            console.log(
-              `[INFO] Enviando POST a /api/roles-plantilla con plantilla_id: ${currentPlantillaId} y rol_id: ${rolId}`,
-            )
             await axios.post(
               `${import.meta.env.VITE_URL_BACKEND}/api/roles-plantilla`,
               {
@@ -639,7 +647,6 @@ const submitAllPlantillas = async () => {
                 },
               },
             )
-            console.log(`[SUCCESS] Rol con ID ${rolId} asignado a la plantilla ${currentPlantillaId}.`)
           } catch (rolError) {
             console.error(
               `[ERROR] No se pudo asignar el rol ${rolId} a la plantilla ${currentPlantillaId}:`,
@@ -647,13 +654,8 @@ const submitAllPlantillas = async () => {
             )
           }
         }
-      } else {
-        console.log(
-          `[INFO] No hay roles seleccionados para la plantilla con ID: ${currentPlantillaId}.`,
-        )
       }
     }
-
     okModalMessage.value = `Todas las plantillas y sus roles han sido guardados con éxito!`
     showOkModal.value = true
     emit('success', { message: okModalMessage.value })
@@ -661,7 +663,6 @@ const submitAllPlantillas = async () => {
   } catch (err) {
     console.error('Error general al procesar las plantillas:', err.response?.data || err.message)
     let errorToDisplay = 'Error desconocido al procesar las plantillas.'
-
     if (err.response && err.response.data) {
       if (err.response.data.errors) {
         const errors = err.response.data.errors
@@ -696,7 +697,6 @@ const toggleAccordion = (plantillaId) => {
   }
 }
 </script>
-
 
 <template>
   <teleport to="body">
@@ -734,36 +734,61 @@ const toggleAccordion = (plantillaId) => {
                 :duration="1000"
                 @close="handleOkModalClose"
               />
-
-              <div class="d-flex justify-content-end mb-3 gap-2 flex-shrink-0">
-                <button class="btn btn-primary btn-sm" @click="addNewPlantillaSession">
-                  <i class="fas fa-plus me-2"></i>Añadir Nueva Plantilla
-                </button>
-                <button
-                  class="btn btn-info btn-sm"
-                  @click="
-                    startEditingPlantillaName(
-                      currentPlantilla.id,
-                      currentPlantilla.nombre_plantilla,
-                    )
-                  "
-                  :disabled="!currentPlantilla"
-                  title="Editar nombre de la plantilla actual"
-                >
-                  <i class="fas fa-pencil-alt me-2"></i>Editar Nombre
-                </button>
-                <button
-                  class="btn btn-danger btn-sm"
-                  @click="
-                    openDeletePlantillaConfirmation(
-                      currentPlantilla.id,
-                      currentPlantilla.nombre_plantilla,
-                    )
-                  "
-                  :disabled="!currentPlantilla || allNewPlantillasInSession.length <= 1"
-                >
-                  <i class="fas fa-trash me-2"></i>Eliminar Actual
-                </button>
+              <ConfirmationModal
+                :show="showDeleteConfirmation"
+                :title="confirmDeleteTitle"
+                :message="confirmDeleteMessage"
+                :confirmText="confirmDeleteConfirmText"
+                :cancelText="confirmDeleteCancelText"
+                @confirm="handleDeletePlantillaConfirmed"
+                @cancel="handleDeleteConfirmationCancelled"
+              />
+              <div class="d-flex justify-content-between align-items-center mb-3 flex-shrink-0">
+                <div class="d-flex align-items-center">
+                  <span
+                    class="me-2 fw-bold"
+                    :class="{
+                      'text-danger': totalPlantillasPeso !== 100,
+                      'text-success': totalPlantillasPeso === 100,
+                    }"
+                    >Total de Peso de Plantillas: {{ totalPlantillasPeso }}%</span
+                  >
+                  <i
+                    v-if="totalPlantillasPeso !== 100"
+                    class="fas fa-exclamation-triangle text-warning"
+                    title="El peso total de las plantillas debe ser 100%"
+                  ></i>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-primary btn-sm" @click="addNewPlantillaSession">
+                    <i class="fas fa-plus me-2"></i>Añadir Nueva Plantilla
+                  </button>
+                  <button
+                    class="btn btn-info btn-sm"
+                    @click="
+                      startEditingPlantillaName(
+                        currentPlantilla.id,
+                        currentPlantilla.nombre_plantilla,
+                      )
+                    "
+                    :disabled="!currentPlantilla"
+                    title="Editar nombre de la plantilla actual"
+                  >
+                    <i class="fas fa-pencil-alt me-2"></i>Editar Nombre
+                  </button>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    @click="
+                      openDeletePlantillaConfirmation(
+                        currentPlantilla.id,
+                        currentPlantilla.nombre_plantilla,
+                      )
+                    "
+                    :disabled="!currentPlantilla || allNewPlantillasInSession.length <= 1"
+                  >
+                    <i class="fas fa-trash me-2"></i>Eliminar Actual
+                  </button>
+                </div>
               </div>
 
               <ScrollBar class="flex-grow-1">
@@ -811,10 +836,7 @@ const toggleAccordion = (plantillaId) => {
                           </span>
                         </template>
                         <span class="ms-auto me-3 text-muted small"
-                          >Total:
-                          {{
-                            plantilla.criterios.reduce((sum, c) => sum + (Number(c.peso) || 0), 0)
-                          }}%</span
+                          >Peso de plantilla: {{ plantilla.peso }}%</span
                         >
                       </button>
                     </h2>
@@ -928,23 +950,21 @@ const toggleAccordion = (plantillaId) => {
                                 <td colspan="2" class="text-end fw-bold">Total Peso:</td>
                                 <td
                                   :class="{
-                                    'text-danger': totalPeso !== 100,
-                                    'text-success': totalPeso === 100,
+                                    'text-danger': totalCriteriosPeso !== 100,
+                                    'text-success': totalCriteriosPeso === 100,
                                   }"
                                   class="fw-bold"
                                 >
-                                  {{ totalPeso }}%
+                                  {{ totalCriteriosPeso }}%
                                 </td>
                                 <td></td>
                               </tr>
                             </tfoot>
                           </table>
                         </div>
-
                         <hr />
-
                         <div class="mt-4">
-                          <h6 class="mb-3">Quienes pueden calificar esta plantilla</h6>
+                          <h6 class="mb-3">Roles de Calificación</h6>
                           <div class="row g-2">
                             <div v-for="rol in availableRoles" :key="rol.id" class="col-auto">
                               <div class="form-check">
@@ -962,6 +982,24 @@ const toggleAccordion = (plantillaId) => {
                                   {{ rol.nombre }}
                                 </label>
                               </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="mt-4">
+                          <h6 class="mb-3">Peso de la plantilla</h6>
+                          <div class="row g-2 align-items-center">
+                            <div class="col-md-3">
+                              <label :for="`plantilla-peso-${plantilla.id}`" class="form-label-sm"
+                                >Peso (%):</label
+                              >
+                              <input
+                                type="number"
+                                :id="`plantilla-peso-${plantilla.id}`"
+                                class="form-control form-control-sm"
+                                v-model.number="plantilla.peso"
+                                min="0"
+                                max="100"
+                              />
                             </div>
                           </div>
                         </div>
@@ -999,16 +1037,6 @@ const toggleAccordion = (plantillaId) => {
         </div>
       </div>
     </div>
-
-    <ConfirmationModal
-      :show="showDeleteConfirmation"
-      :title="confirmDeleteTitle"
-      :message="confirmDeleteMessage"
-      :confirmText="confirmDeleteConfirmText"
-      :cancelText="confirmDeleteCancelText"
-      @confirm="handleDeletePlantillaConfirmed"
-      @cancel="handleDeleteConfirmationCancelled"
-    />
   </teleport>
 </template>
 
