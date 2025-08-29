@@ -103,6 +103,7 @@ const handleEventSelection = (eventId) => {
   if (selectedEvent) {
     eventSearchQuery.value = selectedEvent.nombre
   }
+  fetchCertificates(eventId)
 }
 
 const closeModal = () => {
@@ -112,36 +113,20 @@ const closeModal = () => {
 // --- LIFECYCLE & WATCHERS ---
 watch(
   () => props.show,
-  (newVal) => {
+  async (newVal) => {
     if (newVal) {
       selectedEventId.value = props.eventId
-      eventosStore.fetchAllEventsForFilter().then(() => {
-        if (eventosStore.allEventsList.length > 0) {
-          fetchCertificates(selectedEventId.value)
+      await eventosStore.fetchAllEventsForFilter()
+
+      if (eventosStore.allEventsList.length > 0) {
+        const initialEvent = eventosStore.allEventsList.find(
+          (event) => event.id === Number(props.eventId),
+        )
+        if (initialEvent) {
+          selectedEventId.value = initialEvent.id
+          eventSearchQuery.value = initialEvent.nombre
         }
-      })
-    }
-  },
-)
-
-watch(selectedEventId, (newId) => {
-  if (newId) {
-    fetchCertificates(newId)
-    const selectedEvent = eventosStore.allEventsList.find((event) => event.id === newId)
-    if (selectedEvent) {
-      eventSearchQuery.value = selectedEvent.nombre
-    }
-  }
-})
-
-watch(
-  () => eventosStore.allEventsList,
-  (newVal) => {
-    if (newVal.length > 0 && props.eventId) {
-      const initialEvent = newVal.find((event) => event.id === Number(props.eventId))
-      if (initialEvent) {
-        selectedEventId.value = initialEvent.id
-        eventSearchQuery.value = initialEvent.nombre
+        fetchCertificates(selectedEventId.value)
       }
     }
   },

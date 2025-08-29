@@ -25,7 +25,6 @@ const emit = defineEmits(['close', 'save'])
 // --- STATE MANAGEMENT ---
 // Roles
 const availableRoles = ref([])
-// Map to store selected roles for each certificate: { certId: Set<roleId> }
 const selectedRolesByCert = ref({})
 const loadingRoles = ref(false)
 const showOkModal = ref(false)
@@ -36,6 +35,7 @@ const existingCertificates = ref([])
 const selectedCertificateId = ref(null)
 const loadingCertificates = ref(false)
 const isUploading = ref(false)
+const deletingCertificate = ref(false)
 const localPdfs = ref([])
 
 // Generic
@@ -47,18 +47,15 @@ const ConfModalMessage = ref('')
 const certToDeleteId = ref(null)
 
 // --- COMPUTED PROPERTIES ---
-// Combined list of existing and locally stored PDFs
 const allCertificates = computed(() => {
   return [...existingCertificates.value, ...localPdfs.value]
 })
 
-// Get the full object of the selected certificate for preview
 const selectedCertificate = computed(() => {
   if (!selectedCertificateId.value) return null
   return allCertificates.value.find((cert) => cert.id === selectedCertificateId.value)
 })
 
-// The roles currently selected for the active certificate
 const activeSelectedRoles = computed({
   get: () => {
     if (!selectedCertificateId.value) return new Set()
@@ -74,13 +71,17 @@ const activeSelectedRoles = computed({
   },
 })
 
-// Determines if the selected certificate is a locally uploaded one (not from the API)
 const isLocalCertSelected = computed(() => {
   return String(selectedCertificateId.value).startsWith('local-')
 })
 
 const showLoader = computed(() => {
-  return isUploading.value || loadingRoles.value || loadingCertificates.value
+  return (
+    isUploading.value ||
+    loadingRoles.value ||
+    loadingCertificates.value ||
+    deletingCertificate.value
+  )
 })
 
 // --- API FUNCTIONS ---
@@ -194,30 +195,36 @@ const handleConfirmationConfirm = async () => {
   const certificateId = certToDeleteId.value
   if (!certificateId) return
 
-  if (String(certificateId).startsWith('local-')) {
-    localPdfs.value = localPdfs.value.filter((cert) => cert.id !== certificateId)
-  } else {
-    const token = localStorage.getItem('token')
-    try {
-      await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/certificados/${certificateId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      await fetchEventCertificates()
-    } catch (error) {
-      console.error('Error deleting certificate:', error)
-      errorMessage.value = `Error al eliminar el certificado: ${error.response?.data?.message || error.message}`
-      showErrorModal.value = true
-    }
-  }
+  showConfirmationModal.value = false
+  deletingCertificate.value = true
 
-  delete selectedRolesByCert.value[certificateId]
+  try {
+    if (String(certificateId).startsWith('local-')) {
+      localPdfs.value = localPdfs.value.filter((cert) => cert.id !== certificateId)
+      delete selectedRolesByCert.value[certificateId]
+    } else {
+      const token = localStorage.getItem('token')
+      await axios.delete(
+        `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${props.eventId}/certificados/${certificateId}/permanente`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      await fetchEventCertificates()
+    }
+    showOkModal.value = true
+    okModalMessage.value = 'Certificado eliminado exitosamente.'
+  } catch (error) {
+    console.error('Error deleting certificate:', error)
+    errorMessage.value = `Error al eliminar el certificado: ${error.response?.data?.message || error.message}`
+    showErrorModal.value = true
+  } finally {
+    deletingCertificate.value = false
+  }
 
   if (selectedCertificateId.value === certificateId) {
     selectedCertificateId.value = null
   }
-  showConfirmationModal.value = false
-  showOkModal.value = true
-  okModalMessage.value = 'Certificado eliminado exitosamente.'
   certToDeleteId.value = null
 }
 
@@ -461,7 +468,12 @@ watch(selectedCertificateId, (newId) => {
     @confirm="handleConfirmationConfirm"
     @cancel="handleConfirmationCancel"
   />
-  <OkModal :show="showOkModal" :message="okModalMessage" @close="showOkModal = false" style="z-index: 1060;" />
+  <OkModal
+    :show="showOkModal"
+    :message="okModalMessage"
+    @close="showOkModal = false"
+    style="z-index: 1060"
+  />
 </template>
 
 <style scoped>
