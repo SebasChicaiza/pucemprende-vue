@@ -13,6 +13,7 @@ import AddUserModal from '@/components/Admin/Usuarios/AddUserModal.vue'
 import Pagination from '@/components/Admin/PaginationComponent.vue'
 import ManageRolesModal from '@/components/Admin/Usuarios/ManageRolesModal.vue'
 import { useEventUsersStore } from '@/stores/eventUsers'
+import * as XLSX from 'xlsx'
 
 const store = useEventUsersStore()
 const loading = computed(() => store.loading)
@@ -84,7 +85,7 @@ const currentFilters = ref({
   event: '',
   role: '',
   status: '',
-  alumni: '', // NEW: Add alumni to currentFilters
+  alumni: '',
 })
 
 const openFilterModal = () => {
@@ -98,7 +99,7 @@ const handleApplyFilters = (newFilters) => {
 }
 
 const handleClearFilters = () => {
-  currentFilters.value = { event: '', role: '', status: '', alumni: '' } // NEW: Clear alumni filter
+  currentFilters.value = { event: '', role: '', status: '', alumni: '' }
   store.setCurrentPage(1)
   showFilterModal.value = false
 }
@@ -151,39 +152,36 @@ const clearSearch = () => {
   store.error = null
 }
 
+const filteredUsers = computed(() => {
+  let usersToFilter =
+    isSearching.value && searchQuery.value.trim() ? searchResults.value : store.users
+
+  return usersToFilter.filter((user) => {
+    let matches = true
+    if (currentFilters.value.event && user.evento !== currentFilters.value.event) {
+      matches = false
+    }
+    if (currentFilters.value.role && user.rol !== currentFilters.value.role) {
+      matches = false
+    }
+    if (currentFilters.value.status && user.status !== currentFilters.value.status) {
+      matches = false
+    }
+    if (currentFilters.value.alumni !== '') {
+      const alumniFilterValue = currentFilters.value.alumni === 'true'
+      if (user.persona && user.persona.alumni !== alumniFilterValue) {
+        matches = false
+      }
+    }
+    return matches
+  })
+})
+
 const displayedUsers = computed(() => {
-  let usersToPaginate = []
-
-  if (isSearching.value && searchQuery.value.trim()) {
-    usersToPaginate = searchResults.value
-  } else {
-    usersToPaginate = store.users.filter((user) => {
-      let matches = true
-      if (currentFilters.value.event && user.evento !== currentFilters.value.event) {
-        matches = false
-      }
-      if (currentFilters.value.role && user.rol !== currentFilters.value.role) {
-        matches = false
-      }
-      if (currentFilters.value.status && user.status !== currentFilters.value.status) {
-        matches = false
-      }
-      // NEW: Apply alumni filter
-      if (currentFilters.value.alumni !== '') {
-        const alumniFilterValue = currentFilters.value.alumni === 'true' // Convert string to boolean
-        if (user.persona && user.persona.alumni !== alumniFilterValue) {
-          matches = false
-        }
-      }
-      return matches
-    })
-  }
-
-  store.totalUsersCount = usersToPaginate.length
-
+  store.totalUsersCount = filteredUsers.value.length
   const startIndex = (store.currentPage - 1) * store.itemsPerPage
   const endIndex = startIndex + store.itemsPerPage
-  return usersToPaginate.slice(startIndex, endIndex)
+  return filteredUsers.value.slice(startIndex, endIndex)
 })
 
 const totalPages = computed(() => {
@@ -206,7 +204,6 @@ const uniqueRoles = computed(() => {
 
 const statusOptions = ref(['Activo', 'Inactivo'])
 
-// NEW: Alumni filter options
 const alumniOptions = ref([
   { label: 'Sí', value: 'true' },
   { label: 'No', value: 'false' },
@@ -320,6 +317,22 @@ const handleRoleOperationError = ({ message }) => {
   showErrorModal.value = true
 }
 
+const downloadTableAsExcel = () => {
+  const data = filteredUsers.value.map((user) => ({
+    'Nombre de Usuario': `${user.persona.nombre} ${user.persona.apellido}`,
+    Identificación: user.persona.identificacion,
+    'Rol en el Evento': user.rol,
+    Evento: user.evento,
+    Alumni: user.persona.alumni ? 'Sí' : 'No',
+    Estado: user.status,
+  }))
+
+  const worksheet = XLSX.utils.json_to_sheet(data)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Usuarios')
+  XLSX.writeFile(workbook, 'usuarios_eventos.xlsx')
+}
+
 onMounted(() => {
   store.fetchUsers().then((success) => {
     if (!success) {
@@ -356,7 +369,10 @@ onMounted(() => {
               </button>
             </div>
             <button class="btn btn-filter" @click="openFilterModal">
-              <i class="fas fa-filter"></i> Filters
+              <i class="fas fa-filter"></i> Filtros
+            </button>
+            <button @click="downloadTableAsExcel" class="btn btn-success export-excel-btn">
+              <i class="fas fa-file-excel me-2"></i>Descargar Excel
             </button>
             <button class="btn btn-secondary manage-roles-btn" @click="openManageRolesModal">
               <i class="fas fa-user-tag"></i> Gestionar Roles
@@ -436,11 +452,13 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <Pagination
-          :currentPage="store.currentPage"
-          :totalPages="totalPages"
-          @page-changed="handlePageChange"
-        />
+        <div class="pagination-container d-flex justify-content-center align-items-center mt-3">
+          <Pagination
+            :currentPage="store.currentPage"
+            :totalPages="totalPages"
+            @page-changed="handlePageChange"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -651,7 +669,7 @@ onMounted(() => {
 /* User List Grid Header */
 .user-list-header {
   display: grid;
-  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px; /* Added 0.8fr for Alumni */
+  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px;
   gap: 10px;
   padding: 12px 15px;
   background-color: #234e8f;
@@ -676,7 +694,7 @@ onMounted(() => {
 
 .user-item {
   display: grid;
-  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px; /* Added 0.8fr for Alumni */
+  grid-template-columns: 1.8fr 1.2fr 1.5fr 0.8fr 0.8fr 100px;
   gap: 10px;
   align-items: center;
   padding: 12px 15px;
@@ -773,7 +791,7 @@ onMounted(() => {
 .user-alumni {
   font-size: 0.9em;
   font-weight: 500;
-  text-align: left; /* Centering the content */
+  text-align: left;
 }
 
 .user-alumni .alumni-yes {
@@ -855,5 +873,29 @@ onMounted(() => {
 .no-users-message.error-message {
   color: #dc3545;
   font-weight: bold;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.export-excel-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.export-excel-btn:hover {
+  background-color: #218838;
 }
 </style>
