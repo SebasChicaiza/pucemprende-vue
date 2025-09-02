@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
@@ -16,6 +16,101 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 
+// CONFIGURACIÓN DE CACHÉ Y AUTO-ACTUALIZACIÓN
+const CACHE_KEYS = {
+  USER_PROFILE: 'user_profile_cache',
+  PERSONA_DATA: 'persona_data_cache',
+  USER_STATS: 'user_stats_cache'
+}
+
+const CACHE_DURATION = {
+  USER_PROFILE: 30 * 60 * 1000, // 30 minutos
+  PERSONA_DATA: 30 * 60 * 1000, // 30 minutos
+  USER_STATS: 30 * 60 * 1000,   // 30 minutos
+}
+
+// Variables para el auto-refresh
+const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000 // 30 minutos
+let refreshInterval = null
+
+// FUNCIONES DE CACHÉ
+const saveToCache = (key, data) => {
+  try {
+    const cacheData = {
+      data: data,
+      timestamp: Date.now(),
+      userId: userProfile.value.id
+    }
+    localStorage.setItem(key, JSON.stringify(cacheData))
+    console.log(`Datos guardados en caché: ${key}`)
+  } catch (error) {
+    console.warn('Error guardando en caché:', error)
+  }
+}
+
+const getFromCache = (key, maxAge = 30 * 60 * 1000) => {
+  try {
+    const cached = localStorage.getItem(key)
+    if (!cached) {
+      console.log(`No hay datos en caché para: ${key}`)
+      return null
+    }
+
+    const cacheData = JSON.parse(cached)
+    const now = Date.now()
+
+    if (now - cacheData.timestamp > maxAge) {
+      console.log(`Caché expirado para: ${key}`)
+      localStorage.removeItem(key)
+      return null
+    }
+
+    if (userProfile.value.id && cacheData.userId !== userProfile.value.id) {
+      console.log(`Usuario diferente, invalidando caché: ${key}`)
+      localStorage.removeItem(key)
+      return null
+    }
+
+    console.log(`Datos obtenidos del caché: ${key}`)
+    return cacheData.data
+  } catch (error) {
+    console.warn('Error leyendo caché:', error)
+    localStorage.removeItem(key)
+    return null
+  }
+}
+
+const clearUserCache = () => {
+  Object.values(CACHE_KEYS).forEach(key => {
+    localStorage.removeItem(key)
+  })
+  console.log('Caché de usuario limpiado')
+}
+
+// FUNCIONES DE AUTO-ACTUALIZACIÓN
+const startAutoRefresh = () => {
+  console.log('Iniciando auto-actualización cada 30 minutos')
+
+  // Limpiar interval anterior si existe
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+
+  // Establecer nuevo interval
+  refreshInterval = setInterval(async () => {
+    console.log('Ejecutando auto-actualización de datos...')
+    await refreshUserData(true) // true = es auto-refresh
+  }, AUTO_REFRESH_INTERVAL)
+}
+
+const stopAutoRefresh = () => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+    console.log('Auto-actualización detenida')
+  }
+}
+
 const showErrorModal = ref(false)
 const errorMessage = ref('')
 
@@ -25,13 +120,12 @@ const okModalMessage = ref('')
 const universalDeleteModalRef = ref(null)
 
 // --- Dynamic Confirmation Modal State ---
-const showConfirmationModal = ref(false) // Controls visibility of the dynamic modal
+const showConfirmationModal = ref(false)
 const confirmModalTitle = ref('')
 const confirmModalMessage = ref('')
 const confirmModalConfirmText = ref('')
 const confirmModalCancelText = ref('Cancelar')
 
-// Stores the callback function to execute when the dynamic confirmation is accepted
 let onConfirmCallback = () => {}
 
 // --- Profile specific state ---
@@ -49,7 +143,6 @@ const userProfile = ref({
   updated_at: null,
 })
 
-// Datos extendidos de la persona desde la API
 const personaData = ref({
   id: null,
   nombre: '',
@@ -70,31 +163,7 @@ const userStats = ref({
   teamsCount: 0,
 })
 
-// Placeholder functions for other modals
-const handleOkModalClose = () => {
-  showOkModal.value = false
-}
-const handleErrorModalClose = () => {
-  showErrorModal.value = false
-  errorMessage.value = ''
-}
-const handleDeleteConfirmed = () => {
-  universalDeleteModalRef.value.hide()
-  okModalMessage.value = 'Elemento eliminado con éxito (simulado)!'
-  showOkModal.value = true
-}
-
-// --- Handlers for the dynamic ConfirmationModal's events ---
-const handleDynamicConfirm = () => {
-  onConfirmCallback() // Execute the stored callback
-  showConfirmationModal.value = false // Hide the modal after confirmation
-}
-
-const handleDynamicCancel = () => {
-  showConfirmationModal.value = false // Just hide the modal on cancel
-}
-
-// --- Profile methods ---
+// FUNCIONES CON CACHÉ
 const checkAuth = async () => {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -103,6 +172,23 @@ const checkAuth = async () => {
   }
 
   try {
+    // Intentar obtener del caché primero
+    const cachedProfile = getFromCache(CACHE_KEYS.USER_PROFILE, CACHE_DURATION.USER_PROFILE)
+
+    if (cachedProfile) {
+      userProfile.value = cachedProfile
+      console.log('Perfil de usuario cargado desde caché')
+
+      // Cargar datos relacionados (también con caché)
+      await loadPersonaData()
+      if (userProfile.value.id) {
+        await loadUserStats()
+      }
+      return true
+    }
+
+    // Si no hay caché, hacer petición a la API
+    console.log('Cargando perfil desde API...')
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/user`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -118,10 +204,11 @@ const checkAuth = async () => {
     const userData = await response.json()
     userProfile.value = userData
 
-    // Cargar datos de persona primero, luego estadísticas
-    await loadPersonaData()
+    // Guardar en caché
+    saveToCache(CACHE_KEYS.USER_PROFILE, userData)
 
-    // Cargar estadísticas solo si tenemos el ID del usuario
+    // Cargar datos relacionados
+    await loadPersonaData()
     if (userProfile.value.id) {
       await loadUserStats()
     }
@@ -129,6 +216,7 @@ const checkAuth = async () => {
     return true
   } catch (error) {
     console.error('Error verificando autenticación:', error)
+    clearUserCache() // Limpiar caché en caso de error
     localStorage.removeItem('token')
     router.push('/login')
     return false
@@ -137,9 +225,20 @@ const checkAuth = async () => {
 
 const loadPersonaData = async () => {
   try {
-    const token = localStorage.getItem('token')
+    // Intentar obtener del caché primero
+    const cachedPersona = getFromCache(CACHE_KEYS.PERSONA_DATA, CACHE_DURATION.PERSONA_DATA)
 
+    if (cachedPersona) {
+      personaData.value = cachedPersona
+      console.log('Datos de persona cargados desde caché')
+      return
+    }
+
+    // Si no hay caché y tenemos ID de usuario, hacer petición
     if (userProfile.value.id) {
+      console.log('Cargando datos de persona desde API...')
+      const token = localStorage.getItem('token')
+
       const personaResponse = await fetch(
         `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userProfile.value.id}`,
         {
@@ -153,6 +252,9 @@ const loadPersonaData = async () => {
       if (personaResponse.ok) {
         const persona = await personaResponse.json()
         personaData.value = persona
+
+        // Guardar en caché
+        saveToCache(CACHE_KEYS.PERSONA_DATA, persona)
       } else {
         console.warn('No se encontraron datos de persona para este usuario')
       }
@@ -164,9 +266,19 @@ const loadPersonaData = async () => {
 
 const loadUserStats = async () => {
   try {
+    // Intentar obtener del caché primero
+    const cachedStats = getFromCache(CACHE_KEYS.USER_STATS, CACHE_DURATION.USER_STATS)
+
+    if (cachedStats) {
+      userStats.value = cachedStats
+      console.log('Estadísticas cargadas desde caché')
+      return
+    }
+
+    // Si no hay caché, hacer petición a la API
+    console.log('Cargando estadísticas desde API...')
     const token = localStorage.getItem('token')
 
-    // Usar la API específica de estadísticas del usuario
     const statsResponse = await fetch(
       `${import.meta.env.VITE_URL_BACKEND}/api/usuario/estadisticas/${userProfile.value.id}`,
       {
@@ -181,13 +293,18 @@ const loadUserStats = async () => {
       const response = await statsResponse.json()
 
       if (response.success && response.data) {
-        userStats.value = {
+        const stats = {
           projectsCount: response.data.total_proyectos || 0,
           eventsCount: response.data.total_eventos || 0,
           teamsCount: response.data.total_equipos || 0,
         }
 
-        console.log('Estadísticas cargadas:', userStats.value)
+        userStats.value = stats
+
+        // Guardar en caché
+        saveToCache(CACHE_KEYS.USER_STATS, stats)
+
+        console.log('Estadísticas cargadas y guardadas en caché:', stats)
       } else {
         console.warn('No se pudieron obtener las estadísticas:', response.message)
         userStats.value = {
@@ -206,13 +323,59 @@ const loadUserStats = async () => {
     }
   } catch (error) {
     console.error('Error cargando estadísticas:', error)
-    // Fallback: mantener valores en cero
     userStats.value = {
       projectsCount: 0,
       eventsCount: 0,
       teamsCount: 0,
     }
   }
+}
+
+// FUNCIÓN MODIFICADA PARA AUTO-ACTUALIZACIÓN
+const refreshUserData = async (isAutoRefresh = false) => {
+  if (!isAutoRefresh) {
+    loading.value = true
+  }
+
+  console.log(isAutoRefresh ? 'Auto-actualización ejecutándose...' : 'Actualización manual ejecutándose...')
+
+  // Limpiar caché
+  clearUserCache()
+
+  // Recargar datos
+  await checkAuth()
+
+  if (!isAutoRefresh) {
+    loading.value = false
+    okModalMessage.value = 'Datos actualizados correctamente'
+    showOkModal.value = true
+  } else {
+    console.log('Auto-actualización completada silenciosamente')
+  }
+}
+
+const handleOkModalClose = () => {
+  showOkModal.value = false
+}
+
+const handleErrorModalClose = () => {
+  showErrorModal.value = false
+  errorMessage.value = ''
+}
+
+const handleDeleteConfirmed = () => {
+  universalDeleteModalRef.value.hide()
+  okModalMessage.value = 'Elemento eliminado con éxito (simulado)!'
+  showOkModal.value = true
+}
+
+const handleDynamicConfirm = () => {
+  onConfirmCallback()
+  showConfirmationModal.value = false
+}
+
+const handleDynamicCancel = () => {
+  showConfirmationModal.value = false
 }
 
 const copyProfileLink = () => {
@@ -222,7 +385,6 @@ const copyProfileLink = () => {
   showOkModal.value = true
 }
 
-// Nueva función para cerrar sesión
 const logout = () => {
   confirmModalTitle.value = 'Cerrar Sesión'
   confirmModalMessage.value = '¿Estás seguro que deseas cerrar sesión?'
@@ -230,6 +392,11 @@ const logout = () => {
   confirmModalCancelText.value = 'Cancelar'
 
   onConfirmCallback = () => {
+    // Detener auto-refresh antes de logout
+    stopAutoRefresh()
+
+    // Limpiar TODO el almacenamiento local
+    clearUserCache()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('eventos')
@@ -239,13 +406,6 @@ const logout = () => {
 
   showConfirmationModal.value = true
 }
-
-// Remover funciones de edición
-// const replacePhoto = () => { ... }
-// const removePhoto = () => { ... }
-// const handlePhotoChange = (event) => { ... }
-// const saveChanges = async () => { ... }
-// const cancelChanges = () => { ... }
 
 const resendVerification = async () => {
   sendingVerification.value = true
@@ -278,7 +438,6 @@ const resendVerification = async () => {
   }
 }
 
-// Computed para mostrar el nombre completo
 const fullName = computed(() => {
   if (personaData.value.nombre && personaData.value.apellido) {
     return `${personaData.value.nombre} ${personaData.value.apellido}`
@@ -286,7 +445,6 @@ const fullName = computed(() => {
   return userProfile.value.name || 'Usuario'
 })
 
-// Computed para formatear fechas
 const formatDate = (dateString) => {
   if (!dateString) return 'No disponible'
   return new Date(dateString).toLocaleDateString('es-ES', {
@@ -301,6 +459,14 @@ onMounted(async () => {
   loading.value = true
   await checkAuth()
   loading.value = false
+
+  // Iniciar auto-actualización después de la carga inicial
+  startAutoRefresh()
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -436,8 +602,6 @@ onMounted(async () => {
                   <span class="stat-label">Equipos</span>
                 </div>
               </div>
-
-              <!-- Sección de verificación de email si no está verificado -->
             </div>
           </div>
         </div>
@@ -467,7 +631,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* Profile Content Styles */
+/* Resto de estilos sin cambios */
 .profile-container {
   max-width: 800px;
   margin: 0 auto;
@@ -525,32 +689,21 @@ onMounted(async () => {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  align-items: flex-end;
 }
 
-.btn-secondary {
+.btn-logout {
   padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 8px;
-  color: #374151;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  padding: 8px 16px;
-  background: #111827;
+  background: #dc2626;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .profile-info {
@@ -594,135 +747,6 @@ onMounted(async () => {
   color: #6b7280;
 }
 
-.profile-form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.form-input {
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 16px;
-  color: #111827;
-  transition: border-color 0.2s;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.input-with-icon {
-  position: relative;
-}
-
-.input-with-icon i {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
-}
-
-.input-with-icon .form-input {
-  padding-left: 40px;
-}
-
-.photo-upload {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  justify-content: center;
-}
-
-.current-photo {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid #d1d5db;
-}
-
-.upload-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-replace,
-.btn-remove {
-  padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 8px;
-  color: #374151;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.btn-remove {
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
-.hidden-input {
-  display: none;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 12px;
-}
-
-.btn-cancel {
-  padding: 10px 20px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 8px;
-  color: #374151;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-save {
-  padding: 10px 20px;
-  background: #111827;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .verification-status {
   display: flex;
   align-items: center;
@@ -738,54 +762,6 @@ onMounted(async () => {
 
 .verification-status.unverified {
   color: #f59e0b;
-}
-
-.form-help {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-  text-align: center;
-}
-
-.verification-section {
-  padding: 16px;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.verification-message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  margin: 8px 0;
-  justify-content: center;
-}
-
-.btn-verify {
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.btn-cancel:hover {
-  background: #f9fafb;
-}
-
-.btn-primary:hover,
-.btn-replace:hover {
-  background: #1f2937;
-}
-
-.btn-remove:hover {
-  background: #fee2e2;
 }
 
 .user-details {
@@ -842,19 +818,6 @@ onMounted(async () => {
   color: #374151;
 }
 
-.btn-logout {
-  padding: 8px 16px;
-  background: #dc2626;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* Responsive para detalles */
 @media (max-width: 768px) {
   .details-grid {
     grid-template-columns: 1fr;
@@ -868,6 +831,12 @@ onMounted(async () => {
 
   .detail-value {
     text-align: left;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
   }
 }
 </style>
