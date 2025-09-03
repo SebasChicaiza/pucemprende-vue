@@ -432,6 +432,7 @@ const goBack = () => {
       :show="showEvaluateTemplateModal"
       :plantilla="currentPlantillaToEvaluate"
       :proceso-evento-id="currentProcesoEventoId"
+      :proceso-id="procesoId"
       :user-event-permissions="userEventPermissions"
       @close="handleEvaluateModalClose"
       @submit-evaluation="handleEvaluationSubmit"

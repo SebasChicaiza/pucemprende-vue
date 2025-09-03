@@ -17,6 +17,10 @@ const props = defineProps({
     type: [Number, String],
     default: null,
   },
+  procesoId: {
+    type: [Number, String],
+    default: null,
+  },
   userEventPermissions: {
     type: Array,
     default: () => [],
@@ -241,6 +245,24 @@ const submitEvaluation = async () => {
         Authorization: `Bearer ${token}`,
       },
     })
+
+    const resultadosPayload = {
+      persona_id: evaluatorId,
+      proceso_id: +props.procesoId,
+      equipo_id: selectedTeamId.value,
+    }
+
+    console.log('Payload for resultados-proceso-evaluacion:', resultadosPayload)
+    await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/resultado-proceso-evaluacion`,
+      resultadosPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
 
     emit('submit-evaluation', { success: true })
     close()

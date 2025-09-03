@@ -3,28 +3,54 @@ import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
 import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
-import { useEventosStore } from '@/stores/eventos' // Importa tu store
-import { storeToRefs } from 'pinia' // Necesario para desestructurar propiedades reactivas del store
+import { useEventosStore } from '@/stores/eventos'
+import { storeToRefs } from 'pinia'
 import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
+import ManageSedesModal from '@/components/Admin/Eventos/ManageSedesModal.vue'
+import ManageCategoriasModal from '@/components/Admin/Eventos/ManageCategoriasModal.vue'
 const eventosInscritosStore = useEventosInscritosStore()
 
-// Carga asíncrona de componentes grandes o usados con menos frecuencia
+const isSuperAdmin = ref(false)
+const isAdmin = ref(false)
+const isUser = ref(false)
+
+const checkrol = () => {
+  const user = JSON.parse(localStorage.getItem('user'))
+  if (user.rol_id == 1) {
+    isAdmin.value = true
+  } else if (user.rol_id == 2) {
+    isUser.value = true
+  } else if (user.rol_id == 8) {
+    isSuperAdmin.value = true
+  }
+}
+
 const ModalCrearEvento = defineAsyncComponent(
   () => import('@/components/Admin/Eventos/ModalCrearEvento.vue'),
 )
+
 const AdminEventCard = defineAsyncComponent(
   () => import('@/components/Admin/Eventos/AdminEventCard.vue'),
 )
-// LoaderComponent es pequeño, no suele necesitar carga asíncrona
 import LoaderComponent from '@/components/LoaderComponent.vue'
 
 const router = useRouter()
-const eventosStore = useEventosStore() // Instancia el store
+const eventosStore = useEventosStore()
 
 const showCreateEditModal = ref(false)
+const showSedesModal = ref(false)
+const showCategoriasModal = ref(false)
+
+const openSedesModal = () => {
+  showSedesModal.value = true
+}
+
+const openCategoriasModal = () => {
+  showCategoriasModal.value = true
+}
+
 let searchTimeout = null
 
-// Desestructura las propiedades reactivas del store usando storeToRefs
 const {
   events,
   loading,
@@ -39,41 +65,32 @@ const {
 const handleSearchInput = () => {
   clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
-    // Al cambiar el query de búsqueda, siempre vamos a la primera página
     if (eventosStore.currentPage !== 1) {
-      eventosStore.setCurrentPage(1) // Esto disparará el watcher de currentPage
+      eventosStore.setCurrentPage(1)
     } else {
-      eventosStore.fetchEvents() // Si ya estamos en la primera página, simplemente busca
+      eventosStore.fetchEvents()
     }
-  }, 500)
+  }, 1500)
 }
 
 const handleSearchEnter = () => {
   clearTimeout(searchTimeout)
-  eventosStore.setCurrentPage(1) // Siempre ir a la primera página con Enter
+  eventosStore.setCurrentPage(1)
   eventosStore.fetchEvents()
 }
 
-// Observar cambios en currentPage del store para recargar eventos
 watch(currentPage, () => {
   eventosStore.fetchEvents()
 })
 
-// Observar cambios en searchQuery del store (opcional, si lo modificas fuera del v-model)
-// watch(searchQuery, (newVal, oldVal) => {
-//     // Puedes agregar lógica aquí si la query cambia de forma externa y necesitas una acción inmediata
-//     if (newVal === '' && oldVal !== '' && !loading.value) {
-//         eventosStore.fetchEvents();
-//     }
-// });
-
 onMounted(() => {
-  eventosStore.fetchEvents() // Carga inicial de eventos al montar el componente
-  eventosInscritosStore.fetchEventosInscritos() // Actualiza eventos inscritos del usuario actual
+  eventosStore.fetchEvents()
+  eventosInscritosStore.fetchEventosInscritos()
+  checkrol()
 })
 
 const openCreateModal = () => {
-  eventosStore.clearCurrentEventToEdit() // Asegúrate de limpiar el evento a editar antes de abrir el modal para crear
+  eventosStore.clearCurrentEventToEdit()
   showCreateEditModal.value = true
 }
 
@@ -88,14 +105,16 @@ const handleEditEvent = async (eventData) => {
 
 const handleModalClose = () => {
   showCreateEditModal.value = false
-  eventosStore.clearCurrentEventToEdit() // Limpia el evento editado al cerrar el modal
+  showSedesModal.value = false
+  showCategoriasModal.value = false
+  eventosStore.clearCurrentEventToEdit()
 }
 
 const handleModalSubmit = async (emittedEventData) => {
   showCreateEditModal.value = false
   eventosStore.clearCurrentEventToEdit()
 
-  await eventosStore.fetchEvents() // Recargar la lista de eventos después de crear/editar
+  await eventosStore.fetchEvents()
   console.log('Event list refreshed after modal submission.')
 }
 
@@ -131,18 +150,28 @@ const prevPage = () => {
       <PageHeaderRoute />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <div class="d-flex align-items-center mb-3 gap-2">
-          <input
-            v-model="eventosStore.searchQuery"
-            type="text"
-            placeholder="Buscar por nombre"
-            class="form-control"
-            @input="handleSearchInput"
-            @keyup.enter="handleSearchEnter"
-          />
-          <button class="btn btn-default" @click="openCreateModal">
-            <i class="fas fa-plus"></i>
-          </button>
+        <div class="filter-controls mb-4">
+          <div class="search-input-group">
+            <input
+              v-model="eventosStore.searchQuery"
+              type="text"
+              placeholder="Buscar por nombre"
+              @input="handleSearchInput"
+              @keyup.enter="handleSearchEnter"
+            />
+            <i class="fas fa-search search-icon"></i>
+          </div>
+          <div class="button-group">
+            <button v-if="isSuperAdmin" class="btn btn-manage" @click="openSedesModal">
+              <i class="fa-solid fa-pen"></i> Sedes
+            </button>
+            <button v-if="isSuperAdmin" class="btn btn-manage" @click="openCategoriasModal">
+              <i class="fa-solid fa-pen"></i> Categorías
+            </button>
+            <button v-if="isSuperAdmin" class="btn btn-create" @click="openCreateModal">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
         </div>
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
@@ -188,30 +217,94 @@ const prevPage = () => {
           @close="handleModalClose"
           @submit="handleModalSubmit"
         />
+        <ManageSedesModal :show="showSedesModal" @close="handleModalClose" />
+        <ManageCategoriasModal :show="showCategoriasModal" @close="handleModalClose" />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.error-text {
-  color: red;
-  font-weight: bold;
+.filter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
-.form-control {
+.search-input-group {
+  position: relative;
   flex-grow: 1;
 }
 
-.btn-default {
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  color: #495057;
+.search-input-group input {
+  width: 100%;
+  padding: 0.5rem 1rem 0.5rem 2.2rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.btn-default:hover {
-  background-color: #e2e6ea;
-  border-color: #dae0e5;
+.search-input-group input:focus {
+  border-color: #174384;
+  outline: none;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a0a0a0;
+  pointer-events: none;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-create {
+  background-color: #174384;
+  color: white;
+  box-shadow: 0 1px 3px rgba(40, 167, 69, 0.2);
+}
+
+.btn-create:hover {
+  background-color: #14386b;
+}
+
+.btn-manage {
+  background-color: #174384;
+  color: white;
+  box-shadow: 0 1px 3px rgba(23, 67, 132, 0.2);
+}
+
+.btn-manage:hover {
+  background-color: #14386b;
+}
+
+.error-text {
+  color: #dc3545;
+  font-weight: 500;
+  background-color: #fff0f0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #dc3545;
 }
 
 .pagination {
