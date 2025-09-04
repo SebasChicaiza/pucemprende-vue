@@ -18,7 +18,7 @@
     "pucemprende-vue": "file:",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
