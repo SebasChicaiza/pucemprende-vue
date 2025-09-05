@@ -9,6 +9,13 @@ import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.
 
 const router = useRouter()
 
+const props = defineProps({
+  eventoId: {
+    type: [String, Number],
+    required: true,
+  },
+})
+
 // --- Estado principal ---
 const loading = ref(false)
 const error = ref('')
@@ -23,8 +30,9 @@ const logoImage = ref({ file: null, id: null, url: '' })
 const titulo = ref('')
 const descripcion = ref('')
 
-// Miembros del proyecto (sin inscripciones a eventos)
-const miembrosProyecto = ref([]) // [{ persona:{...}, persona_id, rol_id, _isOwner? }]
+// Equipo (creación por detrás)
+const nombreEquipo = ref('')
+const miembrosEquipo = ref([]) // [{ persona:{...}, persona_id, rol_id, _isOwner? }]
 const cedulaBusqueda = ref('')
 const resultadosBusqueda = ref([])
 const buscando = ref(false)
@@ -63,23 +71,34 @@ function getCurrentPersonaId() {
 }
 
 // --- Debug helpers ---
+function safeParse(data) {
+  try {
+    return typeof data === 'string' ? JSON.parse(data) : data
+  } catch {
+    return data
+  }
+}
 function logAxiosError(err, label = 'Axios error') {
   const { config, response, message } = err || {}
-  console.groupCollapsed(`ERROR ${label}`)
+  console.groupCollapsed(`❌ ${label}`)
   console.log('Message:', message)
   console.log('Request:', {
     method: config?.method,
     url: config?.url,
-    data: config?.data,
+    headers: config?.headers,
+    data: safeParse(config?.data),
   })
   if (response) {
     console.log('Status:', response.status, response.statusText)
     console.log('Response data:', response.data)
+    console.log('Response headers:', response.headers)
+  } else {
+    console.log('No hubo respuesta (red/CORS).')
   }
   console.groupEnd()
 }
 
-// --- Cargar al creador como miembro fijo ---
+// --- Cargar al creador como miembro fijo (API/persona/:id) ---
 async function ensureSelfMemberPresent() {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -104,20 +123,14 @@ async function ensureSelfMemberPresent() {
     showNotification('No se pudo identificar tu usuario (persona_id).', 'error')
     return
   }
-
-  // CLAVE: Verificar si ya existe ANTES de añadir
-  if (miembrosProyecto.value.some((m) => m.persona_id === personaId)) {
-    console.log('Usuario ya existe en el proyecto, no se añade duplicado')
-    return
-  }
+  if (miembrosEquipo.value.some((m) => m.persona_id === personaId)) return
 
   try {
     const { data: persona } = await axios.get(
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-
-    miembrosProyecto.value.unshift({
+    miembrosEquipo.value.unshift({
       persona: {
         id: persona?.id,
         nombre: persona?.nombre,
@@ -129,7 +142,7 @@ async function ensureSelfMemberPresent() {
       rol_id: 1, // por defecto Líder (editable)
       _isOwner: true,
     })
-    console.log('Usuario creador añadido:', miembrosProyecto.value)
+    console.log(miembrosEquipo.value)
   } catch (e) {
     console.error('No se pudieron cargar tus datos con API/persona/id', e)
     showNotification('No se pudieron cargar tus datos de persona.', 'error')
@@ -146,18 +159,125 @@ function validarFormulario() {
     showNotification('La descripción no puede tener más de 45 caracteres.', 'error')
     return false
   }
-  if (miembrosProyecto.value.length === 0) {
-    showNotification('Añade al menos un integrante al proyecto.', 'error')
+  if (miembrosEquipo.value.length === 0) {
+    showNotification('Añade al menos un integrante al equipo.', 'error')
     return false
   }
-  if (!miembrosProyecto.value.some((m) => m.rol_id === 1)) {
+  if (!miembrosEquipo.value.some((m) => m.rol_id === 1)) {
     showNotification('Debes asignar al menos un integrante con rol de Líder.', 'error')
+    return false
+  }
+  if (!miembrosEquipo.value.some((m) => m.persona_id === currentPersonaId.value)) {
+    showNotification('El usuario creador debe pertenecer al equipo.', 'error')
     return false
   }
   return true
 }
 
-// --- Guardado final (Solo proyecto y miembros) ---
+// ====== APIs de inscripción / activación ======
+async function getEventoRolPersonaId(eventoId, personaId, headers) {
+  try {
+    const res = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${eventoId}/${personaId}`,
+      { headers },
+    )
+    const d = res.data
+    console.log('GET evento-rol-persona result:', d)
+    return d?.id ?? d?.evento_rol_persona_id ?? (Array.isArray(d) ? d[0]?.id : null)
+  } catch (e) {
+    if (e?.response?.status === 404) return null
+    logAxiosError(e, `GET evento-rol-persona (${eventoId}/${personaId})`)
+    throw e
+  }
+}
+
+async function activarEventoRolPersonaById(eventoRolPersonaId, headers) {
+  await axios.post(
+    `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${eventoRolPersonaId}/activar`,
+    {},
+    { headers },
+  )
+}
+
+/** CREADOR: prioriza self-inscribe cuando no existe registro */
+async function ensureInscripcionActivaCreador(eventoId, personaId, headers) {
+  let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
+  if (erpId) {
+    /*try {
+      await activarEventoRolPersonaById(erpId, headers)
+      return
+    } catch (e) {
+      logAxiosError(e, `ACTIVAR CREADOR erpId=${erpId}`)
+    }*/
+  }
+  // No existe => self-inscribe (sin persona_id)
+  try {
+    await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
+      { evento_id: Number(eventoId) }, // self
+      { headers },
+    )
+  } catch (e) {
+    // si ya estaba inscrito pero borrado=true, backend podría devolver 409; seguimos
+    if (e?.response?.status !== 409) {
+      logAxiosError(e, 'SELF-INSCRIBIR CREADOR')
+      throw e
+    }
+  }
+  // Buscar y activar
+  erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
+  /*if (erpId) await activarEventoRolPersonaById(erpId, headers)*/
+}
+
+/** OTRO MIEMBRO: inscribe con persona_id si no existe; si 409, re-GET + activar */
+async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
+  let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
+  /*if (erpId) {
+    await activarEventoRolPersonaById(erpId, headers)
+    return
+  }*/
+  try {
+    const payload = {
+      persona_id: personaId,
+      evento_id: eventoId,
+      rol_id: 4,
+      estado_borrado: false,
+    }
+    console.log('Inscribiendo miembro:', JSON.stringify(payload))
+    await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
+      headers,
+    })
+    return
+  } catch (e) {
+    if (e?.response?.status !== 409) {
+      logAxiosError(e, `INSCRIBIR miembro persona_id=${personaId}`)
+      throw e
+    }
+  }
+  // 409 => intentar activar
+  erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
+  /*if (erpId) await activarEventoRolPersonaById(erpId, headers)*/
+}
+
+/** Valida/activa TODOS antes de crear proyecto */
+async function ensureAllInscripcionesActivas(headers) {
+  // 1) Creador
+  await ensureInscripcionActivaCreador(props.eventoId, currentPersonaId.value, headers)
+
+  // 2) Demás miembros
+  for (const m of miembrosEquipo.value) {
+    if (m.persona_id === currentPersonaId.value) continue
+    try {
+      await ensureInscripcionActivaMiembro(props.eventoId, m.persona_id, headers)
+    } catch (e) {
+      const fullName = `${m.persona?.nombre ?? ''} ${m.persona?.apellido ?? ''}`.trim()
+      showNotification(`No se pudo activar/inscribir a ${fullName}.`, 'error')
+      throw e // detener flujo completo
+    }
+  }
+}
+
+// --- Guardado final ---
 async function confirmarCreacion() {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -168,29 +288,66 @@ async function confirmarCreacion() {
 
   loading.value = true
   try {
-    // Filtrar duplicados usando la misma lógica del código que funciona
-    const miembrosUnicos = miembrosProyecto.value.filter(
+    // (0) **OBLIGATORIO**: asegurar inscripciones ACTIVAS de TODOS (incluido creador)
+    await ensureAllInscripcionesActivas(headers)
+
+    // (1) Crear equipo "por detrás"
+    const nombreEquipoFinal = nombreEquipo.value.trim() || `${titulo.value.trim() || 'Proyecto'}`
+
+    const equipoRes = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
+      {
+        nombre: nombreEquipoFinal,
+        evento_id: Number(props.eventoId),
+        ranking: null,
+      },
+      { headers },
+    )
+    const equipoId = equipoRes.data.id
+
+    // (1.1) Registrar miembros del equipo
+    const hoy = new Date()
+    const fechaInicio = hoy.toISOString().split('T')[0]
+    const fechaFin = new Date(hoy.getTime() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+    const miembrosUnicos = miembrosEquipo.value.filter(
       (m, i, arr) => arr.findIndex((x) => x.persona_id === m.persona_id) === i,
     )
+    console.log('Miembros únicos a registrar en equipo:', miembrosUnicos)
+    for (const miembro of miembrosUnicos) {
+      try {
+        const miembrosEquipo = await axios.post(
+          `${import.meta.env.VITE_URL_BACKEND}/api/miembros-equipo`,
+          {
+            equipo_id: equipoId,
+            persona_id: miembro.persona_id,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+          },
+          { headers },
+        )
+        console.log('Miembro al equipo registrado:', JSON.stringify(miembrosEquipo.data))
+      } catch (e) {
+        console.warn(`Error registrando miembro-equipo (${miembro.persona_id}):`, e)
+        showNotification(
+          `No se pudo registrar en el equipo a ${miembro.persona?.nombre ?? ''} ${miembro.persona?.apellido ?? ''}.`,
+          'error',
+        )
+      }
+    }
 
-    console.log('Miembros únicos a procesar:', miembrosUnicos.length)
-    miembrosUnicos.forEach((m, i) => {
-      console.log(`Miembro único ${i}:`, m.persona?.nombre, m.persona?.apellido, 'ID:', m.persona_id)
-    })
-
-    // (1) Crear proyecto SIN evento
+    // (2) Crear proyecto
     const { data: proyectoCreado } = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
       {
-        titulo: titulo.value.trim(),
-        descripcion: descripcion.value.trim(),
+        titulo: titulo.value,
+        descripcion: descripcion.value,
+        equipo_id: equipoId,
       },
       { headers },
     )
 
-    console.log('Proyecto creado:', proyectoCreado)
-
-    // (2) Subir logo (opcional)
+    // (3) Subir logo (opcional)
     if (logoImage.value?.file) {
       const uploaded = await subirLogoProyecto(logoImage.value.file, proyectoCreado.id)
       if (!uploaded) {
@@ -201,195 +358,40 @@ async function confirmarCreacion() {
       }
     }
 
-    // (3) Registrar SOLO miembros únicos
-    const fechaInicioP = proyectoCreado.fecha_inicio ? proyectoCreado.fecha_inicio.split('T')[0] : null
-    const fechaFinP = proyectoCreado.fecha_fin ? proyectoCreado.fecha_fin.split('T')[0] : null
+    // (4) Registrar miembros del proyecto (con rol)
+    const fechaInicioP = proyectoCreado.fecha_inicio.split('T')[0]
+    const fechaFinP = proyectoCreado.fecha_fin.split('T')[0]
 
-    console.log('Fechas para miembros del proyecto:', { fechaInicioP, fechaFinP })
+    // Consulta los miembros ya existentes en el proyecto (opcional, si el backend lo permite)
+    // const { data: miembrosExistentes } = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto?proyecto_id=${proyectoCreado.id}`, { headers })
 
-    for (const miembro of miembrosUnicos) {
-      console.log('Procesando miembro único:', miembro.persona?.nombre, miembro.persona?.apellido, 'ID:', miembro.persona_id)
-
-      const miembroData = {
-        rol_id: miembro.rol_id,
-        proyecto_id: proyectoCreado.id,
-        persona_id: miembro.persona_id,
-        fecha_inicio: fechaInicioP,
-        fecha_fin: fechaFinP,
-      }
-
-      console.log('Datos a enviar:', miembroData)
+    // Si sabes que el backend agrega al creador automáticamente, omite agregarlo aquí:
+    for (const miembro of miembrosEquipo.value) {
+      // Omitir el líder/creador si el backend ya lo agrega
+      if (miembro.persona_id === currentPersonaId.value) continue
 
       try {
-        const response = await axios.post(
+        await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/miembros-proyecto`,
-          miembroData,
+          {
+            rol_id: miembro.rol_id,
+            proyecto_id: proyectoCreado.id,
+            persona_id: miembro.persona_id,
+            fecha_inicio: fechaInicioP,
+            fecha_fin: fechaFinP,
+          },
           { headers },
         )
-        console.log(`ÉXITO: Miembro registrado - ${miembro.persona?.nombre} ${miembro.persona?.apellido} (ID: ${miembro.persona_id})`)
       } catch (e) {
-        console.error(`FALLO: Error con ${miembro.persona?.nombre} ${miembro.persona?.apellido} (ID: ${miembro.persona_id}):`, e?.response?.data || e.message)
-        logAxiosError(e, `Error miembro ${miembro.persona_id}`)
+        // Manejo de error...
+        console.warn(
+          `Error registrando miembro-proyecto (${miembro.persona_id}):`,
+          e?.response?.data || e,
+        )
         showNotification(
-          `No se pudo registrar a ${miembro.persona?.nombre ?? ''} ${miembro.persona?.apellido ?? ''} en el proyecto.`,
+          `No se pudo registrar en el proyecto a ${miembro.persona?.nombre ?? ''} ${miembro.persona?.apellido ?? ''}.`,
           'error',
         )
-      }
-    }
-
-    /** Valida/activa TODOS antes de crear proyecto */
-    async function ensureAllInscripcionesActivas(headers) {
-      console.log(`Asegurando inscripciones para evento ID: ${props.eventoId}`)
-
-      // 1) Creador - solo para este evento específico
-      console.log(`Inscribiendo creador (ID: ${currentPersonaId.value}) al evento ${props.eventoId}`)
-      await ensureInscripcionActivaCreador(props.eventoId, currentPersonaId.value, headers)
-
-      // 2) Demás miembros - solo para este evento específico
-      for (const m of miembrosProyecto.value) {
-        if (m.persona_id === currentPersonaId.value) {
-          console.log(`Saltando creador en bucle de miembros: ${m.persona?.nombre}`)
-          continue
-        }
-
-        try {
-          console.log(`Inscribiendo miembro (ID: ${m.persona_id}) ${m.persona?.nombre} ${m.persona?.apellido} al evento ${props.eventoId}`)
-          await ensureInscripcionActivaMiembro(props.eventoId, m.persona_id, headers)
-          console.log(`✓ Inscripción exitosa para ${m.persona?.nombre} ${m.persona?.apellido}`)
-        } catch (e) {
-          const fullName = `${m.persona?.nombre ?? ''} ${m.persona?.apellido ?? ''}`.trim()
-          console.error(`✗ Error inscribiendo a ${fullName} en evento ${props.eventoId}:`, e)
-          showNotification(`No se pudo activar/inscribir a ${fullName} en este evento.`, 'error')
-          throw e // detener flujo completo
-        }
-      }
-
-      console.log(`✓ Todas las inscripciones completadas para evento ${props.eventoId}`)
-    }
-
-    /** CREADOR: prioriza self-inscribe cuando no existe registro */
-    async function ensureInscripcionActivaCreador(eventoId, personaId, headers) {
-      console.log(`[CREADOR] Verificando inscripción para persona ${personaId} en evento ${eventoId}`)
-
-      let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-      if (erpId) {
-        console.log(`[CREADOR] Ya existe registro ${erpId}, activando si es necesario`)
-        try {
-          await activarEventoRolPersonaById(erpId, headers)
-          console.log(`[CREADOR] ✓ Activación exitosa`)
-          return
-        } catch (e) {
-          console.warn(`[CREADOR] Error activando ${erpId}:`, e)
-          logAxiosError(e, `ACTIVAR CREADOR erpId=${erpId}`)
-        }
-      }
-
-      // No existe => self-inscribe (sin persona_id)
-      console.log(`[CREADOR] No existe registro, auto-inscribiendo a evento ${eventoId}`)
-      try {
-        await axios.post(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
-          { evento_id: Number(eventoId) }, // self
-          { headers },
-        )
-        console.log(`[CREADOR] ✓ Auto-inscripción exitosa`)
-      } catch (e) {
-        // si ya estaba inscrito pero borrado=true, backend podría devolver 409; seguimos
-        if (e?.response?.status !== 409) {
-          console.error(`[CREADOR] Error en auto-inscripción:`, e)
-          logAxiosError(e, 'SELF-INSCRIBIR CREADOR')
-          throw e
-        }
-        console.log(`[CREADOR] 409 - Ya existe, continuando...`)
-      }
-
-      // Buscar y activar
-      erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-      if (erpId) {
-        console.log(`[CREADOR] Activando registro encontrado ${erpId}`)
-        await activarEventoRolPersonaById(erpId, headers)
-      }
-    }
-
-    /** OTRO MIEMBRO: inscribe con persona_id si no existe; si 409, re-GET + activar */
-    async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
-      console.log(`[MIEMBRO] Verificando inscripción para persona ${personaId} en evento ${eventoId}`)
-
-      let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-      if (erpId) {
-        console.log(`[MIEMBRO] Ya existe registro ${erpId}, activando`)
-        await activarEventoRolPersonaById(erpId, headers)
-        console.log(`[MIEMBRO] ✓ Activación exitosa`)
-        return
-      }
-
-      console.log(`[MIEMBRO] No existe registro, inscribiendo a evento ${eventoId}`)
-      try {
-        const payload = {
-          persona_id: personaId,
-          evento_id: Number(eventoId), // Asegurar que sea número
-          rol_id: 4,
-          estado_borrado: false,
-        }
-        console.log(`[MIEMBRO] Enviando payload:`, JSON.stringify(payload))
-
-        await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
-          headers,
-        })
-        console.log(`[MIEMBRO] ✓ Inscripción exitosa`)
-        return
-      } catch (e) {
-        if (e?.response?.status !== 409) {
-          console.error(`[MIEMBRO] Error en inscripción:`, e)
-          logAxiosError(e, `INSCRIBIR miembro persona_id=${personaId}`)
-          throw e
-        }
-        console.log(`[MIEMBRO] 409 - Ya existe, intentando activar...`)
-      }
-
-      // 409 => intentar activar
-      erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
-      if (erpId) {
-        console.log(`[MIEMBRO] Activando registro ${erpId} después de 409`)
-        await activarEventoRolPersonaById(erpId, headers)
-      }
-    }
-
-    async function getEventoRolPersonaId(eventoId, personaId, headers) {
-      console.log(`[GET] Buscando evento-rol-persona para evento ${eventoId}, persona ${personaId}`)
-      try {
-        const res = await axios.get(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${eventoId}/${personaId}`,
-          { headers },
-        )
-        const d = res.data
-        console.log(`[GET] Resultado:`, d)
-        const id = d?.id ?? d?.evento_rol_persona_id ?? (Array.isArray(d) ? d[0]?.id : null)
-        console.log(`[GET] ID extraído: ${id}`)
-        return id
-      } catch (e) {
-        if (e?.response?.status === 404) {
-          console.log(`[GET] 404 - No existe registro`)
-          return null
-        }
-        console.error(`[GET] Error:`, e)
-        logAxiosError(e, `GET evento-rol-persona (${eventoId}/${personaId})`)
-        throw e
-      }
-    }
-
-    async function activarEventoRolPersonaById(eventoRolPersonaId, headers) {
-      console.log(`[ACTIVAR] Activando evento-rol-persona ID: ${eventoRolPersonaId}`)
-      try {
-        await axios.post(
-          `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/${eventoRolPersonaId}/activar`,
-          {},
-          { headers },
-        )
-        console.log(`[ACTIVAR] ✓ Activación exitosa`)
-      } catch (e) {
-        console.error(`[ACTIVAR] Error:`, e)
-        throw e
       }
     }
 
@@ -444,7 +446,7 @@ async function subirLogoProyecto(file, proyectoId) {
   }
 }
 
-// --- Manejo de logo ---
+// --- Manejo de logo (preview) ---
 function onLogoChange(event) {
   const file = event.target.files[0]
   if (!file) return
@@ -470,11 +472,9 @@ async function buscarPersonaPorCedula() {
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${cedulaBusqueda.value}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    console.log('Resultados de búsqueda:', data)
     const resultados = Array.isArray(data) ? data : [data]
     resultadosBusqueda.value = resultados.filter((p) => !p.estado_borrado)
   } catch (e) {
-    console.error('Error en búsqueda:', e)
     busquedaError.value = 'No se encontraron resultados.'
   } finally {
     buscando.value = false
@@ -482,21 +482,11 @@ async function buscarPersonaPorCedula() {
 }
 
 async function seleccionarPersona(persona) {
-  console.log('Intentando seleccionar persona:', persona.nombre, persona.apellido, 'ID:', persona.id)
-
-  // CLAVE: Misma verificación que en el código que funciona
   if (
-    miembrosProyecto.value.some((i) => i.persona?.identificacion === persona.identificacion) ||
+    miembrosEquipo.value.some((i) => i.persona?.identificacion === persona.identificacion) ||
     persona?.id === currentPersonaId.value
   ) {
-    showNotification('Esta persona ya forma parte del proyecto.', 'error')
-    console.log('RECHAZADO: Persona ya existe')
-    return
-  }
-
-  if (!persona.id) {
-    showNotification('Error: No se pudo obtener el ID de la persona.', 'error')
-    console.error('Persona sin ID:', persona)
+    showNotification('Esta persona ya forma parte del equipo.', 'error')
     return
   }
 
@@ -513,7 +503,7 @@ async function seleccionarPersona(persona) {
     )
     const personaCompleta = Array.isArray(response.data) ? response.data[0] : response.data
 
-    miembrosProyecto.value.push({
+    miembrosEquipo.value.push({
       persona: {
         nombre: personaCompleta.nombre,
         apellido: personaCompleta.apellido,
@@ -523,30 +513,23 @@ async function seleccionarPersona(persona) {
       persona_id: personaCompleta.id,
       rol_id: 2, // por defecto Integrante
     })
+    console.log(miembrosEquipo.value)
 
-    console.log('Miembro añadido, total actual:', miembrosProyecto.value.length)
-
-    // Limpiar búsqueda
-    cedulaBusqueda.value = ''
-    resultadosBusqueda.value = []
-    busquedaError.value = ''
-
-    showNotification(`${personaCompleta.nombre} ${personaCompleta.apellido} añadido al proyecto.`, 'success')
-
+    showNotification('Integrante añadido correctamente.', 'success')
   } catch (error) {
-    console.error('Error añadiendo integrante:', error)
     showNotification('Ocurrió un error al añadir al integrante.', 'error')
+    console.error('Error obteniendo persona completa:', error)
   }
 }
 
 function eliminarIntegrante(index) {
-  const m = miembrosProyecto.value[index]
+  const m = miembrosEquipo.value[index]
   if (!m) return
   if (isSelfMember(m)) {
-    showNotification('No puedes eliminarte del proyecto.', 'error')
+    showNotification('No puedes eliminarte del equipo.', 'error')
     return
   }
-  miembrosProyecto.value.splice(index, 1)
+  miembrosEquipo.value.splice(index, 1)
 }
 
 // --- init ---
@@ -560,10 +543,10 @@ onMounted(async () => {
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-      <PageHeaderRoute title="Home - Eventos - PUCE Emprende - Crear Proyecto" />
+      <PageHeaderRoute title="Home - Eventos - PUCE Emprende - Inscripciones" />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <h2 class="mb-3" style="color: #174384; font-weight: 600">
-          Crear nuevo proyecto
+          Inscríbete con tu proyecto a PUCE Emprende
         </h2>
 
         <div class="card p-4">
@@ -603,34 +586,45 @@ onMounted(async () => {
             />
           </div>
 
-          <!-- Información del Proyecto -->
-          <h4 class="text-dark mb-3">Información del Proyecto</h4>
+          <!-- Proyecto -->
+          <h4 class="text-dark mb-3">Proyecto</h4>
           <p class="text-muted mb-4" style="max-width: 600px">
-            Crea un proyecto que podrás usar para formar equipos en diferentes eventos
+            Detalla el proyecto con el que te quieres inscribir a este evento y participa en el
+            mismo
           </p>
 
           <div class="mb-3">
-            <label class="form-label">Título del proyecto</label>
+            <label class="form-label">Título de tu proyecto</label>
             <input
               v-model="titulo"
               type="text"
               class="form-control"
-              placeholder="Ingresa el nombre de tu proyecto"
+              placeholder="Ingresa el Nombre de tu proyecto"
             />
           </div>
 
           <div class="mb-4">
-            <label class="form-label">Descripción del proyecto</label>
+            <label class="form-label">Descripción de tu proyecto</label>
             <textarea
               v-model="descripcion"
               class="form-control"
               rows="3"
-              placeholder="Describe tu proyecto (máx. 45 caracteres)"
+              placeholder="Ingresa la descripción de tu proyecto (máx. 45 caracteres)"
             ></textarea>
           </div>
 
-          <!-- Miembros del Proyecto -->
-          <h4 class="text-dark mb-3">Miembros del Proyecto</h4>
+          <!-- Equipo
+          <h4 class="text-dark mb-3">Equipo</h4>
+          <div class="mb-3">
+            <label class="form-label">Nombre del equipo (opcional)</label>
+            <input
+              v-model="nombreEquipo"
+              type="text"
+              class="form-control"
+              placeholder="Si lo dejas vacío, usaremos el título del proyecto"
+            />
+          </div>
+          -->
 
           <!-- Buscador por cédula -->
           <div class="mb-3">
@@ -654,7 +648,8 @@ onMounted(async () => {
                 class="list-group-item d-flex justify-content-between align-items-center"
               >
                 <div>
-                  <strong>{{ persona.nombre }} {{ persona.apellido }}</strong><br />
+                  <strong>{{ persona.nombre }} {{ persona.apellido }}</strong
+                  ><br />
                   <small class="text-muted">Cédula: {{ persona.identificacion }}</small>
                 </div>
                 <button class="btn btn-sm btn-outline-primary" @click="seleccionarPersona(persona)">
@@ -664,9 +659,9 @@ onMounted(async () => {
             </ul>
           </div>
 
-          <!-- Tabla de miembros -->
+          <!-- Tabla de integrantes -->
           <div class="mb-4">
-            <label class="form-label fw-semibold mb-2">Miembros del proyecto</label>
+            <label class="form-label fw-semibold mb-2">Integrantes añadidos</label>
             <table class="table table-bordered align-middle">
               <thead class="table-light">
                 <tr>
@@ -678,7 +673,7 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(miembro, index) in miembrosProyecto" :key="index">
+                <tr v-for="(miembro, index) in miembrosEquipo" :key="index">
                   <td>
                     {{ miembro.persona?.nombre }} {{ miembro.persona?.apellido }}
                     <span v-if="isSelfMember(miembro)" class="badge bg-info ms-1">Tú</span>
@@ -696,7 +691,7 @@ onMounted(async () => {
                       class="btn btn-sm btn-danger"
                       :disabled="isSelfMember(miembro)"
                       :title="
-                        isSelfMember(miembro) ? 'No puedes eliminarte del proyecto' : 'Eliminar'
+                        isSelfMember(miembro) ? 'No puedes eliminarte del equipo' : 'Eliminar'
                       "
                       @click="eliminarIntegrante(index)"
                     >
@@ -704,8 +699,8 @@ onMounted(async () => {
                     </button>
                   </td>
                 </tr>
-                <tr v-if="miembrosProyecto.length === 0">
-                  <td colspan="5" class="text-center text-muted">Sin miembros aún</td>
+                <tr v-if="miembrosEquipo.length === 0">
+                  <td colspan="5" class="text-center text-muted">Sin integrantes aún</td>
                 </tr>
               </tbody>
             </table>
@@ -719,7 +714,7 @@ onMounted(async () => {
             :disabled="loading"
             @click="openConfirm"
           >
-            <i class="bi bi-check-lg me-2"></i> Crear Proyecto
+            <i class="bi bi-check-lg me-2"></i> Inscribirse
           </button>
         </div>
       </div>

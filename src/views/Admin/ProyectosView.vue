@@ -6,6 +6,10 @@ import ProjectCard from '@/components/ProjectCard.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { user } from '@/stores/userPermisos' // opcional: superadmin
+import { useRouter } from 'vue-router'
+
+// Agregamos el router para navegación
+const router = useRouter()
 
 /* --------- Estado --------- */
 const indexProyectos = ref([]) // índice ligero de /api/proyectos
@@ -289,6 +293,11 @@ onBeforeUnmount(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
   if (abortCtrlBatch) abortCtrlBatch.abort()
 })
+
+// Función para navegar a la creación de proyecto
+function irACrearProyecto() {
+  router.push('/admin/crearProyecto')  // Cambio aquí: /admin/crearProyecto en lugar de /admin/proyectos/crear
+}
 </script>
 
 <template>
@@ -299,17 +308,30 @@ onBeforeUnmount(() => {
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
       <PageHeaderRoute />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <div class="d-flex align-items-center mb-3 gap-2">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Buscar por título, equipo o evento"
-            class="form-control"
-          />
-          <select v-model="orden" class="orden-select">
-            <option value="alfabetico">Ordenar: Alfabéticamente</option>
-            <option value="fecha">Ordenar: Fecha de inicio</option>
-          </select>
+        <!-- Encabezado con búsqueda, ordenamiento y botón crear -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="d-flex align-items-center gap-2 flex-grow-1">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Buscar por título, equipo o evento"
+              class="form-control"
+            />
+            <select v-model="orden" class="orden-select">
+              <option value="alfabetico">Ordenar: Alfabéticamente</option>
+              <option value="fecha">Ordenar: Fecha de inicio</option>
+            </select>
+          </div>
+
+          <!-- Botón para crear nuevo proyecto -->
+          <button
+            @click="irACrearProyecto"
+            class="btn-crear-proyecto"
+            title="Crear nuevo proyecto"
+          >
+            <i class="fas fa-plus me-2"></i>
+            Crear Proyecto
+          </button>
         </div>
 
         <p v-if="error" class="error-text">{{ error }}</p>
@@ -325,7 +347,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-else class="col-12 text-center text-muted mt-5">No se encontraron proyectos.</div>
+          <div v-else class="col-12 text-center text-muted mt-5">
+            <div class="empty-state">
+              <i class="fas fa-folder-open fa-3x mb-3 text-muted"></i>
+              <h5>No se encontraron proyectos</h5>
+              <p class="text-muted">Comienza creando tu primer proyecto</p>
+              <button @click="irACrearProyecto" class="btn-crear-proyecto">
+                <i class="fas fa-plus me-2"></i>
+                Crear Primer Proyecto
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="pagination justify-content-center">
@@ -353,16 +385,56 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   border: 1px solid #cbe2ff;
 }
+
+.btn-crear-proyecto {
+  background: linear-gradient(135deg, #174384, #2563eb);
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(23, 67, 132, 0.2);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.btn-crear-proyecto:hover {
+  background: linear-gradient(135deg, #0f2e5c, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(23, 67, 132, 0.3);
+}
+
+.btn-crear-proyecto:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(23, 67, 132, 0.2);
+}
+
+.empty-state {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-state .btn-crear-proyecto {
+  margin: 0 auto;
+  margin-top: 1rem;
+}
+
 .error-text {
   color: red;
   font-weight: bold;
   margin-top: 10px;
 }
+
 .pagination {
   display: flex;
   gap: 0.3rem;
   margin-top: 1rem;
 }
+
 .page-btn {
   background: #eee;
   border: none;
@@ -370,8 +442,23 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   cursor: pointer;
 }
+
 .page-btn.active {
   background: #174384;
   color: #fff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .d-flex.align-items-center.justify-content-between {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .btn-crear-proyecto {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

@@ -10,6 +10,7 @@ import CuentaView from '@/views/CuentaView.vue'
 import OrganizadoresView from '@/views/Admin/OrganizadoresView.vue'
 import ProyectosView from '@/views/Admin/ProyectosView.vue'
 import EventDetailView from '@/views/Admin/EventDetailView.vue'
+import CrearEquiposView from '@/views/Admin/CrearEquiposView.vue'
 import CrearProyectosView from '@/views/Admin/CrearProyectosView.vue'
 import UsersView from '@/views/Admin/UsersView.vue'
 import UserGlobal from '@/views/Admin/UserGlobal.vue'
@@ -98,7 +99,16 @@ const router = createRouter({
       },
     },
     {
-      path: '/admin/crearProyecto/:eventoId',
+      path: '/admin/crearEquipo/:eventoId',
+      name: 'crearEquipo',
+      component: CrearEquiposView,
+      props: true,
+      meta: {
+        title: 'Crear Equipo',
+      },
+    },
+    {
+      path: '/admin/crearProyecto/',
       name: 'crearProyecto',
       component: CrearProyectosView,
       props: true,
