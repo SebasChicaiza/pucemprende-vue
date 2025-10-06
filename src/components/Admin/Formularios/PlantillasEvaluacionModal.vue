@@ -546,9 +546,10 @@ const submitAllPlantillas = async () => {
 
       if (typeof plantilla.id === 'string' && plantilla.id.startsWith('temp-')) {
         const payload = {
-          nombre_plantilla: plantilla.nombre_plantilla.trim(),
-          criterios: criteriosPayload,
           proceso_id: props.procesoId,
+          nombre_plantilla: plantilla.nombre_plantilla.trim(),
+          peso: Number(plantilla.peso),
+          criterios: criteriosPayload,
         }
         const response = await axios.post(
           `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios`,
@@ -561,34 +562,15 @@ const submitAllPlantillas = async () => {
           },
         )
         currentPlantillaId = response.data.plantillaId
-        await axios.patch(
-          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas/${currentPlantillaId}/peso`,
-          { peso: Number(plantilla.peso) },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
       } else {
         const payload = {
           nombre_plantilla: plantilla.nombre_plantilla.trim(),
+          peso: Number(plantilla.peso),
           criterios: criteriosPayload,
         }
         await axios.put(
           `${import.meta.env.VITE_URL_BACKEND}/api/plantillas-criterios/${plantilla.id}`,
           payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-        await axios.patch(
-          `${import.meta.env.VITE_URL_BACKEND}/api/plantillas/${plantilla.id}/peso`,
-          { peso: Number(plantilla.peso) },
           {
             headers: {
               'Content-Type': 'application/json',
