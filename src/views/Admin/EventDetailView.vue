@@ -9,16 +9,10 @@ import DefaultImage from '@/assets/banners/EventoConstruccion.png'
 import DeleteModal from '@/components/DeleteModal.vue'
 import OkModal from '@/components/OkModal.vue'
 import ModalCrearEvento from '@/components/Admin/Eventos/ModalCrearEvento.vue'
-import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue'
-import ScrollBar from '@/components/ScrollBar.vue'
-import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import ErrorModal from '@/components/ErrorModal.vue'
-import { useProyectosEventosStore } from '@/stores/proyectos_eventos'
-import { usePlantillasEvaluacionStore } from '@/stores/plantillas_evaluacion' // Import the new store
-import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
-import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
-import ManageCertificate from '@/components/Admin/Eventos/ManageCertificate.vue'
-import ViewMyCertificates from '@/components/Admin/Eventos/ViewMyCertificates.vue'
+import ImageManagementModal from '@/components/Admin/ImageManagementModal.vue';
+import ScrollBar from '@/components/ScrollBar.vue';
+import ConfirmationModal from '@/components/ConfirmationModal.vue';
+import ErrorModal from '@/components/ErrorModal.vue';
 
 const route = useRoute()
 const router = useRouter()
@@ -27,85 +21,50 @@ const eventDetails = ref(null)
 const eventImages = ref([])
 const loading = ref(true)
 const loadingImages = ref(false)
-const isLoadingImagesInModal = ref(false)
+const isLoadingImagesInModal = ref(false);
 
-const mainImage = ref('')
-const DEFAULT_IMAGE_URL = DefaultImage
-const showConfirmDialog = ref(false)
+const mainImage = ref('');
+const DEFAULT_IMAGE_URL = DefaultImage;
 
-const universalDeleteModalRef = ref(null)
-const modalTitle = ref('')
-const modalMessage = ref('')
-const modalWarning = ref('')
-const modalConfirmText = ref('')
-const currentDeleteAction = ref(null)
+const universalDeleteModalRef = ref(null);
+const modalTitle = ref('');
+const modalMessage = ref('');
+const modalWarning = ref('');
+const modalConfirmText = ref('');
+const currentDeleteAction = ref(null);
 
-const showManageCertificateModal = ref(false)
-const showViewMyCertificatesModal = ref(false)
-const showOkModal = ref(false)
-const okModalMessage = ref('')
+const showOkModal = ref(false);
+const okModalMessage = ref('');
 
-const showErrorModal = ref(false)
-const errorMessage = ref('')
+const showErrorModal = ref(false);
+const errorMessage = ref('');
 
 const showCreateEditModal = ref(false)
 const currentEventToEdit = ref(null)
 
-const showImageManagementModal = ref(false)
-const imageToDelete = ref(null)
-const imageManagementModalRef = ref(null)
+const showImageManagementModal = ref(false);
+const imageToDelete = ref(null);
+const imageManagementModalRef = ref(null); // Ref to access modal component's methods
 
-const showReactivateConfirmModal = ref(false)
-
-// Initialize the Pinia stores
-const proyectosEventosStore = useProyectosEventosStore()
-const plantillasEvaluacionStore = usePlantillasEvaluacionStore() // Initialize the new store
-
-// Use computed properties from the stores
-const eventProjects = computed(() => proyectosEventosStore.getProjectsForEvent(eventId.value))
-const loadingProjects = computed(() => proyectosEventosStore.isLoadingProjects)
-const eventForms = computed(() => plantillasEvaluacionStore.getPlantillasForEvent(eventId.value)) // Computed for forms
-const loadingForms = computed(() => plantillasEvaluacionStore.isLoadingPlantillas) // Computed for forms loading
+const showReactivateConfirmModal = ref(false);
 
 const imagesToDisplay = computed(() => {
   if (eventImages.value && eventImages.value.length > 0) {
-    return eventImages.value
+    return eventImages.value;
   }
-  return [
-    { id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' },
-  ]
-})
-
-const canEditEvent = computed(() => {
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const userRolId = user.rol_id
-
-  if (userRolId === 8) {
-    return true
-  }
-
-  if (userRolId === 1 && eventDetails.value) {
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]')
-    // Ensure eventDetails.value.id is used for matching against evento_id
-    const hasEventPermission = eventos.some(
-      (e) => e.evento_id === eventDetails.value.id && e.rol_id === 1,
-    )
-    return hasEventPermission
-  }
-
-  return false
-})
+  return [{ id: 'default', url: DEFAULT_IMAGE_URL, tipo: 'Default Image', name: 'Imagen por Defecto' }];
+});
 
 const selectImage = (image) => {
-  mainImage.value = image.url
-}
+  mainImage.value = image.url;
+};
 
 async function fetchEventDetails() {
-  loading.value = true
+  loading.value = true;
   const token = localStorage.getItem('token')
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.'
-    showErrorModal.value = true
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
     return
   }
 
@@ -117,26 +76,26 @@ async function fetchEventDetails() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      },
+      }
     )
     eventDetails.value = response.data
   } catch (err) {
     console.error('Error fetching event details:', err.response?.data || err.message)
-    errorMessage.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`
-    showErrorModal.value = true
-    throw err
+    errorMessage.value = `Error al cargar los detalles del evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
+    throw err;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function fetchEventImages() {
-  loadingImages.value = true
-  const token = localStorage.getItem('token')
+  loadingImages.value = true;
+  const token = localStorage.getItem('token');
   if (!token) {
-    loadingImages.value = false
-    mainImage.value = DEFAULT_IMAGE_URL
-    return
+    loadingImages.value = false;
+    mainImage.value = DEFAULT_IMAGE_URL;
+    return;
   }
 
   try {
@@ -147,221 +106,211 @@ async function fetchEventImages() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      },
-    )
+      }
+    );
 
-    const fetchedImages = eventArchivosResponse.data
-    eventImages.value = fetchedImages
+    const fetchedImages = eventArchivosResponse.data;
+    eventImages.value = fetchedImages;
 
     if (eventImages.value.length > 0) {
-      if (!mainImage.value || !fetchedImages.some((img) => img.url === mainImage.value)) {
-        mainImage.value = eventImages.value[0].url
+      // Ensure the mainImage is one of the fetched images, or set the first one
+      if (!mainImage.value || !fetchedImages.some(img => img.url === mainImage.value)) {
+        mainImage.value = eventImages.value[0].url;
       }
     } else {
-      mainImage.value = DEFAULT_IMAGE_URL
+      mainImage.value = DEFAULT_IMAGE_URL;
     }
+
   } catch (err) {
-    console.error('Error fetching event images, no image found:', err.response?.data || err.message)
-    mainImage.value = DEFAULT_IMAGE_URL
-    eventImages.value = []
+    console.error('Error fetching event images, no image found:', err.response?.data || err.message);
+    mainImage.value = DEFAULT_IMAGE_URL;
+    eventImages.value = []; // Ensure it's an empty array if there's an error or no images
   } finally {
-    loadingImages.value = false
+    loadingImages.value = false;
   }
 }
 
 const handleDeleteConfirmed = async () => {
   if (currentDeleteAction.value === 'deleteEvent') {
-    await deleteEvent()
+    await deleteEvent();
   } else if (currentDeleteAction.value === 'deleteImage') {
-    await confirmDeleteImage()
+    await confirmDeleteImage();
   }
-  currentDeleteAction.value = null
-}
+  currentDeleteAction.value = null;
+};
 
 const showDeleteConfirmation = () => {
-  modalTitle.value = 'Confirmar Eliminación de Evento'
-  modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?'
-  modalWarning.value =
-    'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento'
-  modalConfirmText.value = 'Sí, Deshabilitar Evento'
-  currentDeleteAction.value = 'deleteEvent'
-  universalDeleteModalRef.value.show()
-}
+  modalTitle.value = 'Confirmar Eliminación de Evento';
+  modalMessage.value = '¿Estás seguro de que quieres deshabilitar este evento?';
+  modalWarning.value = 'Esta accion deshabilitara el evento, todos los usuarios no podrar ver el evento';
+  modalConfirmText.value = 'Sí, Deshabilitar Evento';
+  currentDeleteAction.value = 'deleteEvent';
+  universalDeleteModalRef.value.show();
+};
 
 const deleteEvent = async () => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token');
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.'
-    showErrorModal.value = true
-    return
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
   try {
-    await axios.delete(`${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    })
-    okModalMessage.value = '¡El evento ha deshabilitado exitosamente!'
-    showOkModal.value = true
-
-    setTimeout(() => {
-      router.push('/admin/eventos/')
-    }, 1000)
-  } catch (err) {
-    console.error('Error deleting event:', err.response?.data || err.message)
-    errorMessage.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`
-    showErrorModal.value = true
-  } finally {
-    if (universalDeleteModalRef.value) {
-      universalDeleteModalRef.value.hide()
-    }
-    loading.value = false
-  }
-}
-
-const handleOkModalClose = () => {
-  showOkModal.value = false
-}
-
-const handleErrorModalClose = () => {
-  showErrorModal.value = false
-  errorMessage.value = ''
-}
-
-async function fetchEventDetailsForEdit(idToEdit) {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.'
-    showErrorModal.value = true
-    return null
-  }
-
-  loading.value = true
-  try {
-    const response = await axios.get(
-      `${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`,
+    await axios.delete(
+      `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
       {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      },
-    )
-    console.log('Detailed Event Data for Edit:', response.data)
-    currentEventToEdit.value = response.data
-    showCreateEditModal.value = true
-    return response.data
+      }
+    );
+    okModalMessage.value = '¡El evento ha deshabilitado exitosamente!';
+    showOkModal.value = true;
+
+    setTimeout(() => {
+      router.push("/admin/eventos/");
+    }, 1000);
+
   } catch (err) {
-    console.error('Error fetching detailed event for edit:', err.response?.data || err.message)
-    errorMessage.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`
-    showErrorModal.value = true
-    return null
+    console.error('Error deleting event:', err.response?.data || err.message);
+    errorMessage.value = `Error al eliminar el evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
   } finally {
-    loading.value = false
+    if (universalDeleteModalRef.value) {
+      universalDeleteModalRef.value.hide();
+    }
+    loading.value = false;
+  }
+};
+
+const handleOkModalClose = () => {
+  showOkModal.value = false;
+};
+
+const handleErrorModalClose = () => {
+  showErrorModal.value = false;
+  errorMessage.value = '';
+};
+
+async function fetchEventDetailsForEdit(idToEdit) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
+    return null;
+  }
+
+  loading.value = true;
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_URL_BACKEND}/api/eventos-cronogramas/${idToEdit}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    console.log('Detailed Event Data for Edit:', response.data);
+    currentEventToEdit.value = response.data;
+    showCreateEditModal.value = true;
+    return response.data;
+  } catch (err) {
+    console.error('Error fetching detailed event for edit:', err.response?.data || err.message);
+    errorMessage.value = `Error al cargar detalles del evento para edición: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
+    return null;
+  } finally {
+    loading.value = false;
   }
 }
 
 const handleEditButtonClick = () => {
   if (eventId.value) {
-    fetchEventDetailsForEdit(eventId.value)
+    fetchEventDetailsForEdit(eventId.value);
   } else {
-    console.error('Cannot edit: Event ID is not available.')
-    errorMessage.value = 'No se puede editar: El ID del evento no está disponible.'
-    showErrorModal.value = true
+    console.error('Cannot edit: Event ID is not available.');
+    errorMessage.value = 'No se puede editar: El ID del evento no está disponible.';
+    showErrorModal.value = true;
   }
-}
+};
 
 const handleModalClose = () => {
-  showCreateEditModal.value = false
-  currentEventToEdit.value = null
-}
+  showCreateEditModal.value = false;
+  currentEventToEdit.value = null;
+};
 
 const handleModalSubmit = async (emittedEventData) => {
-  showCreateEditModal.value = false
-  currentEventToEdit.value = null
+  showCreateEditModal.value = false;
+  currentEventToEdit.value = null;
 
   if (eventId.value) {
-    await fetchEventDetails()
-    await fetchEventImages()
-    await proyectosEventosStore.fetchProjectsAndTeams(eventId.value) // Re-fetch projects and teams after event edit
-    await plantillasEvaluacionStore.fetchPlantillasForEvent(eventId.value) // Re-fetch forms after event edit
+    await fetchEventDetails();
+    await fetchEventImages();
   }
-}
+};
 
-async function uploadFileToBackend(file, eventoId) {
-  const token = localStorage.getItem('token')
+async function uploadFileToBackend(file, type = 'general') {
+  const token = localStorage.getItem('token');
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.'
-    showErrorModal.value = true
-    return null
+    errorMessage.value = 'Token de autenticación no encontrado. Por favor, inicie sesión.';
+    showErrorModal.value = true;
+    return null;
   }
 
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('name', file.name.split('.')[0])
-  formData.append('evento_id', eventoId)
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', file.name.split('.')[0]);
+  formData.append('tipo', type);
 
-  console.log('Uploading file to backend:', formData)
-
+  // isLoadingImagesInModal.value = true; // This is set in the calling function
   try {
-    const response = await axios.post(
-      `${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
+    const response = await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/archivos/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`,
       },
-    )
-    console.log('File uploaded to Archivos:', response.data)
-    return {
-      id: response.data.file.id,
-      url: response.data.file.url,
-      tipo: response.data.file.tipo,
-      name: file.name,
-    }
+    });
+    console.log('File uploaded to Archivos:', response.data);
+    // Assuming backend returns { id, url, tipo } or similar direct file info
+    return { id: response.data.file.id, url: response.data.file.url, tipo: response.data.file.tipo, name: file.name };
   } catch (error) {
-    console.error('Error uploading file to Archivos:', error.response?.data || error.message)
-    errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`
-    showErrorModal.value = true
-    return null
+    console.error('Error uploading file to Archivos:', error.response?.data || error.message);
+    errorMessage.value = `Error al subir la imagen: ${error.response?.data?.message || error.message}`;
+    showErrorModal.value = true;
+    return null;
   }
 }
 
 const openImageManagementModal = () => {
-  showImageManagementModal.value = true
-}
+  showImageManagementModal.value = true;
+};
 
 const closeImageManagementModal = () => {
-  showImageManagementModal.value = false
-}
+  showImageManagementModal.value = false;
+};
 
 const triggerDeleteImage = (image) => {
-  imageToDelete.value = image
-  modalTitle.value = 'Confirmar Eliminación de Imagen'
-  modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?'
-  modalWarning.value =
-    'Esta acción es irreversible y eliminará permanentemente la imagen del evento.'
-  modalConfirmText.value = 'Sí, Eliminar Imagen'
-  currentDeleteAction.value = 'deleteImage'
-  universalDeleteModalRef.value.show()
-}
+  imageToDelete.value = image;
+  modalTitle.value = 'Confirmar Eliminación de Imagen';
+  modalMessage.value = '¿Estás seguro de que quieres eliminar esta imagen?';
+  modalWarning.value = 'Esta acción es irreversible y eliminará permanentemente la imagen del evento.';
+  modalConfirmText.value = 'Sí, Eliminar Imagen';
+  currentDeleteAction.value = 'deleteImage';
+  universalDeleteModalRef.value.show();
+};
 
 const confirmDeleteImage = async () => {
-  if (!imageToDelete.value) return
+  if (!imageToDelete.value) return;
 
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token');
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado para eliminar imagen.'
-    showErrorModal.value = true
-    return
+    errorMessage.value = 'Token de autenticación no encontrado para eliminar imagen.';
+    showErrorModal.value = true;
+    return;
   }
 
-  isLoadingImagesInModal.value = true
+  isLoadingImagesInModal.value = true;
   try {
     await axios.delete(
       `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento/${imageToDelete.value.id}`,
@@ -370,44 +319,47 @@ const confirmDeleteImage = async () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      },
-    )
+      }
+    );
 
-    okModalMessage.value = '¡Imagen eliminada exitosamente!'
-    showOkModal.value = true
+    okModalMessage.value = '¡Imagen eliminada exitosamente!';
+    showOkModal.value = true;
 
-    await fetchEventImages()
+    // After successful deletion, re-fetch all images to update the list
+    await fetchEventImages();
 
+    // If the main image was deleted, reset it
     if (mainImage.value === imageToDelete.value.url) {
-      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL
+      mainImage.value = eventImages.value.length > 0 ? eventImages.value[0].url : DEFAULT_IMAGE_URL;
     }
+
   } catch (err) {
-    console.error('Error deleting image:', err.response?.data || err.message)
-    errorMessage.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`
-    showErrorModal.value = true
+    console.error('Error deleting image:', err.response?.data || err.message);
+    errorMessage.value = `Error al eliminar la imagen: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
   } finally {
     if (universalDeleteModalRef.value) {
-      universalDeleteModalRef.value.hide()
+      universalDeleteModalRef.value.hide();
     }
-    imageToDelete.value = null
-    isLoadingImagesInModal.value = false
+    imageToDelete.value = null;
+    isLoadingImagesInModal.value = false;
   }
-}
+};
 
 const triggerReactivateEvent = () => {
-  showReactivateConfirmModal.value = true
-}
+  showReactivateConfirmModal.value = true;
+};
 
 const handleReactivateConfirm = async () => {
-  showReactivateConfirmModal.value = false
-  const token = localStorage.getItem('token')
+  showReactivateConfirmModal.value = false;
+  const token = localStorage.getItem('token');
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado.'
-    showErrorModal.value = true
-    return
+    errorMessage.value = 'Token de autenticación no encontrado.';
+    showErrorModal.value = true;
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
   try {
     await axios.put(
       `${import.meta.env.VITE_URL_BACKEND}/api/eventos/${eventId.value}`,
@@ -417,907 +369,445 @@ const handleReactivateConfirm = async () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      },
-    )
-    okModalMessage.value = '¡El evento ha sido reactivado exitosamente!'
-    showOkModal.value = true
-    await fetchEventDetails()
+      }
+    );
+    okModalMessage.value = '¡El evento ha sido reactivado exitosamente!';
+    showOkModal.value = true;
+    await fetchEventDetails();
+
   } catch (err) {
-    console.error('Error reactivating event:', err.response?.data || err.message)
-    errorMessage.value = `Error al reactivar el evento: ${err.response?.data?.message || err.message}`
-    showErrorModal.value = true
+    console.error('Error reactivating event:', err.response?.data || err.message);
+    errorMessage.value = `Error al reactivar el evento: ${err.response?.data?.message || err.message}`;
+    showErrorModal.value = true;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const handleReactivateCancel = () => {
-  showReactivateConfirmModal.value = false
-}
+  showReactivateConfirmModal.value = false;
+};
 
 const uploadNewImages = async (newFiles) => {
   if (!newFiles || newFiles.length === 0) {
-    console.warn('No files selected for upload.')
-    return
+    console.warn('No files selected for upload.');
+    return;
   }
 
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token');
   if (!token) {
-    errorMessage.value = 'Token de autenticación no encontrado para subir imágenes.'
-    showErrorModal.value = true
-    return
+    errorMessage.value = 'Token de autenticación no encontrado para subir imágenes.';
+    showErrorModal.value = true;
+    return;
   }
 
-  isLoadingImagesInModal.value = true
-  const uploadPromises = []
+  isLoadingImagesInModal.value = true;
+  const uploadPromises = [];
 
   for (const file of newFiles) {
     uploadPromises.push(
       (async () => {
-        const uploadedArchivo = await uploadFileToBackend(file, eventId.value)
+        const uploadedArchivo = await uploadFileToBackend(file, file.type.split('/')[1] || 'general');
         if (uploadedArchivo) {
           try {
+            // Your backend should return the full image object including its URL and ID
+            // after linking. The `linkResponse.data` should be the actual image object
+            // that you want to add to `eventImages.value`.
             const linkResponse = await axios.post(
               `${import.meta.env.VITE_URL_BACKEND}/api/archivos-evento`,
               {
-                archivo_id: uploadedArchivo.id,
+                archivo_id: uploadedArchivo.id, // ID from the initial upload
                 evento_id: eventId.value,
-                url: uploadedArchivo.url,
-                tipo: uploadedArchivo.tipo,
-                name: uploadedArchivo.name,
+                url: uploadedArchivo.url, // URL from the initial upload
+                tipo: uploadedArchivo.tipo, // Type from the initial upload
+                // Make sure your backend saves the 'name' and returns it here too
+                name: uploadedArchivo.name // Pass the file name to be saved in backend
               },
               {
                 headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                 },
-              },
-            )
-            console.log(
-              `Image ${uploadedArchivo.id} linked to event ${eventId.value}:`,
-              linkResponse.data,
-            )
-            return linkResponse.data
+              }
+            );
+            console.log(`Image ${uploadedArchivo.id} linked to event ${eventId.value}:`, linkResponse.data);
+            return linkResponse.data; // Return the fully linked image object
           } catch (linkError) {
-            console.error(
-              `Error linking image ${uploadedArchivo.id} to event:`,
-              linkError.response?.data || linkError.message,
-            )
-            errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`
-            showErrorModal.value = true
-            return null
+            console.error(`Error linking image ${uploadedArchivo.id} to event:`, linkError.response?.data || linkError.message);
+            errorMessage.value = `Error al vincular la imagen ${file.name}: ${linkError.response?.data?.message || linkError.message}`;
+            showErrorModal.value = true;
+            return null; // Return null if linking fails
           }
         }
-        return null
-      })(),
-    )
+        return null; // Return null if initial upload fails
+      })()
+    );
   }
 
-  const results = await Promise.all(uploadPromises)
-  const successfulUploads = results.filter((result) => result !== null)
+  const results = await Promise.all(uploadPromises);
+  const successfulUploads = results.filter(result => result !== null); // Filter out failed uploads
 
   if (successfulUploads.length > 0) {
-    okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`
-    showOkModal.value = true
-    await fetchEventImages()
+    okModalMessage.value = `¡${successfulUploads.length} imágenes subidas y asociadas al evento exitosamente!`;
+    showOkModal.value = true;
+    // CRUCIAL: Re-fetch all images from the backend to ensure a fresh, consistent list
+    await fetchEventImages();
+    // Clear the files from the modal's internal state after successful upload and re-fetch
     if (imageManagementModalRef.value) {
-      imageManagementModalRef.value.clearUploadState()
+      imageManagementModalRef.value.clearUploadState();
     }
+  } else {
+    // If some failed, or all failed
+    errorMessage.value = '¡No se pudieron subir o asociar todas las imágenes correctamente!';
+    showErrorModal.value = true;
   }
 
-  isLoadingImagesInModal.value = false
-}
-
-const handleCertificateEditButtonClick = async () => {
-  console.log('Navigating to certificate management for event ID:', eventId.value)
-  showManageCertificateModal.value = true
-}
-
-const closeManageCertificateModal = () => {
-  showManageCertificateModal.value = false
-}
-
-const handleCertificateSave = () => {
-  showOkModal.value = true
-  okModalMessage.value = 'Certificado guardado exitosamente.'
-}
-
-const closeViewMyCertificatesModal = () => {
-  showViewMyCertificatesModal.value = false
-}
-
-const handleCertificateButtonClick = async () => {
-  console.log('Navigating to certificate generation for event ID:', eventId.value)
-  showViewMyCertificatesModal.value = true
-}
+  isLoadingImagesInModal.value = false;
+};
 
 const formatTime = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  if (isNaN(date.getTime())) return 'Hora inválida'
-  const options = { hour: '2-digit', minute: '2-digit', hour12: true }
-  return date.toLocaleTimeString('es-ES', options)
-}
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Hora inválida';
+  const options = { hour: '2-digit', minute: '2-digit', hour12: true };
+  return date.toLocaleTimeString('es-ES', options);
+};
 
 const formatShortDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  if (isNaN(date.getTime())) return 'Fecha inválida'
-  const options = { month: 'short', day: 'numeric' }
-  return date.toLocaleDateString('es-ES', options)
-}
-
-// NEW: Function to redirect to crearProyecto
-const redirectToCreateProject = () => {
-  if (eventId.value) {
-    router.push(`/admin/crearProyecto/${eventId.value}`)
-  } else {
-    errorMessage.value = 'No se puede crear un proyecto: El ID del evento no está disponible.'
-    showErrorModal.value = true
-  }
-}
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Fecha inválida';
+  const options = { month: 'short', day: 'numeric' }; // e.g., "Jul. 20"
+  return date.toLocaleDateString('es-ES', options);
+};
 
 onMounted(async () => {
   try {
-    eventId.value = route.params.id
+    eventId.value = route.params.id;
     if (eventId.value) {
-      await fetchEventDetails()
-      await fetchEventImages()
-      await proyectosEventosStore.fetchProjectsAndTeams(eventId.value)
-      await plantillasEvaluacionStore.fetchPlantillasForEvent(eventId.value)
+      await fetchEventDetails();
+      await fetchEventImages();
     } else {
-      errorMessage.value = 'ID de evento no proporcionado.'
-      showErrorModal.value = true
-      mainImage.value = DEFAULT_IMAGE_URL
+      errorMessage.value = 'ID de evento no proporcionado.';
+      showErrorModal.value = true;
+      mainImage.value = DEFAULT_IMAGE_URL;
     }
   } catch (e) {
-    console.error('Error during initial event details load:', e)
-    errorMessage.value = `Error durante la carga inicial de detalles del evento: ${e.message}`
-    showErrorModal.value = true
-    mainImage.value = DEFAULT_IMAGE_URL
+    console.error("Error during initial event details load:", e);
+    errorMessage.value = `Error durante la carga inicial de detalles del evento: ${e.message}`;
+    showErrorModal.value = true;
+    mainImage.value = DEFAULT_IMAGE_URL;
   }
-})
+});
 
 watch(
   () => route.params.id,
   async (newId, oldId) => {
     if (newId && newId !== oldId) {
-      loading.value = true
+      loading.value = true;
       try {
-        eventId.value = newId
-        errorMessage.value = ''
-        showErrorModal.value = false
-        eventDetails.value = null
-        eventImages.value = []
-        mainImage.value = DEFAULT_IMAGE_URL
-        loadingImages.value = true
-        proyectosEventosStore.clearProjects() // Clear projects cache when event ID changes
-        await proyectosEventosStore.fetchProjectsAndTeams(newId)
-        plantillasEvaluacionStore.clearPlantillas() // Clear forms cache when event ID changes
-        await plantillasEvaluacionStore.fetchPlantillasForEvent(newId)
+        eventId.value = newId;
+        errorMessage.value = '';
+        showErrorModal.value = false;
+        eventDetails.value = null;
+        eventImages.value = [];
+        mainImage.value = DEFAULT_IMAGE_URL;
+        loadingImages.value = true;
 
-        await fetchEventDetails()
-        await fetchEventImages()
+        await fetchEventDetails();
+        await fetchEventImages();
       } catch (e) {
-        console.error('Error during route param change load:', e)
-        errorMessage.value = `Error durante el cambio de ruta y carga de datos: ${e.message}`
-        showErrorModal.value = true
+        console.error("Error during route param change load:", e);
+        errorMessage.value = `Error durante el cambio de ruta y carga de datos: ${e.message}`;
+        showErrorModal.value = true;
       } finally {
-        loading.value = false
+        loading.value = false;
       }
     }
-  },
-)
+  }
+);
 
 const goBack = () => {
-  router.back()
-}
+  router.back();
+};
 
 const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const options = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }
-  const date = new Date(dateString)
+  if (!dateString) return '';
+  const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  const date = new Date(dateString);
   if (isNaN(date.getTime())) {
-    return 'Fecha inválida'
+    return 'Fecha inválida';
   }
-  return date.toLocaleDateString('es-ES', options)
-}
-
-const puedeInscribirse = computed(() => {
-  return (
-    eventDetails.value.inscripcionesAbiertas &&
-    !useEventosInscritosStore().estaInscrito(eventDetails.value.id) &&
-    !eventDetails.value.estado_borrado
-  )
-})
-
-function handleInscribirse() {
-  if (eventDetails.value.hayEquipos > 0) {
-    router.push({ name: 'crearProyecto', params: { eventoId: eventDetails.value.id } })
-  } else {
-    showConfirmDialog.value = true
-  }
-}
-
-const toastMessage = ref('')
-const showToast = ref(false)
-const toastType = ref('')
-
-const inscribirEnEvento = async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    toast('Token no encontrado', 'error')
-    return
-  }
-  loading.value = true
-
-  try {
-    await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ evento_id: eventDetails.value.id }),
-    })
-    console.log('Inscripción exitosa al evento', eventDetails.value.event)
-    if (eventDetails.value.hayEquipos > 0) {
-      router.push({ name: 'crearProyecto', params: { eventoId: eventDetails.value.id } })
-    } else {
-      showConfirmDialog.value = true
-    }
-  } catch (error) {
-    toast('Error al inscribirse al evento', 'error')
-    console.error(error)
-  } finally {
-    showConfirmDialog.value = false
-    toast('Inscripción exitosa al evento sin proyecto.', 'success')
-    loading.value = false
-    await useEventosInscritosStore().fetchEventosInscritos()
-  }
-}
-
-const toast = (msg, type) => {
-  toastMessage.value = msg
-  toastType.value = type
-  showToast.value = true
-  setTimeout(() => (showToast.value = false), 3000)
-}
-
-const confirmarSinProyecto = () => {
-  inscribirEnEvento()
-}
-function closeDialog() {
-  showConfirmDialog.value = false
-}
+  return date.toLocaleDateString('es-ES', options);
+};
 </script>
-
 <template>
-  <div class="event-detail-view-wrapper">
-    <LoaderComponent v-if="loading" />
-    <div class="d-flex" style="height: 100vh; overflow: hidden">
-      <Sidebar />
+  <LoaderComponent v-if="loading" />
+  <div class="d-flex" style="height: 100vh; overflow: hidden">
+    <Sidebar />
 
-      <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
-        <PageHeaderRoute
-          :currentRouteName="route.name"
-          :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'"
-        />
+    <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
+      <PageHeaderRoute :currentRouteName="route.name"
+        :dynamicTitle="eventDetails ? eventDetails.nombre : 'Cargando...'" />
 
-        <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-          <div class="container-fluid" v-if="eventDetails">
-            <div class="d-flex align-items-center justify-content-between mb-4">
-              <div class="d-flex align-items-center">
-                <button class="btn btn-secondary me-3 animated-btn" @click="goBack">
-                  <i class="fas fa-arrow-left me-2"></i>Volver
-                </button>
-                <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
-              </div>
-              <div class="d-flex">
-                <button
-                  v-if="eventDetails.estado === 'Finalizado'"
-                  class="btn btn-terciario btn-m me-2 animated-btn"
-                  @click="handleCertificateButtonClick"
-                >
-                  <i class="fa-solid fa-file-pdf me-2"></i>Mis certificado
-                </button>
-                <button
-                  v-if="canEditEvent"
-                  class="btn btn-primary btn-m me-2 animated-btn"
-                  @click="handleCertificateEditButtonClick"
-                >
-                  <i class="fa-solid fa-file-pdf me-2"></i>Administrar certificado
-                </button>
-                <button
-                  v-if="canEditEvent"
-                  class="btn btn-primary btn-m me-2 animated-btn"
-                  @click="handleEditButtonClick"
-                >
-                  <i class="fa-solid fa-pencil me-2"></i>Editar
-                </button>
-                <div v-if="!eventDetails.estado_borrado && canEditEvent">
-                  <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
-                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="row align-items-stretch mb-5">
-              <div class="col-md-8 d-flex">
-                <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
-                  <ScrollBar :maxHeight="'calc(100% - 60px)'" class="image-list-scroll-area">
-                    <div v-if="loadingImages" class="text-center my-3">
-                      <div class="spinner-border spinner-border-sm text-primary" role="status">
-                        <span class="visually-hidden">Cargando miniaturas...</span>
-                      </div>
-                    </div>
-                    <div
-                      v-else
-                      class="flex-grow-1 d-flex flex-column justify-content-start align-items-center"
-                    >
-                      <div
-                        v-for="image in imagesToDisplay"
-                        :key="image.id"
-                        class="thumbnail-container mb-2"
-                        :class="{ 'active-thumbnail': mainImage === image.url }"
-                        @click="selectImage(image)"
-                      >
-                        <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
-                      </div>
-                    </div>
-                  </ScrollBar>
-                  <button
-                    v-if="canEditEvent"
-                    class="btn btn-primary add-image-plus-btn animated-btn"
-                    @click="openImageManagementModal"
-                    title="Editar Imágenes"
-                  >
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="flex-grow-1 main-image-display">
-                  <div
-                    v-if="loadingImages"
-                    class="d-flex justify-content-center align-items-center h-100"
-                  >
-                    <div
-                      class="spinner-border text-primary"
-                      role="status"
-                      style="width: 3rem; height: 3rem"
-                    ></div>
-                  </div>
-                  <img
-                    v-else
-                    :src="mainImage"
-                    class="img-fluid rounded main-event-image"
-                    :alt="eventDetails.nombre || 'Event Image'"
-                  />
-                </div>
-              </div>
-
-              <div class="col-md-4 event-info-section">
-                <div class="info-group">
-                  <p class="info-label">Descripción</p>
-                  <p class="info-content">{{ eventDetails.descripcion }}</p>
-                </div>
-
-                <div class="info-group">
-                  <p class="info-label">Categoría</p>
-                  <p class="info-content">{{ eventDetails.categoria }}</p>
-                </div>
-
-                <div class="info-group">
-                  <p class="info-label">Sede del evento</p>
-                  <p class="info-content">{{ eventDetails.espacio }}</p>
-                </div>
-
-                <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
-                  <div class="me-4">
-                    <p class="info-label">Fecha de Inicio:</p>
-                    <p class="info-content">{{ formatDate(eventDetails.fecha_inicio) }}</p>
-                  </div>
-                  <div>
-                    <p class="info-label">Fecha de Finalización:</p>
-                    <p class="info-content">{{ formatDate(eventDetails.fecha_fin) }}</p>
-                  </div>
-                </div>
-                <!-- Botón solo si inscripciones están abiertas -->
-                <template v-if="eventDetails.inscripcionesAbiertas">
-                  <button
-                    v-if="puedeInscribirse"
-                    class="btn btn-success mb-4 animated-btn"
-                    @click="handleInscribirse"
-                  >
-                    Inscribirse
-                  </button>
-                  <button v-else class="btn btn-secondary mb-4 animated-btn" disabled>
-                    Ya inscrito
-                  </button>
-                </template>
-                <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
-              </div>
-
-              <hr class="my-3" />
-
-              <div class="d-flex justify-content-between flex-wrap event-attributes">
-                <div class="attribute-item">
-                  <p class="info-label">Estado:</p>
-                  <p class="info-content">{{ eventDetails.estado }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Modalidad:</p>
-                  <p class="info-content">{{ eventDetails.modalidad }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Capacidad:</p>
-                  <p class="info-content">{{ eventDetails.capacidad }}</p>
-                </div>
-                <div class="attribute-item">
-                  <p class="info-label">Inscripciones Abiertas:</p>
-                  <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section"
-            >
-              <div class="d-flex align-items-center">
-                <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
-                  <i class="fas fa-check-circle me-2"></i> Este evento está activo
-                </span>
-                <span v-else class="text-danger status-text">
-                  <i class="fas fa-times-circle me-2"></i> El evento está desactivado
-                </span>
-              </div>
-              <button
-                v-if="eventDetails.estado_borrado && canEditEvent"
-                class="btn btn-success animated-btn"
-                @click="triggerReactivateEvent"
-              >
-                <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
+      <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
+        <div class="container-fluid" v-if="eventDetails">
+          <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="d-flex align-items-center">
+              <button class="btn btn-secondary me-3 animated-btn" @click="goBack">
+                <i class="fas fa-arrow-left me-2"></i>Volver
               </button>
+              <h3 class="mb-0">{{ eventDetails.nombre }}</h3>
+            </div>
+            <div class="d-flex">
+              <button class="btn btn-primary btn-m me-2 animated-btn" @click="handleEditButtonClick">
+                <i class="fa-solid fa-pencil me-2"></i>Editar
+              </button>
+              <div v-if="!eventDetails.estado_borrado">
+                <button class="btn btn-danger btn-m animated-btn" @click="showDeleteConfirmation">
+                  <i class="fa-solid fa-triangle-exclamation me-2"></i>Deshabilitar evento
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row align-items-stretch mb-5">
+            <div class="col-md-8 d-flex">
+              <div class="d-flex flex-column me-3 image-thumbnail-sidebar">
+                <ScrollBar :maxHeight="'calc(100% - 60px)'" class="image-list-scroll-area">
+                  <div v-if="loadingImages" class="text-center my-3">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                      <span class="visually-hidden">Cargando miniaturas...</span>
+                    </div>
+                  </div>
+                  <div v-else class="flex-grow-1 d-flex flex-column justify-content-start align-items-center">
+                    <div v-for="image in imagesToDisplay" :key="image.id" class="thumbnail-container mb-2"
+                      :class="{ 'active-thumbnail': mainImage === image.url }" @click="selectImage(image)">
+                      <img :src="image.url" class="img-fluid thumbnail-img" :alt="image.tipo" />
+                    </div>
+                  </div>
+                </ScrollBar>
+                <button class="btn btn-primary add-image-plus-btn animated-btn" @click="openImageManagementModal"
+                  title="Editar Imágenes">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div class="flex-grow-1 main-image-display">
+                <div v-if="loadingImages" class="d-flex justify-content-center align-items-center h-100">
+                  <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                  </div>
+                </div>
+                <img v-else :src="mainImage" class="img-fluid rounded main-event-image"
+                  :alt="eventDetails.nombre || 'Event Image'" />
+              </div>
             </div>
 
-            <div class="mt-4">
-              <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
-                <li class="nav-item" role="presentation">
-                  <button
-                    class="nav-link active"
-                    id="pills-cronogramas-tab"
-                    data-bs-toggle="pill"
-                    data-bs-target="#pills-cronogramas"
-                    type="button"
-                    role="tab"
-                    aria-controls="pills-cronogramas"
-                    aria-selected="true"
-                  >
-                    Cronogramas
-                  </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                  <button
-                    class="nav-link"
-                    id="pills-equipos-tab"
-                    data-bs-toggle="pill"
-                    data-bs-target="#pills-equipos"
-                    type="button"
-                    role="tab"
-                    aria-controls="pills-equipos"
-                    aria-selected="false"
-                  >
-                    Proyectos
-                  </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                  <button
-                    class="nav-link"
-                    id="pills-formularios-tab"
-                    data-bs-toggle="pill"
-                    data-bs-target="#pills-formularios"
-                    type="button"
-                    role="tab"
-                    aria-controls="pills-formularios"
-                    aria-selected="false"
-                  >
-                    Formularios
-                  </button>
-                </li>
-              </ul>
-              <div class="tab-content" id="pills-tabContent">
-                <div
-                  class="tab-pane fade show active"
-                  id="pills-cronogramas"
-                  role="tabpanel"
-                  aria-labelledby="pills-cronogramas-tab"
-                >
-                  <div
-                    v-if="
-                      eventDetails &&
-                      eventDetails.cronogramas &&
-                      eventDetails.cronogramas.length > 0
-                    "
-                  >
-                    <div class="accordion" id="nestedAccordionCronogramas">
-                      <div
-                        class="accordion-item"
-                        v-for="cronograma in eventDetails.cronogramas"
-                        :key="cronograma.id"
-                      >
-                        <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
-                          <button
-                            class="accordion-button nested-accordion-button collapsed"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
-                            aria-expanded="false"
-                            :aria-controls="`cronogramaCollapse${cronograma.id}`"
-                          >
-                            <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
-                            {{ cronograma.titulo }}
-                          </button>
-                        </h2>
-                        <div
-                          :id="`cronogramaCollapse${cronograma.id}`"
-                          class="accordion-collapse collapse"
-                          :aria-labelledby="`cronogramaHeading${cronograma.id}`"
-                          data-bs-parent="#nestedAccordionCronogramas"
-                        >
-                          <div class="accordion-body nested-accordion-body">
-                            <p class="mb-2">
-                              <strong>Descripción:</strong> {{ cronograma.descripcion }}
-                            </p>
-                            <p class="mb-2">
-                              <strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}
-                            </p>
-                            <p class="mb-3">
-                              <strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}
-                            </p>
-                            <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
-                            <div
-                              v-if="
-                                cronograma.actividades_cronogramas &&
-                                cronograma.actividades_cronogramas.length > 0
-                              "
-                            >
-                              <div
-                                class="accordion accordion-flush"
-                                :id="`activitiesAccordion${cronograma.id}`"
-                              >
-                                <div
-                                  class="accordion-item"
-                                  v-for="actividad in cronograma.actividades_cronogramas"
-                                  :key="actividad.id"
-                                >
-                                  <h2
-                                    class="accordion-header"
-                                    :id="`activityHeading${actividad.id}`"
-                                  >
-                                    <button
-                                      class="accordion-button activity-accordion-button collapsed"
-                                      type="button"
-                                      data-bs-toggle="collapse"
-                                      :data-bs-target="`#activityCollapse${actividad.id}`"
-                                      aria-expanded="false"
-                                      :aria-controls="`activityCollapse${actividad.id}`"
-                                    >
-                                      <i class="fas fa-check-circle activity-icon me-2"></i>
-                                      {{ actividad.titulo }}
-                                      <div class="activity-date-display ms-auto">
-                                        <i
-                                          class="fas fa-clock activity-date-icon me-1"
-                                          title="Inicio de Actividad"
-                                        ></i>
-                                        <span class="activity-start-date">{{
-                                          formatTime(actividad.fecha_inicio)
+            <div class="col-md-4 event-info-section">
+
+              <div class="info-group">
+                <p class="info-label">Descripción</p>
+                <p class="info-content">{{ eventDetails.descripcion }}</p>
+              </div>
+
+              <div class="info-group">
+                <p class="info-label">Categoría</p>
+                <p class="info-content">{{ eventDetails.categoria }}</p>
+              </div>
+
+              <div class="info-group">
+                <p class="info-label">Sede del evento</p>
+                <p class="info-content">{{ eventDetails.espacio }}</p>
+              </div>
+
+              <div class="d-flex justify-content-between flex-wrap info-dates mb-3">
+                <div class="me-4">
+                  <p class="info-label">Fecha de Inicio:</p>
+                  <p class="info-content">{{ formatDate(eventDetails.fecha_inicio) }}</p>
+                </div>
+                <div>
+                  <p class="info-label">Fecha de Finalización:</p>
+                  <p class="info-content">{{ formatDate(eventDetails.fecha_fin) }}</p>
+                </div>
+              </div>
+
+              <button v-if="eventDetails.inscripcionesAbiertas"
+                class="btn btn-success mb-4 animated-btn">Inscribirse</button>
+              <p v-else class="text-muted mt-3 mb-4">Este evento aún no acepta inscripciones.</p>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="d-flex justify-content-between flex-wrap event-attributes">
+              <div class="attribute-item">
+                <p class="info-label">Estado:</p>
+                <p class="info-content">{{ eventDetails.estado }}</p>
+              </div>
+              <div class="attribute-item">
+                <p class="info-label">Modalidad:</p>
+                <p class="info-content">{{ eventDetails.modalidad }}</p>
+              </div>
+              <div class="attribute-item">
+                <p class="info-label">Capacidad:</p>
+                <p class="info-content">{{ eventDetails.capacidad }}</p>
+              </div>
+              <div class="attribute-item">
+                <p class="info-label">Inscripciones Abiertas:</p>
+                <p class="info-content">{{ eventDetails.inscripcionesAbiertas ? 'Sí' : 'No' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- New Section for Event Status and Reactivate Button -->
+          <div class="d-flex justify-content-between align-items-center mb-4 p-3 border rounded status-section">
+            <div class="d-flex align-items-center">
+              <span v-if="!eventDetails.estado_borrado" class="text-success status-text">
+                <i class="fas fa-check-circle me-2"></i> Este evento está activo
+              </span>
+              <span v-else class="text-danger status-text">
+                <i class="fas fa-times-circle me-2"></i> El evento está desactivado
+              </span>
+            </div>
+            <button v-if="eventDetails.estado_borrado" class="btn btn-success animated-btn"
+              @click="triggerReactivateEvent">
+              <i class="fa-solid fa-circle-check me-2"></i>Reactivar evento
+            </button>
+          </div>
+
+          <div class="mt-4">
+            <ul class="nav nav-pills mb-3 custom-pills" id="pills-tab" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pills-cronogramas-tab" data-bs-toggle="pill"
+                  data-bs-target="#pills-cronogramas" type="button" role="tab" aria-controls="pills-cronogramas"
+                  aria-selected="true">
+                  Cronogramas
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-equipos-tab" data-bs-toggle="pill" data-bs-target="#pills-equipos"
+                  type="button" role="tab" aria-controls="pills-equipos" aria-selected="false">
+                  Equipos
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-formularios-tab" data-bs-toggle="pill"
+                  data-bs-target="#pills-formularios" type="button" role="tab" aria-controls="pills-formularios"
+                  aria-selected="false">
+                  Formularios
+                </button>
+              </li>
+            </ul>
+            <div class="tab-content" id="pills-tabContent">
+              <div class="tab-pane fade show active" id="pills-cronogramas" role="tabpanel"
+                aria-labelledby="pills-cronogramas-tab">
+                <div v-if="eventDetails && eventDetails.cronogramas && eventDetails.cronogramas.length > 0">
+                  <div class="accordion" id="nestedAccordionCronogramas">
+                    <div class="accordion-item" v-for="(cronograma) in eventDetails.cronogramas" :key="cronograma.id">
+                      <h2 class="accordion-header" :id="`cronogramaHeading${cronograma.id}`">
+                        <button class="accordion-button nested-accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" :data-bs-target="`#cronogramaCollapse${cronograma.id}`"
+                          aria-expanded="false" :aria-controls="`cronogramaCollapse${cronograma.id}`">
+                          <i class="fas fa-calendar-alt me-2 nested-accordion-icon"></i>
+                          {{ cronograma.titulo }}
+                        </button>
+                      </h2>
+                      <div :id="`cronogramaCollapse${cronograma.id}`" class="accordion-collapse collapse"
+                        :aria-labelledby="`cronogramaHeading${cronograma.id}`"
+                        data-bs-parent="#nestedAccordionCronogramas">
+                        <div class="accordion-body nested-accordion-body">
+                          <p class="mb-2"><strong>Descripción:</strong> {{ cronograma.descripcion }}</p>
+                          <p class="mb-2"><strong>Inicio:</strong> {{ formatDate(cronograma.fecha_inicio) }}</p>
+                          <p class="mb-3"><strong>Fin:</strong> {{ formatDate(cronograma.fecha_fin) }}</p>
+                          <h6 class="mt-3 mb-2 cronograma-activities-title">Actividades:</h6>
+                          <div
+                            v-if="cronograma.actividades_cronogramas && cronograma.actividades_cronogramas.length > 0">
+                            <div class="accordion accordion-flush" :id="`activitiesAccordion${cronograma.id}`">
+                              <div class="accordion-item" v-for="actividad in cronograma.actividades_cronogramas"
+                                :key="actividad.id">
+                                <h2 class="accordion-header" :id="`activityHeading${actividad.id}`">
+                                  <button class="accordion-button activity-accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" :data-bs-target="`#activityCollapse${actividad.id}`"
+                                    aria-expanded="false" :aria-controls="`activityCollapse${actividad.id}`">
+                                    <i class="fas fa-check-circle activity-icon me-2"></i>
+                                    {{ actividad.titulo }}
+                                    <div class="activity-date-display ms-auto">
+                                      <i class="fas fa-clock activity-date-icon me-1" title="Inicio de Actividad"></i>
+                                      <span class="activity-start-date">{{ formatTime(actividad.fecha_inicio) }}</span>
+                                      <span class="mx-1">-</span>
+                                      <span class="activity-end-date">{{ formatTime(actividad.fecha_fin) }}</span>
+                                      <i class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
+                                        title="Fecha de Actividad"></i>
+                                      <span class="activity-full-date">{{ formatShortDate(actividad.fecha_inicio)
                                         }}</span>
-                                        <span class="mx-1">-</span>
-                                        <span class="activity-end-date">{{
-                                          formatTime(actividad.fecha_fin)
-                                        }}</span>
-                                        <i
-                                          class="fas fa-calendar-alt activity-date-icon ms-2 me-1"
-                                          title="Fecha de Actividad"
-                                        ></i>
-                                        <span class="activity-full-date">{{
-                                          formatShortDate(actividad.fecha_inicio)
-                                        }}</span>
-                                      </div>
-                                    </button>
-                                  </h2>
-                                  <div
-                                    :id="`activityCollapse${actividad.id}`"
-                                    class="accordion-collapse collapse"
-                                    :aria-labelledby="`activityHeading${actividad.id}`"
-                                    :data-bs-parent="`#activitiesAccordion${cronograma.id}`"
-                                  >
-                                    <div class="accordion-body activity-accordion-body">
-                                      <p class="mb-2">
-                                        <strong>Descripción:</strong>
-                                        {{ actividad.descripcion || 'Sin descripción.' }}
-                                      </p>
                                     </div>
+                                  </button>
+                                </h2>
+                                <div :id="`activityCollapse${actividad.id}`" class="accordion-collapse collapse"
+                                  :aria-labelledby="`activityHeading${actividad.id}`"
+                                  :data-bs-parent="`#activitiesAccordion${cronograma.id}`">
+                                  <div class="accordion-body activity-accordion-body">
+                                    <p class="mb-2"><strong>Descripción:</strong> {{ actividad.descripcion || 'Sindescripción.' }}</p>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                            <p v-else class="text-muted text-center py-2">
-                              No hay actividades para este cronograma.
-                            </p>
                           </div>
+                          <p v-else class="text-muted text-center py-2">No hay actividades para este cronograma.</p>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <p v-else class="text-muted mt-3">
-                    No hay cronogramas disponibles para este evento.
+                </div>
+                <p v-else class="text-muted mt-3">No hay cronogramas disponibles para este evento.</p>
+              </div>
+
+              <div class="tab-pane fade" id="pills-equipos" role="tabpanel" aria-labelledby="pills-equipos-tab">
+                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                  <h5 class="mb-3">Información de Equipos</h5>
+                  <p class="mb-0">Equipos del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
+                  <p class="text-muted mt-2">Aquí se mostrará la información de los equipos asociados a este evento.</p>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="pills-formularios" role="tabpanel" aria-labelledby="pills-formularios-tab">
+                <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
+                  <h5 class="mb-3">Información de Formularios</h5>
+                  <p class="mb-0">Formularios del evento: <strong>{{ eventDetails?.nombre }}</strong></p>
+                  <p class="text-muted mt-2">Aquí se mostrará la información de los formularios asociados a este evento.
                   </p>
                 </div>
-
-                <div
-                  class="tab-pane fade"
-                  id="pills-equipos"
-                  role="tabpanel"
-                  aria-labelledby="pills-equipos-tab"
-                >
-                  <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                    <h5 class="mb-3">Proyectos y Equipos del Evento</h5>
-                    <div v-if="loadingProjects" class="text-center py-4">
-                      <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Cargando proyectos y equipos...</span>
-                      </div>
-                      <p class="text-muted mt-2">Cargando proyectos y equipos...</p>
-                    </div>
-                    <div v-else-if="eventProjects.length === 0" class="text-center text-muted py-2">
-                      Este evento no tiene proyectos ni equipos asociados.
-                    </div>
-                    <div v-else class="row g-3">
-                      <div
-                        v-for="project in eventProjects"
-                        :key="project.id"
-                        class="col-md-6 col-lg-4"
-                      >
-                        <div class="project-card">
-                          <h6 class="project-title">{{ project.titulo }}</h6>
-                          <p class="project-description">{{ project.descripcion }}</p>
-                          <hr />
-                          <p class="team-info">
-                            <strong>Equipo:</strong>
-                            <span :class="{ 'text-danger': project.team.estado_borrado }">
-                              {{ project.team.nombre }}
-                              <i
-                                v-if="project.team.estado_borrado"
-                                class="fas fa-exclamation-circle ms-1"
-                                title="Equipo Deshabilitado"
-                              ></i>
-                            </span>
-                          </p>
-                          <p class="project-status">
-                            <strong>Estado del Proyecto:</strong> {{ project.estado }}
-                          </p>
-                          <p class="project-dates">
-                            <strong>Inicio:</strong> {{ formatDate(project.fecha_inicio) }}
-                          </p>
-                          <p class="project-dates">
-                            <strong>Fin:</strong> {{ formatDate(project.fecha_fin) }}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  class="tab-pane fade"
-                  id="pills-formularios"
-                  role="tabpanel"
-                  aria-labelledby="pills-formularios-tab"
-                >
-                  <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                    <h5 class="mb-3">Plantillas de Evaluación para este Evento</h5>
-                    <div v-if="loadingForms" class="text-center py-4">
-                      <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Cargando formularios...</span>
-                      </div>
-                      <p class="text-muted mt-2">Cargando plantillas de evaluación...</p>
-                    </div>
-                    <div v-else-if="eventForms.length === 0" class="text-center text-muted py-2">
-                      Este evento no tiene procesos de evaluación o plantillas asociadas.
-                    </div>
-                    <div v-else>
-                      <div class="accordion" id="evaluationProcessesAccordion">
-                        <div
-                          v-for="proceso in eventForms"
-                          :key="proceso.procesoId"
-                          class="accordion-item mb-3"
-                        >
-                          <h2 class="accordion-header" :id="`procesoHeading${proceso.procesoId}`">
-                            <button
-                              class="accordion-button nested-accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              :data-bs-target="`#procesoCollapse${proceso.procesoId}`"
-                              aria-expanded="false"
-                              :aria-controls="`procesoCollapse${proceso.procesoId}`"
-                            >
-                              <i class="fas fa-file-alt me-2 nested-accordion-icon"></i>
-                              Proceso: {{ proceso.procesoTitulo }}
-                            </button>
-                          </h2>
-                          <div
-                            :id="`procesoCollapse${proceso.procesoId}`"
-                            class="accordion-collapse collapse"
-                            :aria-labelledby="`procesoHeading${proceso.procesoId}`"
-                            data-bs-parent="#evaluationProcessesAccordion"
-                          >
-                            <div class="accordion-body nested-accordion-body">
-                              <h6 class="mb-3">Plantillas:</h6>
-                              <div v-if="proceso.plantillas && proceso.plantillas.length > 0">
-                                <div
-                                  class="accordion accordion-flush"
-                                  :id="`plantillasAccordion${proceso.procesoId}`"
-                                >
-                                  <div
-                                    v-for="plantilla in proceso.plantillas"
-                                    :key="plantilla.plantillaId"
-                                    class="accordion-item"
-                                  >
-                                    <h2
-                                      class="accordion-header"
-                                      :id="`plantillaHeading${plantilla.plantillaId}`"
-                                    >
-                                      <button
-                                        class="accordion-button activity-accordion-button collapsed"
-                                        type="button"
-                                        data-bs-toggle="collapse"
-                                        :data-bs-target="`#plantillaCollapse${plantilla.plantillaId}`"
-                                        aria-expanded="false"
-                                        :aria-controls="`plantillaCollapse${plantilla.plantillaId}`"
-                                      >
-                                        <i class="fas fa-clipboard-list activity-icon me-2"></i>
-                                        {{ plantilla.plantillaNombre }}
-                                      </button>
-                                    </h2>
-                                    <div
-                                      :id="`plantillaCollapse${plantilla.plantillaId}`"
-                                      class="accordion-collapse collapse"
-                                      :aria-labelledby="`plantillaHeading${plantilla.plantillaId}`"
-                                      :data-bs-parent="`#plantillasAccordion${proceso.procesoId}`"
-                                    >
-                                      <div class="accordion-body activity-accordion-body">
-                                        <h6 class="mt-2 mb-2">Criterios:</h6>
-                                        <ul
-                                          v-if="
-                                            plantilla.criterios && plantilla.criterios.length > 0
-                                          "
-                                          class="list-group list-group-flush"
-                                        >
-                                          <li
-                                            v-for="criterio in plantilla.criterios"
-                                            :key="criterio.criterioId"
-                                            class="list-group-item d-flex justify-content-between align-items-center"
-                                          >
-                                            <div>
-                                              <strong>{{ criterio.criterioNombre }}</strong
-                                              >: {{ criterio.criterioDescripcion }}
-                                            </div>
-                                            <span class="badge bg-primary rounded-pill"
-                                              >{{ criterio.criterioPeso }}%</span
-                                            >
-                                          </li>
-                                        </ul>
-                                        <p v-else class="text-muted text-center py-2">
-                                          No hay criterios para esta plantilla.
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              <p v-else class="text-muted text-center py-2">
-                                No hay plantillas para este proceso de evaluación.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
-          <div v-else-if="!loading" class="container text-center text-muted mt-5">
-            No se pudieron cargar los detalles del evento o el evento no existe.
-          </div>
+
+        </div>
+        <div v-else-if="!loading" class="container text-center text-muted mt-5">
+          No se pudieron cargar los detalles del evento o el evento no existe.
         </div>
       </div>
     </div>
-
-    <OkModal
-      :show="showOkModal"
-      :message="okModalMessage"
-      :duration="1000"
-      @close="handleOkModalClose"
-    />
-
-    <ModalCrearEvento
-      :show="showCreateEditModal"
-      :eventData="currentEventToEdit"
-      @close="handleModalClose"
-      @submit="handleModalSubmit"
-    />
-
-    <ManageCertificate
-      :show="showManageCertificateModal"
-      :eventId="eventId"
-      @close="closeManageCertificateModal"
-      @save="handleCertificateSave"
-    />
-
-    <ViewMyCertificates
-      :show="showViewMyCertificatesModal"
-      :eventId="eventId"
-      @close="closeViewMyCertificatesModal"
-    />
-
-    <ImageManagementModal
-      :show="showImageManagementModal"
-      :currentImages="eventImages"
-      :isLoading="isLoadingImagesInModal"
-      @close="closeImageManagementModal"
-      @delete-image="triggerDeleteImage"
-      @upload-images="uploadNewImages"
-      ref="imageManagementModalRef"
-    />
-
-    <ConfirmationModal
-      :show="showReactivateConfirmModal"
-      title="Reactivar Evento"
-      message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
-      confirmText="Sí, Reactivar"
-      cancelText="Cancelar"
-      @confirm="handleReactivateConfirm"
-      @cancel="handleReactivateCancel"
-    />
-
-    <DeleteModal
-      ref="universalDeleteModalRef"
-      :title="modalTitle"
-      :message="modalMessage"
-      :warning="modalWarning"
-      :confirmButtonText="modalConfirmText"
-      @confirmed="handleDeleteConfirmed"
-    />
-
-    <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
-
-    <ConfirmationDialog
-      :visible="showConfirmDialog"
-      message="¿Deseas inscribirte al evento?"
-      @confirm="confirmarSinProyecto"
-      @cancel="closeDialog"
-    />
-
-    <div v-if="showToast" :class="['toast-notification', toastType, 'show']">
-      {{ toastMessage }}
-    </div>
   </div>
+
+
+  <OkModal :show="showOkModal" :message="okModalMessage" :duration=1000 @close="handleOkModalClose" />
+
+  <ModalCrearEvento :show="showCreateEditModal" :eventData="currentEventToEdit" @close="handleModalClose"
+    @submit="handleModalSubmit" />
+
+  <ImageManagementModal :show="showImageManagementModal" :currentImages="eventImages"
+    :isLoading="isLoadingImagesInModal" @close="closeImageManagementModal" @delete-image="triggerDeleteImage"
+    @upload-images="uploadNewImages" ref="imageManagementModalRef" />
+
+  <ConfirmationModal :show="showReactivateConfirmModal" title="Reactivar Evento"
+    message="¿Estás seguro de que quieres reactivar este evento? El evento volverá a estar visible y activo."
+    confirmText="Sí, Reactivar" cancelText="Cancelar" @confirm="handleReactivateConfirm"
+    @cancel="handleReactivateCancel" />
+
+  <DeleteModal ref="universalDeleteModalRef" :title="modalTitle" :message="modalMessage" :warning="modalWarning"
+    :confirmButtonText="modalConfirmText" @confirmed="handleDeleteConfirmed" />
+
+  <ErrorModal :show="showErrorModal" :message="errorMessage" @close="handleErrorModalClose" />
 </template>
 
 <style scoped>
-.event-detail-view-wrapper {
-  /* This is the new single root element */
-  height: 100vh;
-  overflow: hidden;
-}
-
 .image-thumbnail-sidebar {
   width: 120px;
   flex-shrink: 0;
@@ -1362,6 +852,7 @@ function closeDialog() {
   overflow: hidden;
 }
 
+
 .btn-primary {
   background-color: #174384;
   border-color: #174384;
@@ -1395,22 +886,6 @@ function closeDialog() {
 .btn-secondary {
   background-color: #6c757d;
   border-color: #6c757d;
-}
-
-.btn-secondary:hover {
-  background-color: #5a6268;
-  border-color: #545b62;
-}
-
-.btn-terciario {
-  background-color: #cfac11;
-  border-color: #ffcf4c;
-  color: #ffffff;
-}
-
-.btn-terciario:hover {
-  background-color: #b89a0e;
-  border-color: #8f740b;
 }
 
 .btn-secondary:hover {
@@ -1481,8 +956,8 @@ function closeDialog() {
 }
 
 .card {
-  border: 1px solid rgba(0, 0, 0, 0.125);
-  border-radius: 0.25rem;
+  border: 1px solid rgba(0, 0, 0, .125);
+  border-radius: .25rem;
 }
 
 .card.mb-4:not(.main-event-details) {
@@ -1522,9 +997,7 @@ function closeDialog() {
   color: #ffffff;
   font-weight: 600;
   border-bottom: 1px solid #14386b;
-  transition:
-    all 0.2s ease,
-    color 0.2s ease;
+  transition: all 0.2s ease, color 0.2s ease;
   padding: 1rem 1.25rem;
 }
 
@@ -1539,9 +1012,7 @@ function closeDialog() {
 }
 
 .accordion-button .accordion-indicator-icon {
-  transition:
-    transform 0.2s ease-in-out,
-    color 0.2s ease;
+  transition: transform 0.2s ease-in-out, color 0.2s ease;
   color: #ffffff;
 }
 
@@ -1553,6 +1024,7 @@ function closeDialog() {
 .accordion-button::after {
   display: none;
 }
+
 
 .accordion-body {
   padding: 1.5rem;
@@ -1694,7 +1166,7 @@ function closeDialog() {
   color: #343a40;
   font-weight: 500;
   font-size: 0.95rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0,0,0,.08);
 }
 
 .activity-date-display {
@@ -1713,88 +1185,23 @@ function closeDialog() {
 .activity-start-date,
 .activity-end-date,
 .activity-full-date {
-  white-space: nowrap; /* Prevent dates from wrapping */
-}
-
-/* Styles for Project Cards in Equipos tab */
-.project-card {
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 15px;
-  height: 100%; /* Ensure cards in a row have equal height */
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.project-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #174384;
-  margin-bottom: 5px;
-}
-
-.project-description {
-  font-size: 0.9rem;
-  color: #555;
-  margin-bottom: 10px;
-  flex-grow: 1; /* Allow description to take available space */
-}
-
-.team-info,
-.project-status,
-.project-dates {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 5px;
-}
-
-.team-info strong,
-.project-status strong,
-.project-dates strong {
-  color: #333;
+    white-space: nowrap; /* Prevent dates from wrapping */
 }
 
 /* Ensure the full date is displayed on smaller screens if necessary, or adjust layout */
 @media (max-width: 576px) {
-  .activity-date-display {
-    flex-wrap: wrap; /* Allow dates to wrap on very small screens */
-    justify-content: flex-end; /* Keep them to the right */
-    text-align: right;
-  }
-  .activity-date-icon {
-    margin-left: 0.5rem !important; /* Adjust icon spacing */
-    margin-right: 0.25rem !important;
-  }
-  .activity-full-date {
-    flex-basis: 100%; /* Make full date take full line if it wraps */
-    margin-top: 0.2rem;
-  }
-}
-
-.toast-notification {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 2000;
-  transition: opacity 0.3s ease-in-out;
-  opacity: 0;
-  pointer-events: none;
-}
-.toast-notification.show {
-  opacity: 1;
-}
-.toast-notification.success {
-  background-color: #28a745;
-}
-.toast-notification.error {
-  background-color: #dc3545;
+    .activity-date-display {
+        flex-wrap: wrap; /* Allow dates to wrap on very small screens */
+        justify-content: flex-end; /* Keep them to the right */
+        text-align: right;
+    }
+    .activity-date-icon {
+        margin-left: 0.5rem !important; /* Adjust icon spacing */
+        margin-right: 0.25rem !important;
+    }
+    .activity-full-date {
+        flex-basis: 100%; /* Make full date take full line if it wraps */
+        margin-top: 0.2rem;
+    }
 }
 </style>

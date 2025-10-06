@@ -1,98 +1,80 @@
 <script setup>
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
-import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useEventosStore } from '@/stores/eventos'
-import { storeToRefs } from 'pinia'
-import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
-import ManageSedesModal from '@/components/Admin/Eventos/ManageSedesModal.vue'
+import { useEventosStore } from '@/stores/eventos' // Import your Pinia store
+import { storeToRefs } from 'pinia' // Important for destructuring reactive properties
 import ManageCategoriasModal from '@/components/Admin/Eventos/ManageCategoriasModal.vue'
-const eventosInscritosStore = useEventosInscritosStore()
+import ManageSedesModal from '@/components/Admin/Eventos/ManageSedesModal.vue'
 
-const isSuperAdmin = ref(false)
-const isAdmin = ref(false)
-const isUser = ref(false)
-
-const checkrol = () => {
-  const user = JSON.parse(localStorage.getItem('user'))
-  if (user.rol_id == 1) {
-    isAdmin.value = true
-  } else if (user.rol_id == 2) {
-    isUser.value = true
-  } else if (user.rol_id == 8) {
-    isSuperAdmin.value = true
-  }
-}
-
-const ModalCrearEvento = defineAsyncComponent(
-  () => import('@/components/Admin/Eventos/ModalCrearEvento.vue'),
-)
-
-const AdminEventCard = defineAsyncComponent(
-  () => import('@/components/Admin/Eventos/AdminEventCard.vue'),
-)
+// Import components. LoaderComponent is usually small, so no async for it.
 import LoaderComponent from '@/components/LoaderComponent.vue'
+const showCreateEditModal = ref(false)
+const showMangeSedesModal = ref(false)
+const showMangeCategoriasModal = ref(false)
+
+
+// For potentially larger components or those not always visible, use defineAsyncComponent
+import { defineAsyncComponent } from 'vue'
+const ModalCrearEvento = defineAsyncComponent(() =>
+  import('@/components/Admin/Eventos/ModalCrearEvento.vue')
+)
+const AdminEventCard = defineAsyncComponent(() =>
+  import('@/components/Admin/Eventos/AdminEventCard.vue')
+)
 
 const router = useRouter()
-const eventosStore = useEventosStore()
+const eventosStore = useEventosStore() // Instantiate the Pinia store
 
-const showCreateEditModal = ref(false)
-const showSedesModal = ref(false)
-const showCategoriasModal = ref(false)
-
-const openSedesModal = () => {
-  showSedesModal.value = true
-}
-
-const openCategoriasModal = () => {
-  showCategoriasModal.value = true
-}
+// Destructure reactive state and getters from the store using storeToRefs
+const { events, error, loading, searchQuery, currentPage, itemsPerPage, totalEvents, totalPages, currentEventToEdit } = storeToRefs(eventosStore)
 
 let searchTimeout = null
-
-const {
-  events,
-  loading,
-  error,
-  currentPage,
-  totalEvents,
-  totalPages,
-  searchQuery,
-  currentEventToEdit,
-} = storeToRefs(eventosStore)
 
 const handleSearchInput = () => {
   clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
+    // If the search query changes and we are not on the first page, set to page 1
+    // This will trigger the watch on 'currentPage' which then calls fetchEvents
     if (eventosStore.currentPage !== 1) {
       eventosStore.setCurrentPage(1)
     } else {
+      // If already on page 1, just fetch events with the new search query
       eventosStore.fetchEvents()
     }
-  }, 1500)
+  }, 500) // Debounce for 500ms
 }
 
 const handleSearchEnter = () => {
-  clearTimeout(searchTimeout)
-  eventosStore.setCurrentPage(1)
+  clearTimeout(searchTimeout) // Clear debounce immediately
+  eventosStore.setCurrentPage(1) // Always go to the first page on Enter
   eventosStore.fetchEvents()
 }
 
+// Watch for changes in currentPage from the store and refetch events
 watch(currentPage, () => {
   eventosStore.fetchEvents()
 })
 
+// Initial data fetch when the component is mounted
 onMounted(() => {
   eventosStore.fetchEvents()
-  eventosInscritosStore.fetchEventosInscritos()
-  checkrol()
 })
 
 const openCreateModal = () => {
-  eventosStore.clearCurrentEventToEdit()
+  eventosStore.clearCurrentEventToEdit() // Clear any previous edit data
   showCreateEditModal.value = true
 }
+
+const openSedesManage = () => {
+  showMangeSedesModal.value = true
+}
+
+const openCategoriasManage = () => {
+  showMangeCategoriasModal.value = true
+}
+
 
 const handleEditEvent = async (eventData) => {
   if (eventData && eventData.id) {
@@ -105,16 +87,13 @@ const handleEditEvent = async (eventData) => {
 
 const handleModalClose = () => {
   showCreateEditModal.value = false
-  showSedesModal.value = false
-  showCategoriasModal.value = false
-  eventosStore.clearCurrentEventToEdit()
+  eventosStore.clearCurrentEventToEdit() // Clear event data when modal is closed
 }
 
-const handleModalSubmit = async (emittedEventData) => {
+const handleModalSubmit = async () => {
   showCreateEditModal.value = false
   eventosStore.clearCurrentEventToEdit()
-
-  await eventosStore.fetchEvents()
+  await eventosStore.fetchEvents() // Refresh the list after form submission
   console.log('Event list refreshed after modal submission.')
 }
 
@@ -150,46 +129,31 @@ const prevPage = () => {
       <PageHeaderRoute />
 
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <div class="filter-controls mb-4">
-          <div class="search-input-group">
-            <input
-              v-model="eventosStore.searchQuery"
-              type="text"
-              placeholder="Buscar por nombre"
-              @input="handleSearchInput"
-              @keyup.enter="handleSearchEnter"
-            />
-            <i class="fas fa-search search-icon"></i>
-          </div>
-          <div class="button-group">
-            <button v-if="isSuperAdmin" class="btn btn-manage" @click="openSedesModal">
-              <i class="fa-solid fa-pen"></i> Sedes
-            </button>
-            <button v-if="isSuperAdmin" class="btn btn-manage" @click="openCategoriasModal">
-              <i class="fa-solid fa-pen"></i> Categorías
-            </button>
-            <button v-if="isSuperAdmin" class="btn btn-create" @click="openCreateModal">
-              <i class="fas fa-plus"></i>
-            </button>
-          </div>
+        <div class="d-flex align-items-center mb-3 gap-2 action-bar">
+          <input v-model="searchQuery" type="text" placeholder="Buscar por nombre" class="form-control flex-grow-1"
+            @input="handleSearchInput" @keyup.enter="handleSearchEnter" />
+          <button class="btn btn-primary" @click="openCategoriasManage">
+            <i class="fas fa-list"></i> <span class="d-none d-md-inline">Categorias</span>
+          </button>
+          <button class="btn btn-primary" @click="openSedesManage">
+            <i class="fas fa-map-pin"></i> <span class="d-none d-md-inline">Sedes</span>
+          </button>
+          <button class="btn btn-default btn-icon-only" @click="openCreateModal">
+            <i class="fas fa-plus"></i>
+          </button>
         </div>
         <p v-if="error" class="error-text">{{ error }}</p>
         <div class="container">
-          <div class="row">
-            <div
-              class="col-12 col-sm-12 col-md-6 col-lg-3 mb-3"
-              v-for="event in events"
-              :key="event.id"
-            >
-              <AdminEventCard
-                :event="event"
-                @edit-event="handleEditEvent"
-                @view-event="handleViewEvent"
-              />
+          <div class="row" v-if="!loading">
+            <div class="col-12 col-sm-12 col-md-6 col-lg-3 mb-3" v-for="event in events" :key="event.id">
+              <AdminEventCard :event="event" @edit-event="handleEditEvent" @view-event="handleViewEvent" />
             </div>
             <div v-if="events.length === 0 && !loading" class="col-12 text-center text-muted mt-5">
               No se encontraron eventos.
             </div>
+          </div>
+          <div v-else class="text-center text-muted mt-5">
+            Cargando eventos...
           </div>
 
           <nav aria-label="Page navigation" v-if="totalPages > 1 && !loading">
@@ -197,12 +161,7 @@ const prevPage = () => {
               <li class="page-item" :class="{ disabled: currentPage === 1 }">
                 <a class="page-link" href="#" @click.prevent="prevPage">Anterior</a>
               </li>
-              <li
-                class="page-item"
-                v-for="page in totalPages"
-                :key="page"
-                :class="{ active: page === currentPage }"
-              >
+              <li class="page-item" v-for="page in totalPages" :key="page" :class="{ active: page === currentPage }">
                 <a class="page-link" href="#" @click.prevent="goToPage(page)">{{ page }}</a>
               </li>
               <li class="page-item" :class="{ disabled: currentPage === totalPages }">
@@ -211,100 +170,75 @@ const prevPage = () => {
             </ul>
           </nav>
         </div>
-        <ModalCrearEvento
-          :show="showCreateEditModal"
-          :eventData="currentEventToEdit"
-          @close="handleModalClose"
-          @submit="handleModalSubmit"
-        />
-        <ManageSedesModal :show="showSedesModal" @close="handleModalClose" />
-        <ManageCategoriasModal :show="showCategoriasModal" @close="handleModalClose" />
+        <ModalCrearEvento :show="showCreateEditModal" :eventData="currentEventToEdit" @close="handleModalClose"
+          @submit="handleModalSubmit" />
+        <ManageSedesModal :show="showMangeSedesModal" @close="showMangeSedesModal = false" />
+        <ManageCategoriasModal :show="showMangeCategoriasModal" @close="showMangeCategoriasModal = false" />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.filter-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+.error-text {
+  color: red;
+  font-weight: bold;
 }
 
-.search-input-group {
-  position: relative;
+.form-control {
   flex-grow: 1;
 }
 
-.search-input-group input {
-  width: 100%;
-  padding: 0.5rem 1rem 0.5rem 2.2rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.search-input-group input:focus {
+.btn-primary {
+  background-color: #174384;
   border-color: #174384;
-  outline: none;
 }
 
-.search-icon {
-  position: absolute;
-  left: 0.8rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #a0a0a0;
-  pointer-events: none;
+.btn-primary:hover {
+  background-color: #ffffff;
+  border-color: #174384;
+  color: #174384;
 }
 
-.button-group {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.btn-default {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
 }
 
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.btn-default:hover {
+  background-color: #e2e6ea;
+  border-color: #dae0e5;
 }
 
-.btn-create {
-  background-color: #174384;
-  color: white;
-  box-shadow: 0 1px 3px rgba(40, 167, 69, 0.2);
+
+/* CSS for a clean button layout */
+.action-bar .btn {
+  /* Ensure consistent height for all buttons */
+  height: calc(1.5em + 0.75rem + 2px);
+  white-space: nowrap; /* Prevent button text from wrapping */
+  padding: 0.375rem 0.75rem; /* Standard Bootstrap padding */
 }
 
-.btn-create:hover {
-  background-color: #14386b;
+/* Style for icon-only button to make it a square */
+.btn-icon-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
 }
 
-.btn-manage {
-  background-color: #174384;
-  color: white;
-  box-shadow: 0 1px 3px rgba(23, 67, 132, 0.2);
+/* Optional: Better spacing for buttons that mix icon and text */
+.action-bar .btn i.fas {
+    margin-right: 0.25rem;
 }
 
-.btn-manage:hover {
-  background-color: #14386b;
-}
-
-.error-text {
-  color: #dc3545;
-  font-weight: 500;
-  background-color: #fff0f0;
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #dc3545;
+/* On smaller screens (where d-md-inline hides the text), remove the right margin */
+@media (max-width: 767.98px) {
+    .action-bar .btn i.fas {
+        margin-right: 0;
+    }
 }
 
 .pagination {

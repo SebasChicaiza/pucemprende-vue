@@ -123,6 +123,11 @@ const startEditCategoria = (categoria) => {
   editedCategoriaName.value = categoria.nombre
 }
 
+const handleCloseModal = () => {
+  emit('close')
+}
+
+
 const cancelEditCategoria = () => {
   editingCategoria.value = null
   editedCategoriaName.value = ''
@@ -246,7 +251,7 @@ defineExpose({
     <div class="modal-container">
       <div class="modal-header">
         <h3>Gestionar Categorías</h3>
-        <button class="close-button" @click="$emit('close')">&times;</button>
+        <button class="close-button" @click="handleCloseModal">&times;</button>
       </div>
       <div class="modal-body d-flex flex-column">
         <div class="sede-form">
