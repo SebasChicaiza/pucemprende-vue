@@ -99,9 +99,9 @@ const router = createRouter({
       },
     },
     {
-      path: '/admin/crearEquipo/:eventoId',
+      path: '/crear-equipo/:eventoId',
       name: 'crearEquipo',
-      component: CrearEquiposView,
+      component: CrearEquiposView, // Usar el import que ya tienes arriba
       props: true,
       meta: {
         title: 'Crear Equipo',

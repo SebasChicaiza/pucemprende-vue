@@ -6,11 +6,14 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import ConfirmationDialog from '@/components/Admin/Proyectos/ConfirmationDialog.vue'
+import { useEventosInscritosStore } from '@/stores/useEventosInscritosStore'
 
 const router = useRouter()
+const eventosInscritosStore = useEventosInscritosStore()
 
 const props = defineProps({
   eventoId: {
+    type: [String, Number],
     required: true,
   },
 })
@@ -94,7 +97,7 @@ function logAxiosError(err, label = 'Axios error') {
   console.groupEnd()
 }
 
-// === APIs de inscripción / activación ===
+// === APIs de inscripción / activación MEJORADAS ===
 async function getEventoRolPersonaId(eventoId, personaId, headers) {
   try {
     const res = await axios.get(
@@ -113,69 +116,102 @@ async function getEventoRolPersonaId(eventoId, personaId, headers) {
 
 /** CREADOR: prioriza self-inscribe cuando no existe registro */
 async function ensureInscripcionActivaCreador(eventoId, personaId, headers) {
+  console.log(`🔍 Verificando inscripción creador - Evento: ${eventoId}, Persona: ${personaId}`)
+
   let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
   if (erpId) {
-    return // ya existe
+    console.log(`✅ Creador ya inscrito con ID: ${erpId}`)
+    return // ya existe y está activo
   }
+
+  console.log('📝 Creador no inscrito, procediendo a inscribir...')
   // No existe => self-inscribe (sin persona_id)
   try {
-    await axios.post(
+    const response = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`,
       { evento_id: Number(eventoId) }, // self
       { headers },
     )
+    console.log('✅ Self-inscripción exitosa:', response.data)
   } catch (e) {
-    // si ya estaba inscrito pero borrado=true, backend podría devolver 409; seguimos
+    console.log('⚠️ Error en self-inscripción:', e.response?.status, e.response?.data)
+    // Si ya estaba inscrito pero borrado=true, backend podría devolver 409; seguimos
     if (e?.response?.status !== 409) {
       logAxiosError(e, 'SELF-INSCRIBIR CREADOR')
       throw e
     }
+    console.log('⚠️ Error 409 - probablemente ya inscrito, continuando...')
   }
 }
 
 /** OTRO MIEMBRO: inscribe con persona_id si no existe; si 409, continúa */
 async function ensureInscripcionActivaMiembro(eventoId, personaId, headers) {
+  console.log(`🔍 Verificando inscripción miembro - Evento: ${eventoId}, Persona: ${personaId}`)
+
   let erpId = await getEventoRolPersonaId(eventoId, personaId, headers)
   if (erpId) {
+    console.log(`✅ Miembro ya inscrito con ID: ${erpId}`)
     return // ya existe
   }
 
+  console.log('📝 Miembro no inscrito, procediendo a inscribir...')
   try {
     const payload = {
       persona_id: personaId,
-      evento_id: eventoId,
+      evento_id: Number(eventoId),
       rol_id: 4,
       estado_borrado: false,
     }
-    console.log('Inscribiendo miembro:', JSON.stringify(payload))
-    await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`, payload, {
-      headers,
-    })
+    console.log('📤 Payload inscripción miembro:', JSON.stringify(payload))
+
+    const response = await axios.post(
+      `${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona`,
+      payload,
+      { headers }
+    )
+    console.log('✅ Inscripción miembro exitosa:', response.data)
   } catch (e) {
+    console.log('⚠️ Error inscribiendo miembro:', e.response?.status, e.response?.data)
+
     if (e?.response?.status !== 409) {
       logAxiosError(e, `INSCRIBIR miembro persona_id=${personaId}`)
       throw e
     }
+    console.log('⚠️ Error 409 - probablemente ya inscrito, continuando...')
   }
 }
 
 /** Valida/activa TODOS antes de crear equipo */
 async function ensureAllInscripcionesActivas(headers) {
+  console.log('🔍 Iniciando inscripciones para evento:', props.eventoId)
+  console.log('🔍 Current persona ID:', currentPersonaId.value)
+  console.log('🔍 Miembros seleccionados:', miembrosSeleccionados.value)
+
   // 1) Creador
+  console.log('📝 Inscribiendo creador...')
   await ensureInscripcionActivaCreador(props.eventoId, currentPersonaId.value, headers)
+  console.log('✅ Creador inscrito')
 
   // 2) Miembros seleccionados del proyecto
   for (const miembroId of miembrosSeleccionados.value) {
-    if (miembroId === currentPersonaId.value) continue
+    if (miembroId === currentPersonaId.value) {
+      console.log(`⏭️ Saltando creador (${miembroId}) - ya inscrito`)
+      continue
+    }
+
+    console.log(`📝 Inscribiendo miembro ID: ${miembroId}`)
     try {
       await ensureInscripcionActivaMiembro(props.eventoId, miembroId, headers)
+      console.log(`✅ Miembro ${miembroId} inscrito`)
     } catch (e) {
-      const miembro = miembrosProyecto.value.find(m => m.id === miembroId)
+      const miembro = miembrosProyecto.value.find(m => m.id === miembroId || m.persona_id === miembroId)
       const fullName = `${miembro?.nombre ?? ''} ${miembro?.apellido ?? ''}`.trim()
+      console.error(`❌ Error inscribiendo a ${fullName}:`, e)
       showNotification(`No se pudo inscribir a ${fullName} en el evento.`, 'error')
       throw e
     }
   }
+  console.log('🎉 Todas las inscripciones completadas')
 }
 
 // --- Cargar proyectos disponibles ---
@@ -186,21 +222,35 @@ async function cargarProyectos() {
     return
   }
 
+  // Usar USER_ID, no persona_id
+  const userId = getCurrentPersonaId() // Este método devuelve user_id del localStorage
+  if (!userId) {
+    console.error('❌ No se puede cargar proyectos: userId no disponible')
+    showNotification('Error: No se pudo identificar al usuario actual.', 'error')
+    return
+  }
+
   loadingProyectos.value = true
   try {
+    console.log('🔍 Cargando proyectos para USER ID:', userId)
+
     const { data } = await axios.get(
-      `${import.meta.env.VITE_URL_BACKEND}/api/proyecto`,
+      `${import.meta.env.VITE_URL_BACKEND}/api/usuarios/${userId}/proyectos`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
 
+    console.log('📋 Proyectos recibidos:', data)
     proyectosDisponibles.value = Array.isArray(data) ? data : []
 
+    console.log('✅ Proyectos procesados:', proyectosDisponibles.value.length)
+
     if (proyectosDisponibles.value.length === 0) {
-      showNotification('No se encontraron proyectos disponibles.', 'error')
+      showNotification('No tienes proyectos disponibles. Crea uno primero.', 'error')
     }
   } catch (e) {
-    console.error('Error cargando proyectos:', e)
-    showNotification('Error al cargar proyectos disponibles.', 'error')
+    console.error('❌ Error cargando proyectos del usuario:', e)
+    logAxiosError(e, 'Cargar proyectos del usuario')
+    showNotification('Error al cargar tus proyectos.', 'error')
     proyectosDisponibles.value = []
   } finally {
     loadingProyectos.value = false
@@ -296,7 +346,7 @@ function validarFormulario() {
   return true
 }
 
-// --- Guardado final ---
+// --- Guardado final MEJORADO ---
 async function confirmarCreacion() {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -307,10 +357,22 @@ async function confirmarCreacion() {
 
   loading.value = true
   try {
+    console.log('🚀 Iniciando creación de equipo...')
+    console.log('📋 Datos actuales:', {
+      eventoId: props.eventoId,
+      currentPersonaId: currentPersonaId.value,
+      nombreEquipo: nombreEquipo.value,
+      proyectoSeleccionado: proyectoSeleccionado.value,
+      miembrosSeleccionados: miembrosSeleccionados.value
+    })
+
     // (0) **OBLIGATORIO**: asegurar inscripciones ACTIVAS de TODOS los miembros seleccionados
+    console.log('🔐 Paso 1: Asegurando inscripciones...')
     await ensureAllInscripcionesActivas(headers)
+    console.log('✅ Paso 1 completado: Inscripciones aseguradas')
 
     // (1) Crear equipo
+    console.log('🏗️ Paso 2: Creando equipo...')
     const equipoRes = await axios.post(
       `${import.meta.env.VITE_URL_BACKEND}/api/equipos`,
       {
@@ -322,6 +384,7 @@ async function confirmarCreacion() {
       { headers },
     )
     const equipoId = equipoRes.data.id
+    console.log('✅ Paso 2 completado: Equipo creado con ID:', equipoId)
 
     // (2) Registrar miembros del equipo
     const hoy = new Date()
@@ -358,9 +421,18 @@ async function confirmarCreacion() {
       }
     }
 
+    // (3) **NUEVO**: Actualizar store de eventos inscritos
+    await eventosInscritosStore.fetchEventosInscritos()
+
     showNotification('Equipo creado correctamente.', 'success')
-    router.push('/admin/equipos')
+
+    // Redirigir después de un momento para que se vea el mensaje
+    setTimeout(() => {
+      router.push('/admin/equipos')
+    }, 1500)
+
   } catch (error) {
+    console.error('💥 Error en creación de equipo:', error)
     logAxiosError(error, 'Error al crear el equipo')
     showNotification(
       error?.response?.data?.message || 'Ocurrió un error al crear el equipo.',
@@ -377,8 +449,38 @@ watch(() => proyectoSeleccionado.value, cargarMiembrosProyecto)
 
 // --- init ---
 onMounted(async () => {
-  currentPersonaId.value = getCurrentPersonaId()
-  await cargarProyectos()
+  console.log('🔄 Iniciando componente CrearEquipos...')
+
+  const token = localStorage.getItem('token')
+  if (!token) {
+    console.error('❌ No se encontró token')
+    showNotification('Token no encontrado', 'error')
+    return
+  }
+
+  try {
+    // 1) Obtener USER_ID del localStorage (para cargar proyectos)
+    const userId = getCurrentPersonaId() // Nombre confuso, pero devuelve user.id
+    console.log('👤 User ID del localStorage:', userId)
+
+    // 2) Cargar proyectos usando USER_ID
+    await cargarProyectos()
+
+    // 3) Obtener PERSONA_ID del usuario actual (para inscripciones)
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    currentPersonaId.value = data?.id
+    console.log('✅ Current persona ID obtenido:', currentPersonaId.value)
+    console.log('📋 Datos completos de persona:', data)
+
+  } catch (e) {
+    console.error('❌ Error en inicialización:', e)
+    showNotification('Error obteniendo datos del usuario', 'error')
+  }
+
+  console.log('🔄 Componente inicializado completamente')
 })
 </script>
 

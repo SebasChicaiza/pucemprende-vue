@@ -49,10 +49,10 @@ const emitEditEvent = () => {
 
 function handleInscribirse() {
   if (props.event.hayEquipos > 0) {
-    // Solo redirige, NO inscribe aquí
-    router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
+    // Redirige a crear EQUIPO (no proyecto)
+    router.push({ name: 'crearEquipo', params: { eventoId: props.event.id } })
   } else {
-    // Si no permite proyectos, inscribe directamente
+    // Si no permite equipos, inscribe directamente
     showConfirmDialog.value = true
   }
 }
@@ -66,7 +66,7 @@ const inscribirEnEvento = async () => {
   loading.value = true
 
   try {
-    await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
+    const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/evento-rol-persona/inscribirse`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -74,24 +74,33 @@ const inscribirEnEvento = async () => {
       },
       body: JSON.stringify({ evento_id: props.event.id }),
     })
-    console.log('Inscripción exitosa al evento', props.event)
-    if (props.event.hayEquipos > 0) {
-      router.push({ name: 'crearProyecto', params: { eventoId: props.event.id } })
-    } else {
-      showConfirmDialog.value = true
+
+    if (!response.ok) {
+      const errorMsg = await response.text().catch(() => 'Error al inscribirse')
+      throw new Error(errorMsg)
     }
+
+    console.log('Inscripción exitosa al evento', props.event)
+
+    // Solo redirige si hay equipos
+    if (props.event.hayEquipos > 0) {
+      router.push({ name: 'crearEquipo', params: { eventoId: props.event.id } })
+    } else {
+      // Sin equipos: solo muestra éxito y actualiza estado
+      toast('Inscripción exitosa al evento.', 'success')
+      await eventosInscritosStore.fetchEventosInscritos()
+    }
+
   } catch (error) {
     toast('Error al inscribirse al evento', 'error')
     console.error(error)
   } finally {
     showConfirmDialog.value = false
-    toast('Inscripción exitosa al evento sin proyecto.', 'success')
     loading.value = false
-    await eventosInscritosStore.fetchEventosInscritos()
   }
 }
 
-const confirmarSinProyecto = () => {
+const confirmarSinEquipo = () => {
   inscribirEnEvento()
 }
 function closeDialog() {
@@ -173,8 +182,8 @@ const puedeInscribirse = computed(() => {
     </div>
     <ConfirmationDialog
       :visible="showConfirmDialog"
-      message="¿Deseas inscribirte al evento?"
-      @confirm="confirmarSinProyecto"
+      message="¿Deseas inscribirte al evento sin equipo?"
+      @confirm="confirmarSinEquipo"
       @cancel="closeDialog"
     />
 
