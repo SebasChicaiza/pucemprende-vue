@@ -123,10 +123,6 @@ const startEditCategoria = (categoria) => {
   editedCategoriaName.value = categoria.nombre
 }
 
-const handleCloseModal = () => {
-  emit('close')
-}
-
 
 const cancelEditCategoria = () => {
   editingCategoria.value = null

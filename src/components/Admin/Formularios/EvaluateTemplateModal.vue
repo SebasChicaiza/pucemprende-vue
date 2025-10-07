@@ -34,10 +34,11 @@ const loadingTeams = ref(false)
 const isFullPageLoading = ref(false)
 const teamSearchQuery = ref('')
 const selectedTeamId = ref(null)
+// evaluationScores will now also store the existing result's ID for PUT requests
 const evaluationScores = ref({})
 const isSubmitting = ref(false)
 
-const evaluadorId = ref(null)
+const evaluadorId = ref(null) // This will now store the evaluador ID after fetching it
 
 const showErrorModal = ref(false)
 const errorMessage = ref('')
@@ -70,14 +71,22 @@ const currentEventRoleId = computed(() => {
   return eventPermission ? eventPermission.rol_id : null
 })
 
+// Helper function to reset the form data
+const resetEvaluationForm = () => {
+  evaluationScores.value = {}
+  if (props.plantilla && props.plantilla.criterios) {
+    props.plantilla.criterios.forEach((criterio) => {
+      // Initialize with default values (score: 0, comment: '', resultId: null)
+      evaluationScores.value[criterio.criterioId] = { score: 0, comment: '', resultId: null }
+    })
+  }
+}
+
 watch(
   () => props.plantilla,
   (newPlantilla) => {
     if (newPlantilla) {
-      evaluationScores.value = {}
-      newPlantilla.criterios.forEach((criterio) => {
-        evaluationScores.value[criterio.criterioId] = { score: 0, comment: '' }
-      })
+      resetEvaluationForm()
       selectedTeamId.value = null
       teamSearchQuery.value = ''
       isTeamDropdownOpen.value = false
@@ -92,11 +101,41 @@ watch(
   (newValue) => {
     if (newValue) {
       fetchTeams()
+      // Fetch the evaluator ID when the modal opens, as it's needed for fetching and submitting
+      fetchEvaluadorId()
+        .then((id) => {
+          evaluadorId.value = id
+        })
+        .catch((e) => {
+          console.error(e.message)
+          errorMessage.value = e.message
+          showErrorModal.value = true
+        })
+    } else {
+      // Reset everything when closing
+      selectedTeamId.value = null
+      resetEvaluationForm()
+      teamSearchQuery.value = ''
+      isTeamDropdownOpen.value = false
+      evaluadorId.value = null
     }
   },
 )
 
+// WATCHER 1: When a team is selected, log the ID and fetch existing evaluation data
+watch(selectedTeamId, (newTeamId) => {
+  if (newTeamId) {
+    console.log('ID del equipo seleccionado:', newTeamId)
+    fetchExistingEvaluation(newTeamId)
+  } else {
+    resetEvaluationForm() // Clear scores when no team is selected
+  }
+})
+
+// API calls (fetchTeams remains the same)
+
 async function fetchTeams() {
+  // ... (Your existing fetchTeams function code)
   loadingTeams.value = true
   errorMessage.value = ''
   showErrorModal.value = false
@@ -170,6 +209,67 @@ async function fetchEvaluadorId() {
   }
 }
 
+// NEW FUNCTION: Fetch existing evaluation data
+async function fetchExistingEvaluation(equipoId) {
+  if (!evaluadorId.value) {
+    // This should ideally not happen if fetchEvaluadorId runs on open
+    await fetchEvaluadorId().then((id) => (evaluadorId.value = id))
+  }
+
+  if (!evaluadorId.value) return
+
+  isFullPageLoading.value = true
+  errorMessage.value = ''
+  showErrorModal.value = false
+  const token = localStorage.getItem('token')
+
+  try {
+    const url = `${import.meta.env.VITE_URL_BACKEND}/api/resultado-evaluacion/equipo/${equipoId}/${evaluadorId.value}`
+
+    // The response is an object with a "calificaciones" array, similar to the screenshot
+    const response = await axios.get(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    // Start with a fresh form state
+    resetEvaluationForm()
+
+    // Map the fetched data to the form state
+    if (response.data && response.data.calificaciones) {
+      response.data.calificaciones.forEach(calificacion => {
+        const criterioId = calificacion.criterio_id
+
+        // Only update if the criterion is part of the current plantilla
+        if (evaluationScores.value[criterioId]) {
+          evaluationScores.value[criterioId] = {
+            // Note: API returns 'calificacion' (grade) and 'comentarios' (comments)
+            score: calificacion.calificacion !== null ? calificacion.calificacion : 0,
+            comment: calificacion.comentarios || '',
+            // Store the ID of the existing result (id from the API response)
+            resultId: calificacion.id
+          }
+        }
+      })
+    }
+  } catch (err) {
+    // It's common for an evaluation to not exist yet (404/No Content),
+    // so we just reset the form and don't show an error unless it's a critical failure.
+    if (err.response && err.response.status === 404) {
+        console.log('No existing evaluation found for this team/evaluator. Starting new evaluation.')
+        resetEvaluationForm()
+    } else {
+        console.error('Error fetching existing evaluation:', err.response?.data || err.message)
+        errorMessage.value = `Error al cargar evaluación existente: ${err.response?.data?.message || err.message}`
+        showErrorModal.value = true
+    }
+  } finally {
+    isFullPageLoading.value = false
+  }
+}
+
 const toggleTeamDropdown = async () => {
   isTeamDropdownOpen.value = !isTeamDropdownOpen.value
   if (isTeamDropdownOpen.value) {
@@ -186,11 +286,19 @@ const selectTeam = (team) => {
   isTeamDropdownOpen.value = false
 }
 
+// UPDATED FUNCTION: Submit Evaluation (handles POST/PUT)
 const submitEvaluation = async () => {
   if (!selectedTeamId.value) {
     errorMessage.value = 'Por favor, selecciona un proyecto para evaluar.'
     showErrorModal.value = true
     return
+  }
+
+  // Ensure evaluadorId is present
+  if (!evaluadorId.value) {
+    errorMessage.value = 'No se pudo obtener el ID del evaluador. Intenta recargar.'
+    showErrorModal.value = true
+    return;
   }
 
   const rolEventoId = currentEventRoleId.value
@@ -207,21 +315,30 @@ const submitEvaluation = async () => {
   showErrorModal.value = false
 
   try {
-    const evaluatorId = await fetchEvaluadorId()
     const token = localStorage.getItem('token')
 
+    // --- 1. SUBMIT/UPDATE INDIVIDUAL CRITERIA SCORES (POST or PUT) ---
     const evaluationPromises = Object.entries(evaluationScores.value).map(([criterioId, data]) => {
+      const isUpdate = !!data.resultId // Check if we have an existing ID
+      const endpoint = `${import.meta.env.VITE_URL_BACKEND}/api/resultado-evaluacion${isUpdate ? '/' + data.resultId : ''}`
+      const method = isUpdate ? 'put' : 'post'
+
       const payload = {
         equipo_id: selectedTeamId.value,
         criterio_id: parseInt(criterioId),
-        evaluador_id: evaluatorId,
+        evaluador_id: evaluadorId.value,
         puntaje: data.score,
         comentarios: data.comment,
         rolEvento_id: rolEventoId,
         plantilla_id: props.plantilla.plantillaId,
       }
-      console.log('Payload for evaluation:', payload)
-      return axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-evaluacion`, payload, {
+
+      console.log(`[${method.toUpperCase()}] Payload for evaluation (Criterio ${criterioId}):`, payload)
+
+      return axios({
+        method: method,
+        url: endpoint,
+        data: payload,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -231,27 +348,33 @@ const submitEvaluation = async () => {
 
     await Promise.all(evaluationPromises)
 
+    // --- 2. UPDATE/CREATE RUBRICA RESULT (PUT is safer for update) ---
     const rubricaPayload = {
-      persona_id: evaluatorId,
+      persona_id: evaluadorId.value,
       plantilla_id: props.plantilla.plantillaId,
       equipo_id: selectedTeamId.value,
       rolEvento_id: rolEventoId,
     }
-    console.log('Payload for rubrica:', rubricaPayload)
-    await axios.post(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
+
+    // CHANGED: Use PUT for the rubrica result update
+    console.log('[PUT] Payload for rubrica update/creation:', rubricaPayload)
+    await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
     })
 
+    // --- 3. SUBMIT/UPDATE PROCESS EVALUATION RESULT (POST/PUT based on API convention) ---
+    // Assuming this endpoint also updates the process result if it exists.
     const resultadosPayload = {
       proceso_id: +props.procesoId,
       equipo_id: selectedTeamId.value,
     }
 
-    console.log('Payload for resultados-proceso-evaluacion:', resultadosPayload)
-    await axios.post(
+    // CHANGED: Use PUT for the final process result update as well
+    console.log('[PUT] Payload for resultados-proceso-evaluacion:', resultadosPayload)
+    await axios.put(
       `${import.meta.env.VITE_URL_BACKEND}/api/resultado-proceso-evaluacion`,
       resultadosPayload,
       {

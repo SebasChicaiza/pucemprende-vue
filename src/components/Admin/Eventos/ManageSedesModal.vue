@@ -246,7 +246,7 @@ defineExpose({
     <div class="modal-container">
       <div class="modal-header">
         <h3>Gestionar Sedes</h3>
-        <button class="close-button" @click="$emit('close')">&times;</button>
+        <button class="close-button">&times;</button>
       </div>
       <div class="modal-body d-flex flex-column">
         <div class="sede-form">
