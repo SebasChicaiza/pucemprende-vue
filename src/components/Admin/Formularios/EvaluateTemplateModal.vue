@@ -287,6 +287,7 @@ const selectTeam = (team) => {
 }
 
 // UPDATED FUNCTION: Submit Evaluation (handles POST/PUT)
+// UPDATED FUNCTION: Submit Evaluation (handles POST/PUT)
 const submitEvaluation = async () => {
   if (!selectedTeamId.value) {
     errorMessage.value = 'Por favor, selecciona un proyecto para evaluar.'
@@ -348,34 +349,33 @@ const submitEvaluation = async () => {
 
     await Promise.all(evaluationPromises)
 
-    // --- 2. UPDATE/CREATE RUBRICA RESULT (PUT is safer for update) ---
-    const rubricaPayload = {
-      persona_id: evaluadorId.value,
-      plantilla_id: props.plantilla.plantillaId,
-      equipo_id: selectedTeamId.value,
-      rolEvento_id: rolEventoId,
-    }
+    // --- 2. UPDATE RUBRICA RESULT (POST on specialized URL, NO BODY) ---
+    // Endpoint requerido para actualización: /api/resultados-rubrica/{persona_id}/{plantilla_id}/{equipo_id}
+    const rubricaUrl = `${import.meta.env.VITE_URL_BACKEND}/api/resultados-rubrica/${evaluadorId.value}/${props.plantilla.plantillaId}/${selectedTeamId.value}`
 
-    // CHANGED: Use PUT for the rubrica result update
-    console.log('[PUT] Payload for rubrica update/creation:', rubricaPayload)
-    await axios.put(`${import.meta.env.VITE_URL_BACKEND}/api/resultado-rubrica`, rubricaPayload, {
+    // CAMBIO CLAVE: Se usa POST con la URL especializada y se pasa 'null' como cuerpo (sin body)
+    console.log('[POST] (Especializado para UPDATE, sin body) Rubrica URL:', rubricaUrl)
+    await axios.post(rubricaUrl, null, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
     })
 
-    // --- 3. SUBMIT/UPDATE PROCESS EVALUATION RESULT (POST/PUT based on API convention) ---
-    // Assuming this endpoint also updates the process result if it exists.
+    // --- 3. SUBMIT/UPDATE PROCESS EVALUATION RESULT (POST on specialized URL) ---
+    // Endpoint requerido para actualización: /api/resultado-proceso-evaluacion/{procesoId}/{equipoId}
+    const procesoUrl = `${import.meta.env.VITE_URL_BACKEND}/api/resultado-proceso-evaluacion/${props.procesoId}/${selectedTeamId.value}`
+
+    // Se asume que este endpoint requiere un body, aunque sea solo con los IDs de contexto.
     const resultadosPayload = {
       proceso_id: +props.procesoId,
       equipo_id: selectedTeamId.value,
     }
 
-    // CHANGED: Use PUT for the final process result update as well
-    console.log('[PUT] Payload for resultados-proceso-evaluacion:', resultadosPayload)
-    await axios.put(
-      `${import.meta.env.VITE_URL_BACKEND}/api/resultado-proceso-evaluacion`,
+    // CAMBIO: Se usa POST con la URL especializada para actualizar el proceso
+    console.log('[POST] (Especializado para UPDATE) Proceso URL:', procesoUrl)
+    await axios.post(
+      procesoUrl,
       resultadosPayload,
       {
         headers: {
