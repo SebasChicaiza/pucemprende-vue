@@ -639,7 +639,7 @@ const puedeInscribirse = computed(() => {
 
 function handleInscribirse() {
   if (eventDetails.value.hayEquipos > 0) {
-    router.push({ name: 'crearProyecto', params: { eventoId: eventDetails.value.id } })
+    router.push({ name: 'CrearEquipo', params: { eventoId: eventDetails.value.id } })
   } else {
     showConfirmDialog.value = true
   }

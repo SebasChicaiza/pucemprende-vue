@@ -121,9 +121,8 @@ async function cargarProyectoCompleto() {
     const logo = data.logoUrl ?? data.logotipo ?? null
     proyecto.value = {
       ...data,
-      evento_id: data.evento_id,
-      nombre_evento: data.evento_nombre ?? 'Evento desconocido',
-      equipo_nombre: data.equipo_nombre ?? 'Sin equipo',
+      titulo: data.titulo ?? '',
+      descripcion: data.descripcion ?? '',
       logoUrl: logo,
     }
 
@@ -210,15 +209,30 @@ async function buscarPersona() {
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${q}`,
       { headers: authHeaders() },
     )
-    if (!data) {
+
+    const lista = Array.isArray(data) ? data : (data ? [data] : [])
+    if (!lista.length) {
       busquedaError.value = 'No se encontró persona con esa cédula.'
       return
     }
-    if (miembrosProyecto.value.some((m) => Number(m.persona_id) === Number(data.id))) {
+
+    // evitar duplicados ya presentes en el proyecto
+    const existentes = new Set(miembrosProyecto.value.map((m) => Number(m.persona_id)))
+    const sinDuplicados = lista.filter((p) => !existentes.has(Number(p.id)))
+
+    if (!sinDuplicados.length) {
       busquedaError.value = 'Esta persona ya es miembro del proyecto.'
       return
     }
-    resultadosBusqueda.value = [data]
+
+    // normalizar para la vista
+    resultadosBusqueda.value = sinDuplicados.map((p) => ({
+      id: Number(p.id),
+      nombre: p.nombre ?? '',
+      apellido: p.apellido ?? '',
+      email: p.email ?? '',
+      identificacion: p.identificacion ?? p.cedula ?? '',
+    }))
   } catch {
     busquedaError.value = 'No se encontró persona con esa cédula.'
   }
@@ -295,13 +309,13 @@ async function submitEdicion() {
       fd.append('estado', estado.value)
       fd.append('logo', logoImage.value.file)
       await axios.post(
-        `${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}?_method=PUT`,
+        `${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}?_method=PUT`,
         fd,
         { headers: { ...authHeaders() } },
       )
     } else {
       await axios.put(
-        `${import.meta.env.VITE_URL_BACKEND}/api/proyectos/${proyectoId}`,
+        `${import.meta.env.VITE_URL_BACKEND}/api/proyecto/${proyectoId}`,
         {
           titulo: titulo.value,
           descripcion: descripcion.value,
@@ -437,13 +451,16 @@ function eliminarProyecto() {
             </div>
             <div v-if="busquedaError" class="text-danger small mt-1">{{ busquedaError }}</div>
 
-            <div v-if="resultadosBusqueda.length">
+            <div v-if="resultadosBusqueda.length" class="mt-2">
               <div
                 v-for="persona in resultadosBusqueda"
                 :key="persona.id"
-                class="d-flex align-items-center gap-2 mt-2"
+                class="d-flex align-items-center justify-content-between border rounded px-3 py-2 mb-2"
               >
-                <span>{{ persona.nombre }} {{ persona.apellido }} ({{ persona.email }})</span>
+                <div>
+                  <div class="fw-semibold">{{ persona.nombre }} {{ persona.apellido }}</div>
+                  <div class="text-muted small">Cédula: {{ persona.identificacion }}</div>
+                </div>
                 <button class="btn btn-success btn-sm" @click="agregarMiembro(persona)">
                   Añadir
                 </button>

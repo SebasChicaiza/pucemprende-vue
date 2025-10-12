@@ -20,7 +20,7 @@ const loading = ref(false)
 const CACHE_KEYS = {
   USER_PROFILE: 'user_profile_cache',
   PERSONA_DATA: 'persona_data_cache',
-  USER_STATS: 'user_stats_cache'
+  USER_STATS: 'user_stats_cache',
 }
 
 const CACHE_DURATION = {
@@ -34,15 +34,24 @@ const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000 // 30 minutos
 let refreshInterval = null
 
 // FUNCIONES DE CACHÉ
+const userProfile = ref({
+  id: null,
+  name: '',
+  email: '',
+  avatar: null,
+  email_verified_at: null,
+  created_at: null,
+  updated_at: null,
+})
+
 const saveToCache = (key, data) => {
   try {
     const cacheData = {
       data: data,
       timestamp: Date.now(),
-      userId: userProfile.value.id
+      userId: userProfile.value.id,
     }
     localStorage.setItem(key, JSON.stringify(cacheData))
-    console.log(`Datos guardados en caché: ${key}`)
   } catch (error) {
     console.warn('Error guardando en caché:', error)
   }
@@ -51,27 +60,21 @@ const saveToCache = (key, data) => {
 const getFromCache = (key, maxAge = 30 * 60 * 1000) => {
   try {
     const cached = localStorage.getItem(key)
-    if (!cached) {
-      console.log(`No hay datos en caché para: ${key}`)
-      return null
-    }
+    if (!cached) return null
 
     const cacheData = JSON.parse(cached)
     const now = Date.now()
 
     if (now - cacheData.timestamp > maxAge) {
-      console.log(`Caché expirado para: ${key}`)
       localStorage.removeItem(key)
       return null
     }
 
     if (userProfile.value.id && cacheData.userId !== userProfile.value.id) {
-      console.log(`Usuario diferente, invalidando caché: ${key}`)
       localStorage.removeItem(key)
       return null
     }
 
-    console.log(`Datos obtenidos del caché: ${key}`)
     return cacheData.data
   } catch (error) {
     console.warn('Error leyendo caché:', error)
@@ -81,25 +84,14 @@ const getFromCache = (key, maxAge = 30 * 60 * 1000) => {
 }
 
 const clearUserCache = () => {
-  Object.values(CACHE_KEYS).forEach(key => {
-    localStorage.removeItem(key)
-  })
-  console.log('Caché de usuario limpiado')
+  Object.values(CACHE_KEYS).forEach((key) => localStorage.removeItem(key))
 }
 
 // FUNCIONES DE AUTO-ACTUALIZACIÓN
 const startAutoRefresh = () => {
-  console.log('Iniciando auto-actualización cada 30 minutos')
-
-  // Limpiar interval anterior si existe
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-
-  // Establecer nuevo interval
+  if (refreshInterval) clearInterval(refreshInterval)
   refreshInterval = setInterval(async () => {
-    console.log('Ejecutando auto-actualización de datos...')
-    await refreshUserData(true) // true = es auto-refresh
+    await refreshUserData(true) // auto-refresh silencioso
   }, AUTO_REFRESH_INTERVAL)
 }
 
@@ -107,7 +99,6 @@ const stopAutoRefresh = () => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
     refreshInterval = null
-    console.log('Auto-actualización detenida')
   }
 }
 
@@ -133,16 +124,6 @@ const saving = ref(false)
 const sendingVerification = ref(false)
 const defaultAvatar = ref(defaultAvatarImage)
 
-const userProfile = ref({
-  id: null,
-  name: '',
-  email: '',
-  avatar: null,
-  email_verified_at: null,
-  created_at: null,
-  updated_at: null,
-})
-
 const personaData = ref({
   id: null,
   nombre: '',
@@ -163,6 +144,104 @@ const userStats = ref({
   teamsCount: 0,
 })
 
+// Listas y loaders de participación
+const loadingMyEvents = ref(false)
+const loadingMyProjects = ref(false)
+const loadingMyTeams = ref(false)
+
+const myEvents = ref([])    // [{ id, nombre, fecha_inicio, fecha_fin, ... }]
+const myProjects = ref([])  // [{ id, titulo, descripcion, estado, ... }]
+const myTeams = ref([])     // [{ equipo_id/id, nombre, evento_nombre, proyecto_titulo, ... }]
+
+// Estado de pestañas y “loaded” por recurso
+const activeTab = ref('eventos')
+const loaded = ref({ eventos: false, proyectos: false, equipos: false })
+
+// Carga consolidada (rápida) de participación
+const loadMyParticipaciones = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/me/participaciones`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    )
+    myEvents.value = Array.isArray(data?.eventos) ? data.eventos : []
+    myProjects.value = Array.isArray(data?.proyectos) ? data.proyectos : []
+    myTeams.value = Array.isArray(data?.equipos) ? data.equipos : []
+    loaded.value = { eventos: true, proyectos: true, equipos: true }
+  } catch (err) {
+    // Si falla, se hará lazy por pestaña
+    console.warn('Fallo /me/participaciones, se usará lazy por pestaña:', err.response?.data || err.message)
+  }
+}
+
+// Cargadores individuales (APIs “me/*”)
+const loadMyEvents = async () => {
+  if (loaded.value.eventos) return
+  loadingMyEvents.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/me/eventos`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    )
+    myEvents.value = Array.isArray(data) ? data : (data?.data ?? [])
+    loaded.value.eventos = true
+  } catch (err) {
+    console.error('Error cargando mis eventos:', err.response?.data || err.message)
+    myEvents.value = []
+  } finally {
+    loadingMyEvents.value = false
+  }
+}
+
+const loadMyProjects = async () => {
+  if (loaded.value.proyectos) return
+  loadingMyProjects.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/me/proyectos`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    )
+    myProjects.value = Array.isArray(data) ? data : (data?.data ?? [])
+    loaded.value.proyectos = true
+  } catch (err) {
+    console.error('Error cargando mis proyectos:', err.response?.data || err.message)
+    myProjects.value = []
+  } finally {
+    loadingMyProjects.value = false
+  }
+}
+
+const loadMyTeams = async () => {
+  if (loaded.value.equipos) return
+  loadingMyTeams.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const { data } = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/me/equipos`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    )
+    myTeams.value = Array.isArray(data) ? data : (data?.data ?? [])
+    loaded.value.equipos = true
+  } catch (err) {
+    console.error('Error cargando mis equipos:', err.response?.data || err.message)
+    myTeams.value = []
+  } finally {
+    loadingMyTeams.value = false
+  }
+}
+
+// Cambiar de pestaña y hacer lazy load si falta
+const selectTab = async (tab) => {
+  activeTab.value = tab
+  if (tab === 'eventos') await loadMyEvents()
+  if (tab === 'proyectos') await loadMyProjects()
+  if (tab === 'equipos') await loadMyTeams()
+}
+
 // FUNCIONES CON CACHÉ
 const checkAuth = async () => {
   const token = localStorage.getItem('token')
@@ -172,23 +251,15 @@ const checkAuth = async () => {
   }
 
   try {
-    // Intentar obtener del caché primero
     const cachedProfile = getFromCache(CACHE_KEYS.USER_PROFILE, CACHE_DURATION.USER_PROFILE)
 
     if (cachedProfile) {
       userProfile.value = cachedProfile
-      console.log('Perfil de usuario cargado desde caché')
-
-      // Cargar datos relacionados (también con caché)
       await loadPersonaData()
-      if (userProfile.value.id) {
-        await loadUserStats()
-      }
+      if (userProfile.value.id) await loadUserStats()
       return true
     }
 
-    // Si no hay caché, hacer petición a la API
-    console.log('Cargando perfil desde API...')
     const response = await fetch(`${import.meta.env.VITE_URL_BACKEND}/api/user`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -197,48 +268,49 @@ const checkAuth = async () => {
       },
     })
 
-    if (!response.ok) {
-      throw new Error('Token inválido')
-    }
+    if (!response.ok) throw new Error('Token inválido')
 
     const userData = await response.json()
     userProfile.value = userData
-
-    // Guardar en caché
     saveToCache(CACHE_KEYS.USER_PROFILE, userData)
 
-    // Cargar datos relacionados
     await loadPersonaData()
-    if (userProfile.value.id) {
-      await loadUserStats()
-    }
+    if (userProfile.value.id) await loadUserStats()
 
     return true
   } catch (error) {
     console.error('Error verificando autenticación:', error)
-    clearUserCache() // Limpiar caché en caso de error
+    clearUserCache()
     localStorage.removeItem('token')
     router.push('/login')
     return false
   }
 }
 
+// const personaData = ref({
+//   id: null,
+//   nombre: '',
+//   apellido: '',
+//   telefono: '',
+//   identificacion: '',
+//   alumni: null,
+//   genero: '',
+//   creado_en: null,
+//   actualizado_en: null,
+//   estado_borrado: null,
+//   borrado_en: null,
+// })
+
 const loadPersonaData = async () => {
   try {
-    // Intentar obtener del caché primero
     const cachedPersona = getFromCache(CACHE_KEYS.PERSONA_DATA, CACHE_DURATION.PERSONA_DATA)
-
     if (cachedPersona) {
       personaData.value = cachedPersona
-      console.log('Datos de persona cargados desde caché')
       return
     }
 
-    // Si no hay caché y tenemos ID de usuario, hacer petición
     if (userProfile.value.id) {
-      console.log('Cargando datos de persona desde API...')
       const token = localStorage.getItem('token')
-
       const personaResponse = await fetch(
         `${import.meta.env.VITE_URL_BACKEND}/api/persona/user/${userProfile.value.id}`,
         {
@@ -252,8 +324,6 @@ const loadPersonaData = async () => {
       if (personaResponse.ok) {
         const persona = await personaResponse.json()
         personaData.value = persona
-
-        // Guardar en caché
         saveToCache(CACHE_KEYS.PERSONA_DATA, persona)
       } else {
         console.warn('No se encontraron datos de persona para este usuario')
@@ -266,19 +336,13 @@ const loadPersonaData = async () => {
 
 const loadUserStats = async () => {
   try {
-    // Intentar obtener del caché primero
     const cachedStats = getFromCache(CACHE_KEYS.USER_STATS, CACHE_DURATION.USER_STATS)
-
     if (cachedStats) {
       userStats.value = cachedStats
-      console.log('Estadísticas cargadas desde caché')
       return
     }
 
-    // Si no hay caché, hacer petición a la API
-    console.log('Cargando estadísticas desde API...')
     const token = localStorage.getItem('token')
-
     const statsResponse = await fetch(
       `${import.meta.env.VITE_URL_BACKEND}/api/usuario/estadisticas/${userProfile.value.id}`,
       {
@@ -291,66 +355,42 @@ const loadUserStats = async () => {
 
     if (statsResponse.ok) {
       const response = await statsResponse.json()
-
       if (response.success && response.data) {
         const stats = {
           projectsCount: response.data.total_proyectos || 0,
           eventsCount: response.data.total_eventos || 0,
           teamsCount: response.data.total_equipos || 0,
         }
-
         userStats.value = stats
-
-        // Guardar en caché
         saveToCache(CACHE_KEYS.USER_STATS, stats)
-
-        console.log('Estadísticas cargadas y guardadas en caché:', stats)
       } else {
-        console.warn('No se pudieron obtener las estadísticas:', response.message)
-        userStats.value = {
-          projectsCount: 0,
-          eventsCount: 0,
-          teamsCount: 0,
-        }
+        userStats.value = { projectsCount: 0, eventsCount: 0, teamsCount: 0 }
       }
     } else {
-      console.warn('Error en la respuesta del servidor para estadísticas')
-      userStats.value = {
-        projectsCount: 0,
-        eventsCount: 0,
-        teamsCount: 0,
-      }
+      userStats.value = { projectsCount: 0, eventsCount: 0, teamsCount: 0 }
     }
   } catch (error) {
     console.error('Error cargando estadísticas:', error)
-    userStats.value = {
-      projectsCount: 0,
-      eventsCount: 0,
-      teamsCount: 0,
-    }
+    userStats.value = { projectsCount: 0, eventsCount: 0, teamsCount: 0 }
   }
 }
 
 // FUNCIÓN MODIFICADA PARA AUTO-ACTUALIZACIÓN
 const refreshUserData = async (isAutoRefresh = false) => {
-  if (!isAutoRefresh) {
-    loading.value = true
-  }
+  if (!isAutoRefresh) loading.value = true
 
-  console.log(isAutoRefresh ? 'Auto-actualización ejecutándose...' : 'Actualización manual ejecutándose...')
-
-  // Limpiar caché
   clearUserCache()
-
-  // Recargar datos
   await checkAuth()
+
+  // Reiniciar flags y recargar participación
+  loaded.value = { eventos: false, proyectos: false, equipos: false }
+  await loadMyParticipaciones()
+  await selectTab(activeTab.value)
 
   if (!isAutoRefresh) {
     loading.value = false
     okModalMessage.value = 'Datos actualizados correctamente'
     showOkModal.value = true
-  } else {
-    console.log('Auto-actualización completada silenciosamente')
   }
 }
 
@@ -392,10 +432,7 @@ const logout = () => {
   confirmModalCancelText.value = 'Cancelar'
 
   onConfirmCallback = () => {
-    // Detener auto-refresh antes de logout
     stopAutoRefresh()
-
-    // Limpiar TODO el almacenamiento local
     clearUserCache()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -458,9 +495,10 @@ const formatDate = (dateString) => {
 onMounted(async () => {
   loading.value = true
   await checkAuth()
+  // Cargar participación del usuario (consolidado + lazy de la pestaña activa)
+  await loadMyParticipaciones()
+  await selectTab('eventos')
   loading.value = false
-
-  // Iniciar auto-actualización después de la carga inicial
   startAutoRefresh()
 })
 
@@ -472,13 +510,13 @@ onUnmounted(() => {
 
 <template>
   <LoaderComponent v-if="loading" />
-  <div class="d-flex" style="height: 100vh; overflow: hidden">
+  <div class="d-flex" style="height: 100vh; overflow: hidden" v-else>
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column" style="height: 100vh">
       <PageHeaderRoute />
       <div class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
         <!-- Contenido del perfil -->
-        <div class="profile-container" v-if="!loading">
+        <div class="profile-container">
           <div class="profile-card">
             <!-- Header con avatar y acciones -->
             <div class="profile-header">
@@ -527,9 +565,7 @@ onUnmounted(() => {
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Identificación:</span>
-                    <span class="detail-value">{{
-                      personaData.identificacion || 'No disponible'
-                    }}</span>
+                    <span class="detail-value">{{ personaData.identificacion || 'No disponible' }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Teléfono:</span>
@@ -537,13 +573,15 @@ onUnmounted(() => {
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Género:</span>
-                    <span class="detail-value">{{
-                      personaData.genero === 'M'
-                        ? 'Masculino'
-                        : personaData.genero === 'F'
-                          ? 'Femenino'
-                          : 'No especificado'
-                    }}</span>
+                    <span class="detail-value">
+                      {{
+                        personaData.genero === 'M'
+                          ? 'Masculino'
+                          : personaData.genero === 'F'
+                            ? 'Femenino'
+                            : 'No especificado'
+                      }}
+                    </span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Alumni:</span>
@@ -565,24 +603,6 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- Mensaje si no hay datos de persona -->
-              <div
-                v-else
-                class="no-persona-data"
-                style="
-                  padding: 16px;
-                  background: #fff3cd;
-                  border: 1px solid #ffeaa7;
-                  border-radius: 8px;
-                  margin: 16px 0;
-                "
-              >
-                <p>
-                  <i class="fas fa-exclamation-triangle"></i> No se encontraron datos adicionales de
-                  persona para este usuario.
-                </p>
-              </div>
-
               <div style="margin: 20px 0; text-align: center; color: #6b7280; font-weight: 500">
                 Has participado en:
               </div>
@@ -600,6 +620,198 @@ onUnmounted(() => {
                 <div class="stat">
                   <span class="stat-number">{{ userStats.teamsCount || 0 }}</span>
                   <span class="stat-label">Equipos</span>
+                </div>
+              </div>
+
+              <!-- Pestañas de participación -->
+              <div class="mt-4">
+                <ul class="nav nav-pills mb-3 custom-pills" id="profile-pills" role="tablist">
+                  <li class="nav-item" role="presentation">
+                    <button
+                      class="nav-link"
+                      :class="{ active: activeTab === 'eventos' }"
+                      id="pills-events-tab"
+                      data-bs-toggle="pill"
+                      data-bs-target="#pills-events"
+                      type="button"
+                      role="tab"
+                      aria-controls="pills-events"
+                      :aria-selected="activeTab === 'eventos'"
+                      @click="selectTab('eventos')"
+                    >
+                      Eventos
+                    </button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button
+                      class="nav-link"
+                      :class="{ active: activeTab === 'proyectos' }"
+                      id="pills-projects-tab"
+                      data-bs-toggle="pill"
+                      data-bs-target="#pills-projects"
+                      type="button"
+                      role="tab"
+                      aria-controls="pills-projects"
+                      :aria-selected="activeTab === 'proyectos'"
+                      @click="selectTab('proyectos')"
+                    >
+                      Proyectos
+                    </button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button
+                      class="nav-link"
+                      :class="{ active: activeTab === 'equipos' }"
+                      id="pills-teams-tab"
+                      data-bs-toggle="pill"
+                      data-bs-target="#pills-teams"
+                      type="button"
+                      role="tab"
+                      aria-controls="pills-teams"
+                      :aria-selected="activeTab === 'equipos'"
+                      @click="selectTab('equipos')"
+                    >
+                      Equipos
+                    </button>
+                  </li>
+                </ul>
+
+                <div class="tab-content" id="profile-pills-content">
+                  <!-- Eventos -->
+                  <div
+                    class="tab-pane fade"
+                    :class="{ 'show active': activeTab === 'eventos' }"
+                    id="pills-events"
+                    role="tabpanel"
+                    aria-labelledby="pills-events-tab"
+                  >
+                    <div v-if="loadingMyEvents" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando eventos...</span>
+                      </div>
+                      <p class="text-muted mt-2">Cargando eventos...</p>
+                    </div>
+                    <div v-else-if="myEvents.length === 0" class="text-center text-muted py-2">
+                      No participas en ningún evento.
+                    </div>
+                    <div v-else class="row g-3">
+                      <div v-for="ev in myEvents" :key="ev.id" class="col-md-6 col-lg-4">
+                        <div class="project-card">
+                          <h6 class="project-title">{{ ev.nombre || ev.titulo }}</h6>
+                          <p class="project-description">{{ ev.descripcion || 'Sin descripción.' }}</p>
+                          <hr />
+                          <p class="project-status">
+                            <strong>Estado:</strong> {{ ev.estado || '—' }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Inicio:</strong> {{ formatDate(ev.fecha_inicio) }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Fin:</strong> {{ formatDate(ev.fecha_fin) }}
+                          </p>
+                          <div class="d-flex justify-content-end mt-2">
+                            <button
+                              class="btn btn-primary btn-sm"
+                              @click="$router.push(`/admin/eventos/${ev.id}`)"
+                            >
+                              Ver evento
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Proyectos -->
+                  <div
+                    class="tab-pane fade"
+                    :class="{ 'show active': activeTab === 'proyectos' }"
+                    id="pills-projects"
+                    role="tabpanel"
+                    aria-labelledby="pills-projects-tab"
+                  >
+                    <div v-if="loadingMyProjects" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando proyectos...</span>
+                      </div>
+                      <p class="text-muted mt-2">Cargando proyectos...</p>
+                    </div>
+                    <div v-else-if="myProjects.length === 0" class="text-center text-muted py-2">
+                      No participas en proyectos.
+                    </div>
+                    <div v-else class="row g-3">
+                      <div v-for="p in myProjects" :key="p.id" class="col-md-6 col-lg-4">
+                        <div class="project-card">
+                          <h6 class="project-title">{{ p.titulo || p.nombre }}</h6>
+                          <p class="project-description">{{ p.descripcion || 'Sin descripción.' }}</p>
+                          <hr />
+                          <p class="team-info" v-if="p.team || p.equipo">
+                            <strong>Equipo:</strong>
+                            <span :class="{ 'text-danger': (p.team?.estado_borrado || p.equipo?.estado_borrado) }">
+                              {{ p.team?.nombre || p.equipo?.nombre || '—' }}
+                              <i
+                                v-if="p.team?.estado_borrado || p.equipo?.estado_borrado"
+                                class="fas fa-exclamation-circle ms-1"
+                                title="Equipo Deshabilitado"
+                              ></i>
+                            </span>
+                          </p>
+                          <p class="project-status">
+                            <strong>Estado del Proyecto:</strong> {{ p.estado || '—' }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Inicio:</strong> {{ formatDate(p.fecha_inicio) }}
+                          </p>
+                          <p class="project-dates">
+                            <strong>Fin:</strong> {{ formatDate(p.fecha_fin) }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Equipos -->
+                  <div
+                    class="tab-pane fade"
+                    :class="{ 'show active': activeTab === 'equipos' }"
+                    id="pills-teams"
+                    role="tabpanel"
+                    aria-labelledby="pills-teams-tab"
+                  >
+                    <div v-if="loadingMyTeams" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando equipos...</span>
+                      </div>
+                      <p class="text-muted mt-2">Cargando equipos...</p>
+                    </div>
+                    <div v-else-if="myTeams.length === 0" class="text-center text-muted py-2">
+                      No integras ningún equipo.
+                    </div>
+                    <div v-else class="row g-3">
+                      <div v-for="t in myTeams" :key="t.id || t.equipo_id" class="col-md-6 col-lg-4">
+                        <div class="project-card">
+                          <h6 class="project-title">
+                            {{ t.nombre || t.equipo_nombre || 'Equipo sin nombre' }}
+                            <i
+                              v-if="t.estado_borrado"
+                              class="fas fa-exclamation-circle ms-1 text-danger"
+                              title="Equipo Deshabilitado"
+                            ></i>
+                          </h6>
+                          <p class="project-description">
+                            Proyecto: {{ t.proyecto?.titulo || t.proyecto_titulo || '—' }}
+                          </p>
+                          <hr />
+                          <p class="project-status">
+                            <strong>Evento:</strong> {{ t.evento?.nombre || t.evento_nombre || '—' }}
+                          </p>
+                          <p class="project-status" v-if="t.miembros_count !== undefined">
+                            <strong>Integrantes:</strong> {{ t.miembros_count }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -816,6 +1028,73 @@ onUnmounted(() => {
 .badge-secondary {
   background-color: #f3f4f6;
   color: #374151;
+}
+
+.custom-pills .nav-link {
+  border-radius: 0.5rem 0.5rem 0 0;
+  margin-right: 0.25rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #e0e7ff;
+  color: #174384;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 1px solid #c3d9ff;
+  border-bottom: none;
+}
+.custom-pills .nav-link:hover:not(.active) {
+  background-color: #d0e0ff;
+  color: #0d284a;
+}
+.custom-pills .nav-link.active {
+  background-color: #174384;
+  color: #ffffff;
+  border-color: #174384;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.tab-content {
+  background-color: #ffffff;
+  border: 1px solid #e0e7ff;
+  border-radius: 0 0.5rem 0.5rem 0.5rem;
+  padding: 1.5rem;
+  min-height: 200px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Tarjetas (reuso de estilos existentes) */
+.project-card {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+.project-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #174384;
+  margin-bottom: 5px;
+}
+.project-description {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 10px;
+  flex-grow: 1;
+}
+.team-info,
+.project-status,
+.project-dates {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 5px;
+}
+.team-info strong,
+.project-status strong,
+.project-dates strong {
+  color: #333;
 }
 
 @media (max-width: 768px) {

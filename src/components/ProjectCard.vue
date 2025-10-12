@@ -30,11 +30,8 @@
         </div>
       </div>
 
-      <div class="project-subtitle">
-        <span>Evento: {{ proyecto.nombre_evento || '—' }}</span
-        ><br />
-        <span>Equipo: {{ proyecto.equipo_nombre || 'Sin equipo' }}</span>
-      </div>
+      <!-- Título del proyecto -->
+      <h6 class="project-title" :title="projectTitle">{{ projectTitle }}</h6>
 
       <div class="project-description">
         <strong>Descripción</strong>
@@ -89,6 +86,7 @@ const props = defineProps({
 const emit = defineEmits(['deleted'])
 
 const logoSrc = computed(() => props.proyecto?.logoUrl || props.proyecto?.logotipo || null)
+const projectTitle = computed(() => props.proyecto?.titulo || props.proyecto?.nombre || 'Proyecto sin título')
 
 const showDeleteDialog = ref(false)
 const deleting = ref(false)
@@ -96,9 +94,9 @@ const deleteSuccess = ref(false)
 const deleteError = ref('')
 
 function formatDate(dateStr) {
-  if (!dateStr) return ''
+  if (!dateStr) return '—'
   const d = new Date(dateStr)
-  return isNaN(d) ? '' : d.toLocaleDateString()
+  return isNaN(d) ? '—' : d.toLocaleDateString()
 }
 
 async function eliminarProyecto() {
@@ -212,7 +210,7 @@ async function eliminarProyecto() {
 .project-title {
   font-size: 1.1rem;
   font-weight: 700;
-  margin: 0;
+  margin: 0 0 0.4rem 0;
 }
 .project-subtitle {
   font-size: 0.95rem;

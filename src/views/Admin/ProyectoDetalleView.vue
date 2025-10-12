@@ -1,7 +1,7 @@
 <script setup>
 import Sidebar from '@/components/Admin/AdminSidebar.vue'
 import PageHeaderRoute from '@/components/PageHeaderRoute.vue'
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import LoaderComponent from '@/components/LoaderComponent.vue'
@@ -42,6 +42,9 @@ const equipos = ref([])
 const selectedEquipo = ref('') // id en string para <select>
 const dynamicTitle = ref('Proyecto')
 const logoUrl = ref('')
+
+// Puedes usar este computed si quieres el listado como string
+const equiposNombres = computed(() => equipos.value.map(e => e?.nombre).filter(Boolean).join(', ') || 'Sin equipos')
 
 // --- Miembros ---
 const miembrosProyecto = ref([])
@@ -125,7 +128,7 @@ async function cargarProyectoCompleto() {
       ...data,
       evento_id: data.evento_id,
       nombre_evento: data.evento_nombre ?? 'Evento desconocido',
-      equipo_nombre: data.equipo_nombre ?? 'Sin equipo',
+      // ya no usamos equipo_nombre; el back trae lista de equipos
       logoUrl: logo,
     }
 
@@ -133,7 +136,11 @@ async function cargarProyectoCompleto() {
     titulo.value = data.titulo ?? ''
     descripcion.value = data.descripcion ?? ''
     estado.value = String(data.estado ?? 'ACTIVO').toUpperCase()
-    selectedEquipo.value = data?.equipo_id ? String(data.equipo_id) : ''
+
+    // NUEVO: lista de equipos asociados
+    equipos.value = Array.isArray(data.equipos)
+      ? data.equipos.map(e => ({ id: Number(e.id), nombre: e.nombre ?? '' }))
+      : []
 
     // Miembros
     miembrosProyecto.value = Array.isArray(data.miembros) ? data.miembros.map(mapMiembro) : []
@@ -224,15 +231,30 @@ async function buscarPersona() {
       `${import.meta.env.VITE_URL_BACKEND}/api/persona/cedula/${q}`,
       { headers: authHeaders() },
     )
-    if (!data) {
+
+    const lista = Array.isArray(data) ? data : (data ? [data] : [])
+    if (!lista.length) {
       busquedaError.value = 'No se encontró persona con esa cédula.'
       return
     }
-    if (miembrosProyecto.value.some((m) => Number(m.persona_id) === Number(data.id))) {
+
+    // Evitar duplicados ya presentes en el proyecto
+    const existentes = new Set(miembrosProyecto.value.map((m) => Number(m.persona_id)))
+    const sinDuplicados = lista.filter((p) => !existentes.has(Number(p.id)))
+
+    if (!sinDuplicados.length) {
       busquedaError.value = 'Esta persona ya es miembro del proyecto.'
       return
     }
-    resultadosBusqueda.value = [data]
+
+    // Normalizar campos esperados por la vista
+    resultadosBusqueda.value = sinDuplicados.map((p) => ({
+      id: Number(p.id),
+      nombre: p.nombre ?? '',
+      apellido: p.apellido ?? '',
+      email: p.email ?? '',
+      identificacion: p.identificacion ?? p.cedula ?? '',
+    }))
   } catch {
     busquedaError.value = 'No se encontró persona con esa cédula.'
   }
@@ -361,128 +383,119 @@ function eliminarProyecto() {
   <div class="d-flex" style="height: 100vh; overflow: hidden">
     <Sidebar />
     <div class="flex-grow-1 d-flex flex-column">
-      <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'ProyectoEditar'" />
+      <PageHeaderRoute :dynamicTitle="dynamicTitle" :currentRouteName="'ProyectoDetalle'" />
 
       <LoaderComponent v-if="loading" />
 
-      <div v-else class="p-4 overflow-y-scroll flex-grow-1" style="height: calc(100vh - 60px)">
-        <h3 class="mb-4">Editar Proyecto</h3>
-        <button class="btn btn-danger" @click="eliminarProyecto">Eliminar Proyecto</button>
-
-        <div class="card p-4">
-          <div class="mb-3 text-center">
-            <img
-              v-if="logoImage && logoImage.url"
-              :src="logoImage.url"
-              class="rounded-circle"
-              width="80"
-              alt="Logo del proyecto"
-            />
-            <input type="file" class="form-control mt-2" @change="onLogoChange" accept="image/*" />
+      <div
+        v-else
+        class="p-4 overflow-y-scroll flex-grow-1 detalle-proyecto"
+        style="height: calc(100vh - 60px)"
+      >
+        <!-- Hero -->
+        <div class="project-hero bg-light border rounded d-flex align-items-center p-4 mb-4 gap-3">
+          <img
+            v-if="logoImage && logoImage.url"
+            :src="logoImage.url"
+            class="avatar-xl rounded-circle border border-3 border-light-subtle shadow-sm"
+            alt="Logo del proyecto"
+          />
+          <div
+            v-else
+            class="logo-placeholder rounded-circle bg-secondary d-flex align-items-center justify-content-center"
+          >
+            <i class="bi bi-image text-white"></i>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label">Título</label>
-            <input v-model="titulo" type="text" class="form-control" />
+          <div class="flex-grow-1">
+            <h2 class="mb-1 fw-bold hero-title">{{ titulo }}</h2>
+            <ul class="list-inline mb-0 mt-2">
+              <li class="list-inline-item chip">
+                <i class="bi" :class="estado === 'ACTIVO' ? 'bi-check-circle-fill text-success' : 'bi-pause-circle-fill text-secondary'"></i>
+                <span class="fw-semibold">Estado:</span> <span class="fw-bold">{{ estado }}</span>
+              </li>
+              <li class="list-inline-item chip">
+                <i class="bi bi-people-fill" style="color:#174384;"></i>
+                <span class="fw-semibold">Miembros:</span> <span class="fw-bold">{{ miembrosProyecto.length }}</span>
+              </li>
+              <li class="list-inline-item chip">
+                <i class="bi bi-diagram-3-fill" style="color:#174384;"></i>
+                <span class="fw-semibold">Equipos:</span> <span class="fw-bold">{{ equipos.length }}</span>
+              </li>
+            </ul>
           </div>
+        </div>
 
-          <div class="mb-3">
-            <label class="form-label">Descripción</label>
-            <textarea v-model="descripcion" class="form-control" rows="3"></textarea>
+        <!-- Acerca del proyecto -->
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body">
+            <h5 class="section-title fw-bold mb-3"><i class="bi bi-info-circle me-2 text-primary"></i>Acerca del proyecto</h5>
+            <p class="mb-0 text-wrap">{{ descripcion || 'Sin descripción.' }}</p>
           </div>
+        </div>
 
-          <div class="mb-3">
-            <label class="form-label">Equipo</label>
-            <select v-model="selectedEquipo" class="form-select">
-              <option value="" disabled>Selecciona un equipo</option>
-              <option v-for="e in equipos" :key="e.id" :value="String(e.id)">{{ e.nombre }}</option>
-            </select>
+        <!-- Detalles -->
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body">
+            <h5 class="section-title fw-bold mb-3"><i class="bi bi-card-list me-2 text-primary"></i>Detalles</h5>
+            <div class="row g-3">
+
+              <!-- NUEVO: lista de equipos -->
+              <div class="col-12">
+                <div class="detail-item p-3 rounded">
+                  <div class="detail-label text-uppercase text-muted fw-semibold mb-2">Equipos asociados</div>
+                  <div v-if="equipos.length" class="d-flex flex-wrap gap-2">
+                    <span
+                      v-for="eq in equipos"
+                      :key="eq.id"
+                      class="chip sm fw-semibold"
+                      title="Equipo"
+                    >
+                      <i class="bi bi-people-fill me-1 text-primary"></i>{{ eq.nombre }}
+                    </span>
+                  </div>
+                  <div v-else class="text-muted">Sin equipos.</div>
+                </div>
+              </div>
+
+
+              <div class="col-12 col-sm-6 col-lg-4" v-if="proyecto?.fecha_fin">
+                <div class="detail-item p-3 rounded">
+                  <div class="detail-label text-uppercase text-muted fw-semibold">Fecha fin</div>
+                  <div class="detail-value fw-bold">{{ new Date(proyecto.fecha_fin).toLocaleDateString() }}</div>
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div class="mb-3">
-            <label class="form-label">Estado</label>
-            <select v-model="estado" class="form-select">
-              <option value="ACTIVO">Activo</option>
-              <option value="INACTIVO">Inactivo</option>
-            </select>
-          </div>
-
-          <!-- Miembros del proyecto -->
-          <div class="mb-3">
-            <label class="form-label">Miembros del proyecto</label>
+        <!-- Miembros -->
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="section-title fw-bold mb-3"><i class="bi bi-people me-2 text-primary"></i>Miembros del proyecto</h5>
             <div class="row">
               <div
                 class="col-12 col-md-6 col-lg-4 mb-3"
                 v-for="miembro in miembrosProyecto"
                 :key="miembro.persona_id"
               >
-                <div class="card p-2 d-flex flex-row align-items-center gap-2">
-                  <i class="bi bi-person-circle fs-2 text-primary" aria-hidden="true"></i>
+                <div class="member-card card border-0 shadow-sm h-100 p-3 d-flex align-items-start gap-3">
+                  <div class="member-avatar d-flex align-items-center justify-content-center rounded-circle">
+                    <i class="bi bi-person fs-4 text-primary"></i>
+                  </div>
                   <div class="flex-grow-1">
                     <div class="fw-bold">{{ miembro.nombre }} {{ miembro.apellido }}</div>
                     <div class="text-muted small">{{ miembro.email }}</div>
                   </div>
-
-                  <select
-                    class="form-select form-select-sm"
-                    :value="miembro.rol_id"
-                    :disabled="savingRole[miembro.persona_id]"
-                    @change="(e) => onChangeRol(miembro, e)"
-                    style="max-width: 110px"
-                    aria-label="Cambiar rol"
-                  >
-                    <option :value="1">Líder</option>
-                    <option :value="2">Integrante</option>
-                  </select>
-
-                  <button
-                    class="btn btn-outline-danger btn-sm"
-                    @click="pedirEliminarMiembro(miembro)"
-                    v-if="puedeEliminar(miembro)"
-                    title="Eliminar miembro"
-                    aria-label="Eliminar miembro"
-                  >
-                    <i class="bi bi-x-lg" aria-hidden="true"></i>
-                  </button>
+                  <span class="badge role-badge"
+                        :class="Number(miembro.rol_id) === 1 ? 'bg-primary-subtle text-primary-emphasis border border-primary-subtle' : 'bg-info-subtle text-info-emphasis border border-info-subtle'">
+                    {{ Number(miembro.rol_id) === 1 ? 'Líder' : 'Integrante' }}
+                  </span>
                 </div>
               </div>
             </div>
-
-            <!-- Añadir miembro -->
-            <div class="input-group mt-2">
-              <input
-                v-model="cedulaBusqueda"
-                type="text"
-                class="form-control"
-                placeholder="Buscar por cédula"
-                @keyup.enter="buscarPersona"
-              />
-              <button class="btn btn-outline-primary" @click="buscarPersona">Buscar</button>
-            </div>
-            <div v-if="busquedaError" class="text-danger small mt-1">{{ busquedaError }}</div>
-
-            <div v-if="resultadosBusqueda.length">
-              <div
-                v-for="persona in resultadosBusqueda"
-                :key="persona.id"
-                class="d-flex align-items-center gap-2 mt-2"
-              >
-                <span>{{ persona.nombre }} {{ persona.apellido }} ({{ persona.email }})</span>
-                <button class="btn btn-success btn-sm" @click="agregarMiembro(persona)">
-                  Añadir
-                </button>
-              </div>
-            </div>
           </div>
-
-          <button class="btn btn-primary" @click="submitEdicion" :disabled="guardando">
-            <span v-if="guardando">
-              <i class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></i>
-              Guardando...
-            </span>
-            <span v-else>Guardar proyecto</span>
-          </button>
         </div>
+
       </div>
     </div>
   </div>
@@ -515,51 +528,58 @@ function eliminarProyecto() {
 </template>
 
 <style scoped>
-.btn-danger {
-  margin-bottom: 1rem;
-  width: 20rem;
-}
-.toast-notification {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 3000;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-.toast-notification.show {
-  opacity: 1;
-}
-.toast-notification.success {
-  background-color: #28a745;
-}
-.toast-notification.error {
-  background-color: #dc3545;
-}
-.toast-notification.info {
-  background-color: #0d6efd;
-}
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3100;
-}
-.modal-card {
+/* Cards como en CrearProyectos */
+.card {
   background: #fff;
   border-radius: 10px;
-  padding: 18px;
-  width: min(92vw, 440px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  border: none;
 }
+
+/* Paleta */
+.bg-light { background-color: #e9f1f9 !important; }
+.hero-title, .section-title { color: #174384; }
+
+/* Hero */
+.project-hero { border: 1px solid #dbe7f5; }
+.avatar-xl { width: 86px; height: 86px; object-fit: cover; }
+.logo-placeholder { width: 86px; height: 86px; }
+
+/* Chips (soft azules) */
+.chip {
+  background: #e9f1f9;
+  border: 1px solid #dbe7f5;
+  color: #174384;
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+.chip.sm { padding: 4px 8px; font-size: 0.8rem; }
+
+/* Items detalle y miembros */
+.detail-item {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+}
+.detail-label { font-size: 0.75rem; letter-spacing: 0.04em; color: #64748b; }
+.detail-value { font-size: 1.05rem; color: #1f2937; }
+
+.member-card {
+  border-radius: 10px;
+  border: 1px solid #eee;
+  background: #fff;
+}
+.member-avatar { width: 42px; height: 42px; background: #e9f1f9; }
+
+.btn-danger { margin-bottom: 1rem; width: 20rem; }
+.toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #333; color: #fff; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.2); z-index: 3000; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast-notification.show { opacity: 1; }
+.toast-notification.success { background-color: #28a745; }
+.toast-notification.error { background-color: #dc3545; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 3100; }
+.modal-card { background: #fff; border-radius: 10px; padding: 18px; width: min(92vw, 440px); box-shadow: 0 10px 25px rgba(0,0,0,.18); }
 </style>
