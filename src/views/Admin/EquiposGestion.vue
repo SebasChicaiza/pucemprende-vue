@@ -11,8 +11,6 @@
             class="equipos-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4"
           ></div>
 
-          <!-- Button to open modal for creating a new team -->
-          <button class="btn btn-primary" @click="openCreateEquipoModal">+ Nuevo equipo</button>
         </div>
         <div class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto mt-3 mt-md-0">
           <input
