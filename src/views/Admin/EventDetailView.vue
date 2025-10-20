@@ -25,6 +25,10 @@ const router = useRouter()
 const eventId = ref(null)
 const eventDetails = ref(null)
 const eventImages = ref([])
+// Agrega estas variables:
+const eventProjects = ref([])
+const loadingProjects = ref(false)
+
 const loading = ref(true)
 const loadingImages = ref(false)
 const isLoadingImagesInModal = ref(false)
@@ -62,8 +66,8 @@ const proyectosEventosStore = useProyectosEventosStore()
 const plantillasEvaluacionStore = usePlantillasEvaluacionStore() // Initialize the new store
 
 // Use computed properties from the stores
-const eventProjects = computed(() => proyectosEventosStore.getProjectsForEvent(eventId.value))
-const loadingProjects = computed(() => proyectosEventosStore.isLoadingProjects)
+const eventProjectsComputed = computed(() => proyectosEventosStore.getProjectsForEvent(eventId.value))
+const loadingProjectsComputed = computed(() => proyectosEventosStore.isLoadingProjects)
 const eventForms = computed(() => plantillasEvaluacionStore.getPlantillasForEvent(eventId.value)) // Computed for forms
 const loadingForms = computed(() => plantillasEvaluacionStore.isLoadingPlantillas) // Computed for forms loading
 
@@ -557,13 +561,49 @@ const redirectToCreateProject = () => {
   }
 }
 
+// Reemplaza la llamada actual a fetchProjectsAndTeams con esta función:
+async function fetchEventTeams() {
+  if (!eventId.value) return
+
+  loadingProjects.value = true
+  const token = localStorage.getItem('token')
+
+  if (!token) {
+    errorMessage.value = 'Token de autenticación no encontrado.'
+    showErrorModal.value = true
+    return
+  }
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_URL_BACKEND}/api/equipos/evento/${eventId.value}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    // Actualiza la variable reactiva de equipos
+    eventProjects.value = response.data || []
+  } catch (err) {
+    console.error('Error fetching event teams:', err.response?.data || err.message)
+    errorMessage.value = `Error al cargar los equipos: ${err.response?.data?.message || err.message}`
+    showErrorModal.value = true
+    eventProjects.value = []
+  } finally {
+    loadingProjects.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     eventId.value = route.params.id
     if (eventId.value) {
       await fetchEventDetails()
       await fetchEventImages()
-      await proyectosEventosStore.fetchProjectsAndTeams(eventId.value)
+      await fetchEventTeams()
       await plantillasEvaluacionStore.fetchPlantillasForEvent(eventId.value)
     } else {
       errorMessage.value = 'ID de evento no proporcionado.'
@@ -592,7 +632,7 @@ watch(
         mainImage.value = DEFAULT_IMAGE_URL
         loadingImages.value = true
         proyectosEventosStore.clearProjects() // Clear projects cache when event ID changes
-        await proyectosEventosStore.fetchProjectsAndTeams(newId)
+        await fetchEventTeams()
         plantillasEvaluacionStore.clearPlantillas() // Clear forms cache when event ID changes
         await plantillasEvaluacionStore.fetchPlantillasForEvent(newId)
 
@@ -912,7 +952,7 @@ function closeDialog() {
                     aria-controls="pills-equipos"
                     aria-selected="false"
                   >
-                    Proyectos
+                    Equipos
                   </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -1067,45 +1107,56 @@ function closeDialog() {
                   aria-labelledby="pills-equipos-tab"
                 >
                   <div class="card card-body p-4 border-0 shadow-sm custom-tab-content">
-                    <h5 class="mb-3">Proyectos y Equipos del Evento</h5>
+                    <h5 class="mb-3">Equipos del Evento</h5>
                     <div v-if="loadingProjects" class="text-center py-4">
                       <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Cargando proyectos y equipos...</span>
+                        <span class="visually-hidden">Cargando equipos...</span>
                       </div>
-                      <p class="text-muted mt-2">Cargando proyectos y equipos...</p>
+                      <p class="text-muted mt-2">Cargando equipos...</p>
                     </div>
                     <div v-else-if="eventProjects.length === 0" class="text-center text-muted py-2">
-                      Este evento no tiene proyectos ni equipos asociados.
+                      Este evento no tiene equipos asociados.
                     </div>
                     <div v-else class="row g-3">
                       <div
-                        v-for="project in eventProjects"
-                        :key="project.id"
+                        v-for="team in eventProjects"
+                        :key="team.id"
                         class="col-md-6 col-lg-4"
                       >
                         <div class="project-card">
-                          <h6 class="project-title">{{ project.titulo }}</h6>
-                          <p class="project-description">{{ project.descripcion }}</p>
+                          <h6 class="project-title">{{ team.nombre }}</h6>
+                          <p class="project-description">{{ team.descripcion || 'Sin descripción disponible' }}</p>
                           <hr />
                           <p class="team-info">
-                            <strong>Equipo:</strong>
-                            <span :class="{ 'text-danger': project.team.estado_borrado }">
-                              {{ project.team.nombre }}
+                            <strong>ID del Equipo:</strong> {{ team.id }}
+                          </p>
+                          <p class="project-status">
+                            <strong>Estado:</strong>
+                            <span :class="{ 'text-danger': team.estado_borrado, 'text-success': !team.estado_borrado }">
+                              {{ team.estado_borrado ? 'Deshabilitado' : 'Activo' }}
                               <i
-                                v-if="project.team.estado_borrado"
+                                v-if="team.estado_borrado"
                                 class="fas fa-exclamation-circle ms-1"
                                 title="Equipo Deshabilitado"
                               ></i>
+                              <i
+                                v-else
+                                class="fas fa-check-circle ms-1"
+                                title="Equipo Activo"
+                              ></i>
                             </span>
                           </p>
-                          <p class="project-status">
-                            <strong>Estado del Proyecto:</strong> {{ project.estado }}
+                          <p class="project-dates">
+                            <strong>Creado:</strong> {{ formatDate(team.creado_en) }}
                           </p>
                           <p class="project-dates">
-                            <strong>Inicio:</strong> {{ formatDate(project.fecha_inicio) }}
+                            <strong>Actualizado:</strong> {{ formatDate(team.actualizado_en) }}
                           </p>
-                          <p class="project-dates">
-                            <strong>Fin:</strong> {{ formatDate(project.fecha_fin) }}
+                          <p class="team-info">
+                            <strong>Evento ID:</strong> {{ team.evento_id }}
+                          </p>
+                          <p class="team-info">
+                            <strong>Ranking:</strong> {{ team.ranking || 'Sin clasificar' }}
                           </p>
                         </div>
                       </div>
